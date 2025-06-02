@@ -825,14 +825,21 @@ projOut1=function(ik){
   }
 },
 getProjectedData=function(varnames=NULL,
-                          vars=lapply(varnames, self$convert),
+                          vars=lapply(varnames, self$convert)
                           ){
   self$updateUDVP(vars)
   inds = 1:length(self$data)
   names(inds) = names(self$data)
   lapply(inds, function(ik){
       self$projOut(ik)
-  }
+  })
+},
+getVariance=function(){
+  inds = 1:length(self$data)
+  names(inds) = names(self$data)
+  lapply(inds, function(ik){
+    apply(self$data[[ik]], 2,var, na.rm=T)
+  })
 },
 projOut=function(ik){
   #if(TRUE) stop("!!")
@@ -1537,8 +1544,11 @@ getNA=function(var){
     self$norm = lapply(self$data, function(d1) {
       normm = attr(d1,"norm")
       if(is.null(normm)){
-        if(typeof(d1)=="S4"){
-          normm=   -1 *apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
+        if(typeof(d1)=="S4"){ ## this not efficient
+          means = rowMeans(d1)
+          
+         # normm=   -1 *apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
+          normm = -1*sparse_norm(d1)
         }else{
         normm=   -1 *biganalytics::apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
         }

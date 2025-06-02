@@ -15,6 +15,8 @@ library(MASS);
 library(ggplot2)
 library(nnet)  ## for multinomial
 library("binom") ## for plotting
+
+library(SeuratObject)
 #optional packages
 #library(bigmemory)
 #library(bigalgebra)
@@ -37,52 +39,29 @@ invisible(try(lapply(paste("./R",src1,sep="/"), function(x) {print(x);source(x)}
 
 # ## loads data
 ##FUNCTION TO CONVERT 
-.convert<-function(data,mode="rna", expand=F){
-  names(data) =gsub("x_data","data",tolower(names(data)))
-  if(is.list(data$y)){
-    data$y = as.matrix(data$y)
-    if(nrow(data$y)!=nrow(data$data)) stop("!!")
-    dimnames(data$y)[[1]] = dimnames(data$data)[[1]]
-  }
-  if(!is.matrix(data$y)) {
-    data$y =  data.frame(matrix(data$y, dimnames = list(dimnames(data$data)[[1]],"y")))
-        if(is.character(data$y[1,1])){
-          if(expand){
-            data$y = .makeMultiClass(data$y)
-            
-          }else{
-            data$y[[1]] = factor(data$y[[1]])
-          }
-        }
-  }
-  dataset = list(data$data);
-  names(dataset)=mode
-  y = data$y
-  list(dataset=dataset,y=y)
-}
 
-######from rawlinson paper
-## get data from this repo https://github.com/dn-ra/FSPLS-publication-repo via git clone
-.readRawlinsonData<-function(filenames,path){
-  if(is.null(names(filenames))) names(filenames)=lapply(filenames, function(f)rev(strsplit(f,"/")[[1]])[1])
-  
-  #files = grep(".Rds",dir(path,f=T,rec=T),v=T)
-  datas=lapply(filenames, function(file){
-      .convert(data=readRDS(paste(path,file,sep="/")), mode="rna", expand=F)
-  })
-  datasets = lapply(datas, function(d) d$dataset)
-  ys = lapply(datas, function(d) d$y)
-  list(datasets=datasets, ys=ys)
-}
-#rawl = .readRawlinsonData('coin_multiclass_data');
-path=="~/github/FSPLS-publication-repo/input"
-print(dir(path,full=T,rec=T))
-rawl = .readRawlinsonData(filenames=list(golub = 'golub_data/golub.prepd.Rds'), path= path)
+
+
+pbmc = readRDS("data/pbmc_20K.rds")
+counts = t(pbmc@assays$RNA$counts)
+#writeMM(t(counts),"data/temp.mm")
+#counts1 = readMM("data/temp.mm")
+#dimnames(counts1) = rev(dimnames(counts))
+
+meta=pbmc@meta.data[,match(c( "predicted_labels_broad", "predicted_labels_fine"),names(pbmc@meta.data))]
+for(k in 1:ncol(meta))meta[[k]] = factor(meta[[k]])
+ys=list(pbmc=meta)
+datasets = list(pbmc=list(counts=counts1))
+mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1, hasNA=F)))
+flags = list(pthresh = 1e-5, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1)
+
+datas =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
+
+
+
 
 flags = list(pthresh = 1e-3, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1)
 
-## MAKE THE FSPLS DATA OBJECT
-datas =datasEnv$new(rawl$datasets, rawl$ys,flags=flags) 
 
 
 phens=datas$pheno()[1]

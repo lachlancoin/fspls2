@@ -24,7 +24,15 @@
     })
 }
 
-.getSparseMatrices<-function(mat){
+##this function removes NAs
+## if no NA matrixNA is just empty matrix
+.getSparseMatrices<-function(mat, hasNA=T){
+  if(!hasNA){
+   res1 = list(matrix = mat,
+               matrixNA = Matrix(0,nrow(mat) , ncol(mat), sparse = T)
+                    )
+  }else{
+  
   res1 = list(
     matrix = Matrix(apply(mat,2,function(v){
       mv = mean(v, na.rm=T)
@@ -37,6 +45,7 @@
       v1
     }), sparse=TRUE)
   )
+  }
   res1
 }
 
@@ -48,6 +57,7 @@ datasEnv<-R6Class("datasEnv", public = list(
               flags = list(),
               mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1))),
               families=lapply(ys, function(d) .getFamily(d)),
+              
                       memDir=NULL){
     datas = lapply(names(mats), function(nme){
       dataObj$new(mats[[nme]], incl_full=T,seed = getOption("seed",42), memDir=if(is.null(memDir)) NULL else paste(memDir, nme,sep="/"))
@@ -145,6 +155,11 @@ datasEnv<-R6Class("datasEnv", public = list(
   getProjectedData=function(varnames){
     lapply(self$datas, function(d){
       d$getProjectedData(varnames = varnames);      
+    })
+  },
+  getVariance=function(varnames){
+    lapply(self$datas, function(d){
+      d$getVariance();      
     })
   },
   select=function(phens,flags){#, all_reps=F ## used to be train

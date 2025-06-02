@@ -89,6 +89,28 @@
   ggps
 }
 
+sparse_norm<-function(X){ 
+  #converts a sparse Matrix into a list of its columns
+  #each list item contains only the nonzero elements of the column
+ nrow = nrow(X)
+  X<-as(X,"CsparseMatrix")
+  res<-split(X@x, findInterval(seq_len(nnzero(X)), X@p, left.open=TRUE))
+  #names(res)<-colnames(X)
+  
+  aa=unlist(vapply(res,
+                   function(x) {
+                     mean = sum(x)/nrow
+                     nzero = nrow -length(x)
+                     sqrt(sum((x - mean)^2)+ nzero *(mean^2))
+                   },
+                   FUN.VALUE = c(1)))
+  res1 = rep(0, ncol(X))
+  res1[as.numeric(names(aa))] = aa
+  res1
+}
+
+
+
 .makeMultiClass<-function(y){
   if(ncol(y)>1) stop("only one col")
   y0 = y[,1]
