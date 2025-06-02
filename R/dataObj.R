@@ -616,10 +616,10 @@ makeModels=function(phens,vars1, k){
   names(models) = nmes
   models
 },
-updateYpredsInds=function(phens,prev,k,ypred ){
+updateYpredsInds=function(phens,prev,k2,ypred ){
   phensi = match(phens, names(self$y))
-  within=(k==length(self$train))
-  self$updateYpreds(phensi,k,within=within, ypred=ypred, prev)
+  within=(k2==length(self$train))
+  self$updateYpreds(phensi,k2,within=within, ypred=ypred, prev)
 },
 getNonNAInds=function(inds,kk){
     df=data.frame(lapply(inds, function(k){
@@ -824,10 +824,20 @@ projOut1=function(ik){
     return (NULL)
   }
 },
-projOut=function(ik,k){
+getProjectedData=function(varnames=NULL,
+                          vars=lapply(varnames, self$convert),
+                          ){
+  self$updateUDVP(vars)
+  inds = 1:length(self$data)
+  names(inds) = names(self$data)
+  lapply(inds, function(ik){
+      self$projOut(ik)
+  }
+},
+projOut=function(ik){
   #if(TRUE) stop("!!")
   UDV=self$UDVP
-  d = self$train[[k]]
+  #d = self$train[[k]]
 #  nonNA = d$nonNA
   x = self$data[[ik]] #[d$nonNA,,drop=F]
   mean_x=self$mean_x[[ik]]
@@ -944,7 +954,7 @@ getNorm=function(W,var,ik,type){
 getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
   
   assoc=(type %in% c("assoc","assoc1"))
-  W = if(type %in% c("slow","assoc"))self$projOut(ik,k) else self$projOut1(ik)
+  W = if(type %in% c("slow","assoc"))self$projOut(ik) else self$projOut1(ik)
   ##NOTE PROJOUT1 ALSO SUBTRACTS MEAN, BUT FOR PROJOUT WE HAVE TO ADJUST FOR MEAN
   ##IF WE USE PROJOUT1 then x is actually W
   #mean_x = if(type %in% c("slow","assoc")) NULL else self$mean_x[[ik]]#  x_s$mean_x
@@ -1158,9 +1168,7 @@ updateRMSV=function(phensi,k,within=T, ypred = self$train[[k]]$ypred){
 },
 
 
-updateYP=function(phensi,prev, ypred, nonNA, flip, numvar=NULL, ignore.na=F){
-  #for(j in 1:length(prev)){ 
- 
+updateYP=function(phensi,prev, ypred, nonNA, flip, ignore.na=F){
     prev_kj = prev 
     prev_kj$var = lapply(prev_kj$var_names,  self$convert)  ## this would not be threadsafe
     vars_to_incl = which(unlist(lapply(prev_kj$var, length))==2)
@@ -1175,8 +1183,10 @@ updateYP=function(phensi,prev, ypred, nonNA, flip, numvar=NULL, ignore.na=F){
       }else{
         ind_1 = if(flip) !nonNA[[kk]] else nonNA[[kk]]
       }
-      levs1 = if(self$family[k]=="ordinal") min(self$y[,kk], na.rm=T):max(self$y[,kk],na.rm=T) else NULL
-      ypred$calcYpred(prev_kj,self$data,ind_1,numvar,kk1, kk,na_x, levs1)
+      levs1 = NULL
+     if(self$family[kk]=="ordinal")levs1 = min(self$y[,kk], na.rm=T):max(self$y[,kk],na.rm=T) 
+    if(self$family[[kk]]=="multinomial") levs1=levels(self$y[,kk])
+      ypred$calcYpred(prev_kj,self$data,ind_1,kk1, kk,na_x, levs1)
   
     }
  #   names(ypred$ypreds) = names(self$y)
@@ -1207,11 +1217,11 @@ translate=function(prev1){
   }
   prev3
 },
-importModel=function(phensi,prev,ypred = self$ypreds_all, family,within=T, numvar =NULL){  #should change name to evalModel
+importModel=function(phensi,prev,ypred = self$ypreds_all, family,within=T){  #should change name to evalModel
   #ypred = self$ypreds_all
   ind_1 = NULL
 #  if(is.null(params$ignore_na)) params$ignore_na=F
-  self$updateYP(phensi,prev, ypred, c(), TRUE, numvar = numvar, ignore.na = getOption("ignore_na",FALSE))  
+  self$updateYP(phensi,prev, ypred, c(), TRUE, ignore.na = getOption("ignore_na",FALSE))  
   rmsv_=.calcRMSV_1(phensi,ypred$ypreds, self, ind_1, 
                     types_=getOption("types_", default_types),
                     flip=!within,
@@ -1238,24 +1248,23 @@ getRMSVAll=function(phensi,ypred = self$ypreds_all,
 
 updateYpredsAll=function( phensi, 
                           ypred = self$ypreds_all,
-                          numvar=NULL,
                            prevsk = lapply(1:length(self$train), function(k) self$train[[k]]$prev),
                            nme = names(prevsk[[length(prevsk)]])
                            ){ ## within=T  means predict on samples trained on
   for(k in 1:(length(self$train)-1)){
      ind_1=     self$train[[k]]$nonNA
      #d = self$train[[k]]
-     self$updateYP(phensi,prevsk[[k]], ypred, ind_1, TRUE, numvar = numvar)  
+     self$updateYP(phensi,prevsk[[k]], ypred, ind_1, TRUE)  
   }
 },
-updateYpreds=function(phensi,k,within=T,ypred=self$train[[k]]$ypred, 
-                      prev =self$train[[k]]$prev, 
-                      nonNA = self$train[[k]]$nonNA,
-                      numvar=NULL
+updateYpreds=function(phensi,k2,within=T,
+                      ypred=self$train[[k2]]$ypred, 
+                      prev =self$train[[k2]]$prev, 
+                      nonNA = self$train[[k2]]$nonNA
 ){ ## within=T  means predict on samples trained on
   #d = self$train[[k]]
   #prev=d$prev
-  self$updateYP(phensi,prev, ypred, nonNA, !within,numvar = numvar)  
+  self$updateYP(phensi,prev, ypred, nonNA, !within)  
 },
 reorder=function(o,k){
   self$train[[k]]$reorder(o)

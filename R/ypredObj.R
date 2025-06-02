@@ -134,7 +134,7 @@ liability<-function(xM){
 
 
 
-.calcYpred_binomial<-function(prev_kj, data, ind_1,levs,
+.calcYpred_binomial<-function(prev_kj, data, ind_1,
                               numvar=NULL, kk=1,
                               liab=T,
                               constants= prev_kj$constants_proj[[kk]]){
@@ -167,6 +167,7 @@ liability<-function(xM){
         yp = yp + data[[ki]][ind_1,df1[2,inds_11], drop=F]%*% betas1[inds_11,,drop=F]
       }
     }
+    yp=as.matrix(yp)
     #  yp = yp+ unlist(prev_kj$constants_proj)
   }
   # print(yp)
@@ -186,11 +187,6 @@ liability<-function(xM){
   if(!is.null(numvar) && numvar==0) return(yp) 
   betas1 = betas[[kk]]
   
-  if(getOption("fspls.DRS",F)){
-    betas1 = apply(betas1,c(1,2), function(b) if(b>DRS_thresh) 1 else if(b<-1*DRS_thresh) -1 else 0)
-    #  print("DRS")
-    #  print(betas1)
-  }
   vars1 = prev_kj$var
   #print(names(prev_))
   # print(prev_kj$constants_proj)
@@ -211,7 +207,7 @@ liability<-function(xM){
     }
     #  yp = yp+ unlist(prev_kj$constants_proj)
   }
-  yp 
+  as.matrix(yp) 
 }
 
 
@@ -607,7 +603,7 @@ ypredObj<-R6Class("ypredObj", public = list(
   if(is.null(weights)){
    
     ypreds=.initYpred1(data, family)
-  f}else{
+  }else{
     stop("not sure about this")
     beam2=10000  ##IF USING WEIGHTS WE DONT WANT THIS TO EFFECT
     weights=lapply(weights, function(w){
@@ -642,12 +638,12 @@ ypredObj<-R6Class("ypredObj", public = list(
 #  list(params=params,wname=wname,ypreds = ypreds, weights = weights,rms_prev=rms_prev, rmsv=rmsv)
   },
 #calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, kk)
-  calcYpred=function(prev_kj, data, ind_1, numvar, kk1, kk,na_x, levs1){  ## kk1 in model space 
+  calcYpred=function(prev_kj, data, ind_1,  kk1, kk,na_x, levs1){  ## kk1 in model space 
     family = self$family[[kk]]
     #      ypred$ypreds[[kk]]$calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, self$family[[kk]])
     if(family=="multinomial"){
-      levs = names( self$ypreds[[kk]])
-      ab=.calcYpred_multinom(prev_kj,  data, ind_1, levs, numvar = numvar,kk=kk1)  ## for multi-prediction
+      levs = dimnames( self$ypreds[[kk]])[[2]]
+      ab=.calcYpred_multinom(prev_kj,  data, ind_1, levs, kk=kk1)  ## for multi-prediction
       mi22 = match(dimnames( self$ypreds[[kk]])[[2]], levs)
       self$ypreds[[kk]][ind_1,is.na(mi22)]=0
       self$ypreds[[kk]][ind_1,!is.na(mi22)] =  ab[,mi22[!is.na(mi22)]] 
@@ -658,14 +654,14 @@ ypredObj<-R6Class("ypredObj", public = list(
       }
       constants = constants[1:length(levs1)-1]  ##if too long.  We assume that the lower counts are common but might not have higer counts
    aa= .calcYpred_ord(prev_kj,  data, ind_1, levs = levs1,
-                                                   numvar = numvar, kk=kk1, constants = constants)  ## for multi-prediction
+                                                 kk=kk1, constants = constants)  ## for multi-prediction
     self$ypreds[[kk]][ind_1,] =  aa
     }else if(family=="binomial"){
       constants = prev_kj$constants_proj[[kk1]]
       self$ypreds[[kk]][ind_1,] =  .calcYpred_binomial(prev_kj,  data, ind_1, 
-                                                        numvar = numvar, kk=kk1, constants = constants)  ## for multi-prediction
+                                                    kk=kk1, constants = constants)  ## for multi-prediction
     }else{
-      ab = .calcYpred_1(prev_kj,  data, ind_1, numvar = numvar,kk=kk1) 
+      ab = .calcYpred_1(prev_kj,  data, ind_1,kk=kk1) 
       self$ypreds[[kk]][ind_1,] =  unlist(ab[,1]) ##why need unlist here??
     }
     self$ypreds[[kk]][na_x,] = rep(NA, ncol(self$ypreds[[kk]]))

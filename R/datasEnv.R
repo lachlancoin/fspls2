@@ -142,11 +142,17 @@ datasEnv<-R6Class("datasEnv", public = list(
     })
     models
   },
+  getProjectedData=function(varnames){
+    lapply(self$datas, function(d){
+      d$getProjectedData(varnames = varnames);      
+    })
+  },
   select=function(phens,flags){#, all_reps=F ## used to be train
     datas1 = self$datas
     topn = .readFlag(flags,'topn', 20)
  #   return_type = .readFlag(flags,'return','model') ##model,eval,plot
     train_nme = .readFlag(flags,'train', names(datas1))
+    if(!(train_nme %in% names(datas1))) train_nme = names(datas1)[[1]]
     test_nme = .readFlag(flags,'test', names(datas1))
     maxsize=.readFlag(flags,'max',50)
     num_pvals = min(topn, 10)

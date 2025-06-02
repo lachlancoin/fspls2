@@ -55,13 +55,15 @@
       .merge1_new(lapply(numvars, function(nv){
         e4=subset(e3,numvars==nv  & cohort_measure_pheno_trained==cm) #subpheno==sp)
         e5=e4[!duplicated(e4$model),names(e4) %in% c("nsamps","low","mid","high")]
-        
+        if(nrow(e4)==0) return(NULL)
         e6 = e4[1,]
+        
         e6$low=sum(apply(e5,1,function(x) x[2]*x[1]))/sum(e5$nsamps)
         e6$mid=sum(apply(e5,1,function(x) x[3]*x[1]))/sum(e5$nsamps)
         e6$high=sum(apply(e5,1,function(x) x[4]*x[1]))/sum(e5$nsamps)
         e6$nsamps = mean(e5$nsamps); e6$model="avg"; e6$fullmodel="avg";
         e6$cv="avg"
+       
         e6
       }))
     }))
@@ -553,7 +555,7 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   ggp
 }
 
-de.cntNA<-function(vec) length(which(is.na(vec)))
+.cntNA<-function(vec) length(which(is.na(vec)))
 
 .rep<-function(v,n) t(matrix(rep(v,n),ncol=n))
 
