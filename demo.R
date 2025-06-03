@@ -8,9 +8,9 @@ library(R6)
 library(Matrix)
 library(glmnet)
 library(tidyr)
-library(pROC); 
 library(MASS);
 library(ggplot2)
+library(pROC); 
 library(nnet)  ## for multinomial
 library("binom") ## for plotting
 library(confintr)
@@ -26,7 +26,7 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 
-datasets =examples[1]
+datasets =examples[3]
 
 flags = list(pthresh = 5e-2, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1)
 

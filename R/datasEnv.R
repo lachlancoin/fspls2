@@ -10,7 +10,21 @@
   pvs_all
 }
 .getFamily<-function(y_mat){
-  apply(y_mat,2,function(y){
+  if(typeof(y_mat)=="list"){
+    return(lapply(y_mat,function(y){
+      if(!is.numeric(y)){
+        y = as.factor(y);
+      }
+      if(is.factor(y)){
+        return(if(length(levels(y))==2 )"binomial" else "multinomial")
+      }
+      if(length(unique(y[!is.na(y)]))==2) return("binomial")
+      vals = unique(y)
+      if(sum(abs(vals-round(vals)))<1e-9) return("ordinal")
+      return("gaussian")
+    }))
+  }else{
+  return(apply(y_mat,2,function(y){
     if(!is.numeric(y)){
       y = as.factor(y);
     }
@@ -21,7 +35,8 @@
     vals = unique(y)
     if(sum(abs(vals-round(vals)))<1e-9) return("ordinal")
     return("gaussian")
-    })
+    }))
+  }
 }
 
 ##this function removes NAs
