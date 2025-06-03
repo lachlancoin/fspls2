@@ -838,7 +838,11 @@ getVariance=function(){
   inds = 1:length(self$data)
   names(inds) = names(self$data)
   lapply(inds, function(ik){
-    apply(self$data[[ik]], 2,var, na.rm=T)
+    if(typeof(self$data[[ik]])=="S4"){
+    return(sparse_variance(self$data[[ik]]))
+    }else{
+      return(biganalytics::apply(self$data[[ik]], 2,var, na.rm=T))
+    }
   })
 },
 projOut=function(ik){

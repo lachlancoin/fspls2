@@ -89,6 +89,24 @@
   ggps
 }
 
+
+
+
+
+getSparseSubMatrix<-function(counts, colInds){
+  colinds1 = colInds -1
+  X2 <- as(counts, "TsparseMatrix")
+  subinds = which(X2@j %in% colinds1)
+#  subinds = match(X2@j,colinds1)
+#  nonNA = which(!is.na(subinds))
+#  subinds1 = subinds[nonNA]
+  mi = match( X2@j[subinds],colinds1)
+  mat1 <- sparseMatrix(i = X2@i[subinds]+1, 
+                       j = mi,
+                     x = X2@x[subinds])
+  dimnames(mat1) = list(dimnames(X2)[[1]], dimnames(X2)[[2]][colInds])
+  mat1
+}
 sparse_norm<-function(X){ 
   #converts a sparse Matrix into a list of its columns
   #each list item contains only the nonzero elements of the column
@@ -106,8 +124,26 @@ sparse_norm<-function(X){
                    FUN.VALUE = c(1)))
   res1 = rep(0, ncol(X))
   res1[as.numeric(names(aa))] = aa
+  names(res1) = colnames(X)
   res1
 }
+sparse_variance<-function(X){ 
+  nrow = nrow(X)
+  X<-as(X,"CsparseMatrix")
+  res<-split(X@x, findInterval(seq_len(nnzero(X)), X@p, left.open=TRUE))
+  aa=unlist(vapply(res,
+                   function(x) {
+                     mean = sum(x)/nrow
+                     nzero = nrow -length(x)
+                     (sum((x - mean)^2)+ nzero *(mean^2))/nrow
+                   },
+                   FUN.VALUE = c(1)))
+  res1 = rep(0, ncol(X))
+  res1[as.numeric(names(aa))] = aa
+  names(res1) = colnames(X)
+  res1
+}
+
 
 
 
