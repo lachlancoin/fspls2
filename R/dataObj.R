@@ -688,7 +688,7 @@ evaluateAllModels=function(all_models,phens, flags){
       res1 = NULL; res2 = NULL
       if(!is.null(full_model)){
         self$updateYpredsInds(phens,full_model[[nmes1]], length(d$train), ypred )
-        res1 = d$getRMSVInds(phens, length(d$train), ypred)  
+        res1 = self$getRMSVInds(phens, length(d$train), ypred)  
       }
       if(length(nmesm)>0){
         for(j in 1:length(nmesm)){

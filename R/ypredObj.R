@@ -367,9 +367,12 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T){
       names(ycols) = names(ypreds)[phensi]
       if(is.null(names(ypreds))) names(ycols) =dimnames(ypreds)[[2]]
     #  print(names(ycols))
-      phens = names(ypreds) 
-      rms_1=lapply(ycols, function(ycol){
-        ind_1 = if(flip) !nonNAs[[ycol]] else nonNAs[[ycol]]
+      phens = names(ypreds)
+      ycol_inds = 1:length(ycols)
+      names(ycol_inds) = names(ycols)
+      rms_1=lapply(ycol_inds, function(ycol_ind){
+        ycol = ycols[ycol_inds]
+        ind_1 = if(flip) !nonNAs[[ycol_ind]] else nonNAs[[ycol_ind]]
         nsamps = length(which(ind_1))
         types_i = types_[[mtype[[ycol]]]]
         names(types_i) = types_i

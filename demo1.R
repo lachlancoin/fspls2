@@ -53,20 +53,20 @@ for(k in 1:ncol(meta))meta[[k]] = factor(meta[[k]])
 ys=list(pbmc=meta)
 datasets = list(pbmc=list(counts=counts1))
 mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1, hasNA=F)))
-flags = list(pthresh = 1e-5, max=5, nrep=5,batch=0, train=names(datasets)[1],topn=20,beam=1)
+flags = list(pthresh = 1e-5, max=20, nrep=5,batch=0, train=names(datasets)[1],topn=20,beam=1)
 datas =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
-phens=datas$pheno()[1]
+phens=datas$pheno()[2]
 ## FIND VARIABLES
 variables = datas$select(phens, flags)
-
+variables1 = variables[unlist(lapply(variables, function(var) "full" %in% names(var$inds)))]
 ## FIT MODELS
-all_models = datas$makeAllModels(variables, phens, flags)
+all_models = datas$makeAllModels(variables1[20], phens, flags)
 eval = datas$evaluateAllModels(all_models, phens, flags)
 
 ##PLOT
 #ggps = .plotEval1(eval, rename=F, len=1)
 #for multinomial or ordinal
-ggps = .plotEval1(eval, rename=F,grid="subpheno~cv", sep="pheno")
+ggps = .plotEval1(eval, rename=F,grid="subpheno~cv", sep="pheno", txtsize=1)
 ggps
 
 

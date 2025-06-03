@@ -24,6 +24,7 @@
 
 .plotEval1<-function(eval0,rename=F, len=1,
                      shape_color="cohort_measure",linetype="fullmodel",
+                     txtsize=1,
                      grid="pheno~cv",sep_by=c("trainedOn","measure","subpheno")){
   if(rename)eval0=.renameModels(eval0, len=len)
   
@@ -84,7 +85,7 @@
   if(!is.null(grid)){
     ggp<-ggp+facet_grid(grid,scales="free")
   }
-  ggp+ theme(legend.position = "bottom");#+theme(legend.title = element_text(size = 3),    legend.text = element_text(size = 3))
+  ggp+ theme(legend.position = "bottom",legend.title = element_text(size = txtsize));#+theme(,    legend.text = element_text(size = 3))
   })
   ggps
 }
