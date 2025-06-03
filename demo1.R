@@ -53,7 +53,7 @@ for(k in 1:ncol(meta))meta[[k]] = factor(meta[[k]])
 ys=list(pbmc=meta)
 datasets = list(pbmc=list(counts=counts1))
 mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1, hasNA=F)))
-flags = list(pthresh = 1e-5, max=5, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1)
+flags = list(pthresh = 1e-5, max=5, nrep=5,batch=0, train=names(datasets)[1],topn=20,beam=1)
 datas =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
 phens=datas$pheno()[1]
 ## FIND VARIABLES
