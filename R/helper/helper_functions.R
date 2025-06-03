@@ -1117,3 +1117,52 @@ fromJSONM<-function(json){
   ab$m 
 }
 
+
+.convert<-function(data,mode="rna", expand=F, max=100, factor=F){
+  names(data) =gsub("x_data","data",tolower(names(data)))
+  if(is.list(data$y)){
+    data$y = as.matrix(data$y)
+    if(nrow(data$y)!=nrow(data$data)) stop("!!")
+    dimnames(data$y)[[1]] = dimnames(data$data)[[1]]
+  }
+  if(!is.matrix(data$y)) {
+    data$y =  data.frame(matrix(data$y, dimnames = list(dimnames(data$data)[[1]],"y")))
+    if(is.character(data$y[1,1])){
+      if(expand){
+        data$y = .makeMultiClass(data$y)
+        
+      }else{
+        data$y[[1]] = factor(data$y[[1]])
+      }
+    }
+  }
+  
+  if(is.null(dimnames(data$y))) dimnames(data$y) = list(dimnames(data$data)[[1]], "y")
+  if(factor){
+    data$y=data.frame(lapply(data.frame(data$y), function(z) factor(paste("X",z,sep=""))))
+  }
+  if(max < nrow(data$y)){
+    inds = sample.int(nrow(data$y),max)
+    data$y = data$y[inds,,drop=F]
+    data$data = data$data[inds,,drop=F]
+  }
+  
+  dataset = list(data$data);
+  names(dataset)=mode
+  y = data$y
+  list(dataset=dataset,y=y)
+}
+
+######from rawlinson paper
+## get data from this repo https://github.com/dn-ra/FSPLS-publication-repo via git clone
+.readRawlinsonData<-function(filenames,path){
+  if(is.null(names(filenames))) names(filenames)=lapply(filenames, function(f)rev(strsplit(f,"/")[[1]])[1])
+  
+  #files = grep(".Rds",dir(path,f=T,rec=T),v=T)
+  datas=lapply(filenames, function(file){
+    .convert(data=readRDS(paste(path,file,sep="/")), mode="rna", expand=F)
+  })
+  datasets = lapply(datas, function(d) list(dataset=d$dataset, y = d$y))
+  datasets
+}
+

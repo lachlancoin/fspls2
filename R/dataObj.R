@@ -1,4 +1,4 @@
-default_types=fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC","multinomial" : "AUC_all","ordinal" :"AUC_all"}')
+default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC_all","ordinal" :"AUC_all"}')
 
 ## gets matrices without NAs
 
@@ -606,6 +606,7 @@ makeModels=function(phens,vars1, k){
   nmes = c()
   for(jk in 1:length(vars1)){
       prev_is = self$makeNextModel(phensi,vars1[[jk]], prev_is, k)
+      
       models[[jk]] = prev_is$simplify()
 #        lapply(prev_is, function(p_is1){
  #         p_is1$simplify()  ## for serialization

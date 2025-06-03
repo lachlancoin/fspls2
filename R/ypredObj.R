@@ -3,7 +3,14 @@
 #  rmsv1 = .findMinRMSV(rmsv_, params$mult, fspls.sum=getOption("fspls.sum",T))
 #  min(rmsv1)
 #}
-
+.corCI<-function(x,y, method="pearson", probs = c(0.025,0.975)){
+  type=if(method=="spearman") "bootstrap" else "normal"
+  cor1 = ci_cor(x,y,method=method, probs=probs, type=type)
+  range=cor1$interval
+  res = c(range[1], cor1$estimate, range[2])
+  names(res) =c("low","mid","high")
+  res
+}
 
 .prob<-function(vec)vec/sum(vec)
 .samp<-function(pr, levs){
@@ -211,6 +218,11 @@ liability<-function(xM){
 }
 
 
+rmse_interval <- function(rmse, deg_free, p_lower = 0.025, p_upper = 0.975){
+  unlist(list(low = sqrt(deg_free / qchisq(p_upper, df = deg_free)) * rmse,
+         mid = rmse,
+         high = sqrt(deg_free / qchisq(p_lower, df = deg_free)) * rmse))
+}
 
 calcRMS<-function( predy,yTs, family , CI = F, rmsea=T){
   if(length(yTs)==0) return(c(NA,NA,NA))
@@ -219,22 +231,8 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T){
   y = predy
   if(length(y)!=length(yTs)) stop(paste("error",length(y),length(yTs)));
   
-  ##
-  #  sort(unlist(lapply(1:10,function(i) {
-  #     rands=alias[sample.int(length(alias), replace=T)]
-  #    sqrt(sum((yTs[rands] - y[rands])^2)/length(yTs[rands]))
-  #    })))
   rms= sqrt(sum((yTs[alias] - y[alias])^2)/length(yTs[alias]))
-  if(CI){
-    if(rmsea){
-      cis = try(ci.rmsea(rms, df=1, N=length(yTs[alias]), conf.level = 0.95))
-    }else{
-      cis = c(NA, rms,NA)
-    }
-    return(cis) 
-    
-  } 
-  rms*  (length(yTs)/length(alias))
+  rmse_interval(rms, length(predy))
 }
 .areaBetween<-function(yp,y1,family="binomial"){
   #if(family=="ordinal"){
@@ -392,25 +390,22 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T){
           if(fam=="gaussian") y1=as.numeric(factor(y1, sort(unique(y1))))-1
           yp=if(fam=="binomial") plogis(yp[,1]) else yp[,1]
           rms = -1*.misclass(yp,y1, w1,auc=T)
+          names(rms) =c("low","mid","high")
         }else if(type_i=="area"){
           rms = -1 *.areaBetween(yp[nonNA,1], y1[nonNA], family=fam)[2]
           names(rms)=names(data$y)[[ycol]]
         }else if(type_i=="area_full"){
           rms = -1 *.areaBetween(yp[nonNA,1], y1[nonNA], family=fam)
          # names(rms)=names(data$y)[[ycol]]
-          names(rms)=paste(names(data$y)[[ycol]],c("low","mid","high"),sep=".")
+          names(rms)=c("low","mid","high")
         }else if(type_i=="AUC"){
           #.calcAUCW(ypred, y, w)[2] for weighted AUC
           rms = -1*(.calcAUCW(yp[,1],y1, data$weights[nonNA,ycol]))
           names(rms)=c("low","mid","high")
-        #  print(rms)
-          #rms[i] = -1*calcAUC(yp,data$y[,ycol],T)
         }else if(type_i=="AUC_full"){
           #.calcAUCW(ypred, y, w)[2] for weighted AUC
           rms = -1*(.calcAUCW(yp[,1],y1, data$weights[,ycol]))
-          names(rms)=paste(names(data$y)[[ycol]],c("low","mid","high"),sep=".")
-          #  print(rms)
-          #rms[i] = -1*calcAUC(yp,data$y[,ycol],T)
+          names(rms)=c("low","mid","high")
         }else if(type_i=="AUC_all"){
           if(fam=="ordinal"){
           levs = min(y1, na.rm=T):(max(y1,na.rm=T)-1) 
@@ -447,7 +442,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T){
           #rms[i] = -1*calcAUC(yp,data$y[,ycol],T)
         }else if(type_i=="correlation"){
           if(length(type_i1s)==1){
-              rms =  if(length(yp[nonNA,1])==0 || var(yp[nonNA,1])==0) c(NA,0,NA) else -1* weightedCorr(yp[nonNA,1], y1[nonNA], weights=w1[nonNA],method="Pearson")
+              rms =  if(length(yp[nonNA,1])==0 || var(yp[nonNA,1])==0) 0 else -1* .corCI(yp[nonNA,1], y1[nonNA],method="pearson")#weights=w1[nonNA]
               #names(rms)=dimnames(data$y)[[2]][[ycol]]
               }else{
             if(var(yp[nonNA,1])==0) {
@@ -456,16 +451,15 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T){
             if(length(yp[nonNA,1])<3 || var(yp[nonNA,1])==0) {
              rms = c(NA,0,NA) 
             }else{
-           ab=   ci_cor(yp[nonNA,1], y1[nonNA], method="pearson", probs = c(0.05, 0.95))
-         rms = -1*c(ab$interval[1], ab$estimate, ab$interval[2])
+           rms =-1*  .corCI(yp[nonNA,1], y1[nonNA], method="pearson")
             }
           }
-            names(rms)=paste(dimnames(data$y)[[2]][[ycol]],c("low","mid","high"), sep=".")
+            names(rms)=c("low","mid","high")
           }
            #                                use="pairwise.complete.obs")
           
         }else if(type_i=="rank_correlation"){
-          rms = if(var(yp[nonNA,1])==0) rep(0, ncol(data$y)) else  -1* weightedCorr(yp[nonNA,1], y1[nonNA],weights=w1[nonNA], method="Spearman") 
+          rms = if(var(yp[nonNA,1])==0) rep(0, ncol(data$y)) else  -1* .corCI(yp[nonNA,1], y1[nonNA], method="spearman")  #,weights=w1[nonNA]
          # print(var(yp[nonNA]))
           #, use="pairwise.complete.obs")
           if(is.null(rms)){
@@ -474,29 +468,22 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T){
           }
          # print(rms)
         #  print(names(data$y))
-          names(rms)=names(data$y)[[ycol]]
+          #names(rms)=names(data$y)[[ycol]]
         }else if(type_i=="rms"){
           rms=calcRMS(yp[,1],y1)
-          names(rms)=names(data$y)[[ycol]]
           }else if(type_i=="youden"){
-            rms=-1*.youden(yp,y1)[2]
-            names(rms)=names(data$y)[[ycol]]
+            rms=-1*.youden(yp,y1)
            } else if(type_i=="youden_full"){
             rms=-1*.youden(yp,y1)
-            names(rms)=paste(names(data$y)[[ycol]],c("low","mid","high"),sep=".")
 #            names(rms)=names(data$y)[[ycol]]
           }else if(type_i=="youden_sens"){
-            rms=-1*.youden(yp,y1,typ="sens")[2]
-            names(rms)=names(data$y)[[ycol]]
+            rms=-1*.youden(yp,y1,typ="sens")
           }else if(type_i=="youden_spec"){
-            rms=-1*.youden(yp,y1,typ="spec")[2]
-            names(rms)=names(data$y)[[ycol]]
+            rms=-1*.youden(yp,y1,typ="spec")
           }else if(type_i=="youden_sens_full"){
             rms=-1*.youden(yp,y1,typ="sens")
-            names(rms)=paste(names(data$y)[[ycol]],c("low","mid","high"),sep=".")
           }else if(type_i=="youden_spec_full"){
             rms=-1*.youden(yp,y1,typ="spec")
-            names(rms)=paste(names(data$y)[[ycol]],c("low","mid","high"),sep=".")
           }else if(type_i=="sens_spec"){
             #.calcAUCW(ypred, y, w)[2] for weighted AUC
             rms = .calcSensSpec(yp,y1,w1)

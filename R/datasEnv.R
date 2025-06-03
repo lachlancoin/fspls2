@@ -53,9 +53,10 @@ datasEnv<-R6Class("datasEnv", public = list(
   datas = "list",
   type="character",
   initialize=function(
-              datasets,ys,
+              datasets,
+              ys = lapply(datasets, function(d) d$y),
               flags = list(),
-              mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1))),
+              mats = lapply(datasets, function(d) lapply(d$data, function(d1).getSparseMatrices(d1))),
               families=lapply(ys, function(d) .getFamily(d)),
               
                       memDir=NULL){
@@ -123,16 +124,35 @@ datasEnv<-R6Class("datasEnv", public = list(
     angles_all
   },
   makeAllModels=function(variables, phens, flags){
+    ##order from longest to shortest to avoid recalculating models
+    variables =variables[order(unlist(lapply(variables, function(v) length(v$var))),decreasing=T)]
     #var_names =lapply(variables, function(v) names(v)[1]) ## just take the top one for now
     #vars = names(sort(table(unlist(var_names)),decr=T))
     #names(vars ) = vars
-    
-    all_models =  lapply(variables, function(v) {
+    all_models = list()
+    for(v_nme in names(variables)){
+      #print(v_nme)
+      v = variables[[v_nme]]
       inds =v$inds
       vars1 = v$var
-      self$makeModels( vars1, inds,phens,flags)
-      
-    })
+      nme_ = paste(names(vars1),collapse=";")
+      models1 = all_models[[nme_]]
+      if(is.null(models1)){
+        models1 = self$makeModels( vars1, inds,phens,flags)
+        for(k in 1:length(models1)){
+          all_models[[names(models1)[[k]]]] = models1[[k]]
+        }
+      }else{
+        new_inds = inds[which(!(inds %in% names(models1)))]
+        if(length(new_inds)>0){
+          models11 = self$makeModels( vars1, new_inds,phens,flags)
+     
+         for(k in 1:length(models11)){
+           all_models[[names(models11)[[k]]]]= c(all_models[[names(models11)[[k]]]], models11[[k]])
+          }
+        }
+      }
+    }
     all_models
   },
   makeModels=function(vars1, inds, phens,flags){
@@ -146,11 +166,20 @@ datasEnv<-R6Class("datasEnv", public = list(
         lapply(datas[names(datas) %in% train_nme], function(d){
          # fold_inds = if(fold) k else 1:length(d$train)
           mods = d$makeModels(phens,vars1, k)
-          mods[[length(mods)]]
+          mods
         })
       #})
     })
-    models
+    vars = names(models[[1]][[1]])
+    names(vars) = vars
+    models1 = lapply(vars, function(v){
+      m3 = lapply(models, function(m){
+        m2 = lapply(m, function(m1) m1[[v]])
+        m2[unlist(lapply(m2, length))>0]
+      })
+      m3[unlist(lapply(m3, length))>0]
+    })
+    models1
   },
   getProjectedData=function(varnames){
     lapply(self$datas, function(d){
