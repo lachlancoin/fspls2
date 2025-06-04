@@ -138,15 +138,16 @@ datasEnv<-R6Class("datasEnv", public = list(
     })
     angles_all
   },
-  makeAllModels=function(variables, phens, flags){
+  makeAllModels=function(variables, phens, flags, all_models = list()){
     ##order from longest to shortest to avoid recalculating models
     variables =variables[order(unlist(lapply(variables, function(v) length(v$var))),decreasing=T)]
     #var_names =lapply(variables, function(v) names(v)[1]) ## just take the top one for now
     #vars = names(sort(table(unlist(var_names)),decr=T))
     #names(vars ) = vars
-    all_models = list()
+  
+    verbose=.readFlag(flags,"verbose",F)
     for(v_nme in names(variables)){
-      #print(v_nme)
+      if(verbose)print(v_nme)
       v = variables[[v_nme]]
       inds =v$inds
       vars1 = v$var
@@ -173,14 +174,14 @@ datasEnv<-R6Class("datasEnv", public = list(
   makeModels=function(vars1, inds, phens,flags){
     datas=self$datas
     train_nme = .readFlag(flags,'train', names(datas))
-    
+    verbose=.readFlag(flags,"verbose",FALSE)
     #k = .readFlag(flags, 'rep',length(datas[[1]]$train))
     models = lapply(inds, function(k){
      # fold = (k<length(datas[[1]]$train))
      # lapply(var_eg, function(vars1){
         lapply(datas[names(datas) %in% train_nme], function(d){
          # fold_inds = if(fold) k else 1:length(d$train)
-          mods = d$makeModels(phens,vars1, k)
+          mods = d$makeModels(phens,vars1, k,verbose)
           mods
         })
       #})

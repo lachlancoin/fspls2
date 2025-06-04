@@ -356,6 +356,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T){
                     family=data$family){
  # inds1 = 1:maxl
   mtype = match(family,names(types_))
+  #print(mtype)
   if(length(which(is.na(mtype)))>0) stop("could not find match in types_")
  # names(mtype)=family
 #  print(mtype)
@@ -369,9 +370,10 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T){
       ycol_inds = 1:length(ycols)
       names(ycol_inds) = names(ycols)
       rms_1=lapply(ycol_inds, function(ycol_ind){
-        ycol = ycols[ycol_inds]
+        ycol = ycols[ycol_ind]
         ind_1 = if(flip) !nonNAs[[ycol_ind]] else nonNAs[[ycol_ind]]
         nsamps = length(which(ind_1))
+        #print(paste(ycol_inds,ycol))
         types_i = types_[[mtype[[ycol]]]]
         names(types_i) = types_i
         .merge1_new(lapply(types_i, function(type_i1){
@@ -526,7 +528,8 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T){
         df12
         }), num_cols="value", addName="measure")%>% tibble::add_column(nsamps = nsamps, cv=flip)
       })
-      df3=.merge1_new(rms_1,num_cols="value", addName="pheno")
+      rms_2 = .fixBeforeMerge(rms_1)
+      df3=.merge1_new(rms_2,num_cols="value", addName="pheno")
     df3    
   ##})
   #.merge1_new(rms_3, num_cols = "value", addName="beam")

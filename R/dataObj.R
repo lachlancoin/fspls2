@@ -9,19 +9,21 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
     comb1 = lapply(angles, function(angle1){
       ang1=angle1[[inc1]]
       ang2=ang1[[1]]
+      cs = colSums(ang2)
       if(length(ang1)>1){
         for(jk in 1:length(ang1)){
-          ang2 = ang2+ang1[[jk]]
+          cs = cs+colSums(ang1[[jk]])
         }
       }
-      ang2
+      cs
     })
-     .sumMatrices(comb1)
+    .sumMatrices(comb1)
   })
   top_angles=whichpart1(comb_all, n=topn, return_scores=T)
   t1=sort(unlist(top_angles, rec=T))
   t1
 }
+
 .summariseAngles<-function(t1, topn){
   outp =lapply(names(t1)[1:topn], function(str){
     spl=strsplit(str,"\\.")[[1]]
@@ -597,7 +599,7 @@ makeNextModel=function(phensi,var,  prev_is= self$train[[k]]$prev,k
   #})
   #prevs_all
 },
-makeModels=function(phens,vars1, k){
+makeModels=function(phens,vars1, k, verbose=F){
   phensi = match(phens, names(self$y))
   models = vector("list", length(vars1))
  # prev_is = lapply(fold_inds, function(k) stateObj$new(phensi,self,self$train[[k]], k))
@@ -605,6 +607,7 @@ makeModels=function(phens,vars1, k){
   #if(length(prev_i$var)>0) stop("problem")
   nmes = c()
   for(jk in 1:length(vars1)){
+    if(verbose)print(jk)
       prev_is = self$makeNextModel(phensi,vars1[[jk]], prev_is, k)
       
       models[[jk]] = prev_is$simplify()

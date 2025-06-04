@@ -195,6 +195,20 @@ isbigmatrix<-function(x){
   typeof(x)!="S4"
 }
 
+.fixBeforeMerge<-function(t){
+  nmes_all = unique(unlist(lapply(t, names)))
+  lapply(t, function(t1){
+    mi1=match(nmes_all,names(t1))
+    na_i = which(is.na(mi1))
+    if(length(na_i)>0){
+      t1 = cbind(t1,array(NA, dim = c(nrow(t1), ncol=length(na_i)), dimnames =list(NULL, nmes_all[na_i])))
+      mi1=match(nmes_all,names(t1))
+    }
+  
+    t1[,mi1,drop=F]
+  })
+}
+
 .merge1_new<-function(t,num_cols = c(), addName=NULL){
   t = t[!unlist(lapply(t, is.null))]
   t = t[unlist(lapply(t,nrow))>0]
@@ -277,7 +291,7 @@ whichpart1<-function(angle, n=10, one_for_each=F, return_scores=F){
   wp1=lapply(angle[!nulli], function(x1){
 #   x1 = apply(x,2,combine_func)
     #if(!is.null(dim(x1))) {
-      x1 = apply(x1,2,sum)
+     # x1 = apply(x1,2,sum)
       wp_ = whichpart(x1,n)
       return(x1[wp_])
 #    }else{

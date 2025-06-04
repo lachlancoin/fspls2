@@ -53,21 +53,47 @@ for(k in 1:ncol(meta))meta[[k]] = factor(meta[[k]])
 ys=list(pbmc=meta)
 datasets = list(pbmc=list(counts=counts1))
 mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1, hasNA=F)))
-flags = list(pthresh = 1e-5, max=5, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1)
+flags = list(pthresh = 1e-5, max=50, nrep=5,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T)
 datas =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
-phens=datas$pheno()[2]
+phens=datas$pheno()
 ## FIND VARIABLES
 variables = datas$select(phens, flags)
-#variables1 = variables[unlist(lapply(variables, function(var) "full" %in% names(var$inds)))]
+variables1 = variables[unlist(lapply(variables, function(var) "full" %in% names(var$inds)))]
+print(unlist(lapply(variables1[[length(variables1)]]$var, function(v) v[2])))
+
 ## FIT MODELS
 all_models = datas$makeAllModels(variables, phens, flags)
+full_models = lapply(all_models, function(all_models1) all_models1[['full']])
+full_models = full_models[unlist(lapply(full_models, length))>0]
+model_size= unlist(lapply(names(full_models), function(x) length(strsplit(x,";")[[1]])))
+final_model = full_models[[which.max(model_size)]]
+
+model_weights = unlist(lapply(final_model, function(mod1){
+  phen1= names(mod1$betas)
+  names(phen1) = phen1
+  lapply(phen1, function(p1){
+    bet=mod1$betas[[p1]]
+    varn = data.frame(t(data.frame(lapply(names(mod1$var_names), function(str)strsplit(str,"\\.")[1]))))
+    names(varn)=c("type","var")
+    df=cbind(varn,bet)
+    df
+  })
+}),rec=F)
+
+library(writexl)
+write_xlsx(model_weights,"weights.xlsx")
+
 eval = datas$evaluateAllModels(all_models, phens, flags)
+
+
 
 ##PLOT
 #ggps = .plotEval1(eval, rename=F, len=1)
 #for multinomial or ordinal
-ggps = .plotEval1(eval, rename=F,grid="cv~subpheno", sep="pheno", txtsize=1)
-ggps
+ggps = .plotEval1(eval, rename=T,grid="cv~subpheno", sep="pheno", txtsize=1,len=0)
+pdf("plots.pdf",width=30,height=30)
+for(ggp in ggps) print(ggp)
+dev.off()
 
 
 ##VISUALISE PREDICTIONS
