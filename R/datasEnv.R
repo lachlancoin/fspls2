@@ -10,7 +10,16 @@
   pvs_all
 }
 .getFamily<-function(y_mat){
-  if(typeof(y_mat)=="list"){
+  types = attr(y_mat, "types")
+  if(!is.null(types)){
+    return(lapply(types, function(typ){
+      if(typ=="double") return("gaussian")
+      if(typ=="boolean") return("binomial")
+      if(typ=="integer") return("ordinal")
+      if(typ=="character") return("multinomial")
+    }))
+  }
+    if(typeof(y_mat)=="list"){
     return(lapply(y_mat,function(y){
       if(!is.numeric(y)){
         y = as.factor(y);
@@ -24,6 +33,7 @@
       return("gaussian")
     }))
   }else{
+   
   return(apply(y_mat,2,function(y){
     if(!is.numeric(y)){
       y = as.factor(y);
@@ -82,7 +92,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     self$type="slow1"
     types_all = getOption("types_all",names(datas[[1]]$data))
     names(types_all) = types_all
-    var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_thresh",0.05))
+    var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_thresh",0.00))
     genes_incls=.readFlag(flags,"genes_incls",NULL) #,getOption("genes_incls",NULL)
     batch=.readFlag(flags, "batch",0)
     
@@ -93,13 +103,13 @@ datasEnv<-R6Class("datasEnv", public = list(
     invisible(lapply(1:length(datas), function(ik) {
       y1 = ys[[ik]] #dists[[ik]]$updateYdb(cats[['cats']])
       family = families[[ik]]
-      missing_vals = datas[[ik]]$updateY(y1, family=family, CHECK=T)
+      datas[[ik]]$updateY(y1, family=family, CHECK=T)
   #    datas[[ik]]$updateYdb(dists[[ik]]$mydb, cats[['cats']])
   #    missing_vals = self$updateY(y1, family=family, CHECK=T)
       
       datas[[ik]]$initTrain(varn=varn)
       #data[[ik]]$initY()
-      missing_vals
+     return(NULL)
     }))
     self$datas = datas
   },
@@ -139,11 +149,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     angles_all
   },
   makeAllModels=function(variables, phens, flags, all_models = list()){
-    ##order from longest to shortest to avoid recalculating models
     variables =variables[order(unlist(lapply(variables, function(v) length(v$var))),decreasing=T)]
-    #var_names =lapply(variables, function(v) names(v)[1]) ## just take the top one for now
-    #vars = names(sort(table(unlist(var_names)),decr=T))
-    #names(vars ) = vars
   
     verbose=.readFlag(flags,"verbose",F)
     for(v_nme in names(variables)){
@@ -174,6 +180,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   makeModels=function(vars1, inds, phens,flags){
     datas=self$datas
     train_nme = .readFlag(flags,'train', names(datas))
+    if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
     verbose=.readFlag(flags,"verbose",FALSE)
     #k = .readFlag(flags, 'rep',length(datas[[1]]$train))
     models = lapply(inds, function(k){
@@ -207,7 +214,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       d$getVariance();      
     })
   },
-  select=function(phens,flags){#, all_reps=F ## used to be train
+  select=function(phens,flags,verbose=F){#, all_reps=F ## used to be train
     datas1 = self$datas
     topn = .readFlag(flags,'topn', 20)
  #   return_type = .readFlag(flags,'return','model') ##model,eval,plot
@@ -235,11 +242,13 @@ datasEnv<-R6Class("datasEnv", public = list(
     
     variables =lapply(nreps, function(k){
       print(paste("cv",k,"of",length(nreps)))
+      jj1=0
     while(logpv<logpvthresh && length(vars_l[[1]]$var)<maxsize){
       angles_all = lapply(vars_l, function(vars){
         angles=lapply(train_nme, function(data_nme) datas1[[data_nme]]$getAngles1(phens,vars$var,incl=incl,k=k, type=self$type))
         comb=.summariseAngles(.combineAngles(angles,topn=topn),topn)
         nxt_vars = lapply(1:num_pvals, function(ik){
+          #print(ik)
           pv =  .getPvsAll(phens,datas1[names(datas1) %in% train_nme], c(vars$var,comb[ik]),k)
           mStateObj$new(comb[ik],  .sumChisq(pv) , prev_i=vars)
         })
@@ -252,6 +261,12 @@ datasEnv<-R6Class("datasEnv", public = list(
       #print(logpv)
       if(logpv<=logpvthresh){
         vars_l = angles_all1[ord][1:beam]
+      }
+      if(verbose){
+        nmes=names(vars_l[[1]]$var)
+       print(nmes[length(nmes)])
+         print(paste("logpv",logpv,jj1))
+         jj1 = jj1+1
       }
     }
     #lapply(datas1, function(d)d$saveParquet())
@@ -295,9 +310,20 @@ datasEnv<-R6Class("datasEnv", public = list(
  },
   evaluateAllModels=function(all_models, phens,flags){ ## different folds with same variables
 ##                          inds = as.numeric(names(all_models))){
-    .merge1_new(lapply(self$datas, function(d){
-      d$evaluateAllModels(all_models,phens,flags)
-    }),addName="data")%>% pivot_wider(names_from="submeasure")
+    nme_d = .readFlag(flags,"test",names(self$datas))
+    names(nme_d) = nme_d
+    print(nme_d)
+    eval1=.merge1_new(lapply(nme_d, function(nme1){
+     d = self$datas[[nme1]]
+      resd = try(d$evaluateAllModels(all_models,phens,flags))
+      if(inherits(resd,"try-error")) {
+        print(paste("problem", nme1))
+        return(NULL)
+      }
+      resd
+    }),addName="data")
+    if(is.null(eval1)) return(NULL)
+    eval1%>% pivot_wider(names_from="submeasure")
   },
   pvalues=function(vars,phens,flags){
     datas = self$datas

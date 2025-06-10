@@ -18,6 +18,8 @@ library(nnet)  ## for multinomial
 library("binom") ## for plotting
 
 library(SeuratObject)
+
+library(writexl)  ## to save weights
 #optional packages
 #library(bigmemory)
 #library(bigalgebra)
@@ -50,10 +52,33 @@ variance = sparse_variance(counts1)
 
 meta=pbmc@meta.data[,match(c( "predicted_labels_broad", "predicted_labels_fine"),names(pbmc@meta.data))]
 for(k in 1:ncol(meta))meta[[k]] = factor(meta[[k]])
+
+.expandAllvAll<-function(meta, colnmes){
+  rown = rownames(meta)
+  res_all = data.frame(unlist(lapply(colnmes, function(colnme){
+      y = meta[[colnme]]
+      levs = levels(y)
+      inds = 1:length(levs)
+      names(inds) = levs[inds]
+      unlist(lapply(inds[-1], function(ind){
+        inds2 = 1:(ind-1)
+        names(inds2) = levs[inds2]
+        lapply(inds2, function(ind2){
+           y1 = rep(NA,  length(y))
+           y1[y==levs[[ind]]]=0
+           y1[y==levs[[ind2]]]=1
+           y1
+        })
+      }),rec=F)
+  }),rec=F))
+  rownames(res_all) = rown
+  res_all
+}
+meta = .expandAllvAll(meta,"predicted_labels_fine")
 ys=list(pbmc=meta)
 datasets = list(pbmc=list(counts=counts1))
 mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1, hasNA=F)))
-flags = list(pthresh = 1e-5, max=50, nrep=5,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T)
+flags = list(pthresh = 1e-5, max=100, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T)
 datas =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
 phens=datas$pheno()
 ## FIND VARIABLES
@@ -62,43 +87,37 @@ variables1 = variables[unlist(lapply(variables, function(var) "full" %in% names(
 print(unlist(lapply(variables1[[length(variables1)]]$var, function(v) v[2])))
 
 ## FIT MODELS
-all_models = datas$makeAllModels(variables, phens, flags)
-full_models = lapply(all_models, function(all_models1) all_models1[['full']])
-full_models = full_models[unlist(lapply(full_models, length))>0]
-model_size= unlist(lapply(names(full_models), function(x) length(strsplit(x,";")[[1]])))
-final_model = full_models[[which.max(model_size)]]
+all_models = list()
+all_models = 
+  datas$makeAllModels(variables[seq(1,length(variables),by=20)], phens, flags, all_models)
 
-model_weights = unlist(lapply(final_model, function(mod1){
-  phen1= names(mod1$betas)
-  names(phen1) = phen1
-  lapply(phen1, function(p1){
-    bet=mod1$betas[[p1]]
-    varn = data.frame(t(data.frame(lapply(names(mod1$var_names), function(str)strsplit(str,"\\.")[1]))))
-    names(varn)=c("type","var")
-    df=cbind(varn,bet)
-    df
-  })
-}),rec=F)
 
-library(writexl)
-write_xlsx(model_weights,"weights.xlsx")
 
 eval = datas$evaluateAllModels(all_models, phens, flags)
 
-
+## GET WEIGHTS FROM FULL MODEL
+final_model = .getFinalModel(all_models, target_size = "max")
+model_weights = .extractWeights(final_model)
+names(model_weights) = gsub("pbmc.","",names(model_weights))
+combined = list(combined=cbind(model_weights[[1]][,1:2], data.frame(lapply(model_weights, function(mw)mw[,3]))))
+outw = paste0("weights",max(eval$numvars),".xlsx");
+write_xlsx(combined,outw)
 
 ##PLOT
 #ggps = .plotEval1(eval, rename=F, len=1)
+ ggps=.plotEval1(eval, rename=F, len=1, grid="pheno")
+
 #for multinomial or ordinal
-ggps = .plotEval1(eval, rename=T,grid="cv~subpheno", sep="pheno", txtsize=1,len=0)
-pdf("plots.pdf",width=30,height=30)
+#ggps = .plotEval1(eval, rename=T,grid="cv~subpheno", sep="pheno", txtsize=1,len=0)
+out = paste0("plot",max(eval$numvars),".pdf");
+pdf(out,width=30,height=30)
 for(ggp in ggps) print(ggp)
 dev.off()
 
 
 ##VISUALISE PREDICTIONS
-#predictions =datas$extractPredictions(all_models,phens, flags, CV = F);
-#.plotArea(predictions, rename=F)
+predictions =datas$extractPredictions(all_models[c(10,20,30,40,50)],phens, flags, CV = F);
+.plotArea(predictions, rename=F, grid="pheno", p_incl = "Memory.B.cells")
 
 
 ### get projection

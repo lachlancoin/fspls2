@@ -1,5 +1,7 @@
+## redundant should remove
+
 #default_types=fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC"}')
-default_types=fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC","multinomial" : "AUC_all","ordinal" :"AUC_all"}')
+#default_types=fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC","multinomial" : "AUC_all","ordinal" :"AUC_all"}')
 
 
 .mod<-function(mat){

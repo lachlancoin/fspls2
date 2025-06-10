@@ -22,11 +22,8 @@
     eval
 }
 
-.plotEval1<-function(eval0,rename=F, len=1,
-                     shape_color="cohort_measure",linetype="fullmodel",
-                     txtsize=1,
-                     grid="pheno~cv",sep_by=c("trainedOn","measure","subpheno")){
-  if(rename)eval0=.renameModels(eval0, len=len)
+.calcEval1<-function(eval0,sep_by=c("trainedOn","measure","subpheno")){
+
   
    eval = eval0 %>% tibble::add_column(cohort_measure= apply(eval0[,names(eval0) %in% c("data","measure")],1,paste, collapse=" "),
                                        cohort_measure_pheno_trained= apply(eval0[,names(eval0) %in% c("data","subpheno","measure","pheno","trainedOn")],1,paste, collapse=" "),
@@ -72,8 +69,15 @@
   eval2 = rbind(eval2,eval3)
   }
       eval2$cv = paste("CV=",eval2$cv)
+ eval2     
+}
 #      maxn = max(eval2$nsamps)
   #head(eval4)#pivot_wider(eval2, names_from = c("cv", "fullmodel", "numvars"), values_from ="value")
+.plotEval1<-function(eval2, rename=F, len=1,
+           shape_color="cohort_measure",linetype="fullmodel",
+           txtsize=1,logy=F,
+           grid="pheno~cv"){
+  if(rename)eval2=.renameModels(eval2, len=len)
   phenos = unique(eval2$sep_by)
   names(phenos)=phenos
  
@@ -83,39 +87,115 @@
     geom_line(aes_string(x="numvars", y="mid", linetype=linetype, color=shape_color)) +
     geom_errorbar(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype,color=shape_color ), alpha = 0.5)
   if(!is.null(grid)){
+    if(length(grep("~",grid))>0){
     ggp<-ggp+facet_grid(grid,scales="free")
+    }else{
+      ggp<-ggp+facet_wrap(grid)
+    }
   }
-  ggp+ theme(legend.position = "bottom",legend.title = element_text(size = txtsize));#+theme(,    legend.text = element_text(size = 3))
+  ggp<- ggp+ theme(legend.position = "bottom",legend.title = element_text(size = txtsize));#+theme(,    legend.text = element_text(size = 3))
+  if(logy)ggp<-ggp+ scale_y_log10() 
+  ggp
   })
   ggps
 }
 
-
-
-
-
-getSparseSubMatrix<-function(counts, colInds){
-  colinds1 = colInds -1
-  X2 <- as(counts, "TsparseMatrix")
-  subinds = which(X2@j %in% colinds1)
-#  subinds = match(X2@j,colinds1)
-#  nonNA = which(!is.na(subinds))
-#  subinds1 = subinds[nonNA]
-  mi = match( X2@j[subinds],colinds1)
-  mat1 <- sparseMatrix(i = X2@i[subinds]+1, 
-                       j = mi,
-                     x = X2@x[subinds])
-  dimnames(mat1) = list(dimnames(X2)[[1]], dimnames(X2)[[2]][colInds])
+mergeSparseMatrices<-function(m1,m2, by="row"){
+  m1 <- as(m1, "TsparseMatrix")
+  m2 <- as(m2, "TsparseMatrix")
+  if(by=="row"){
+  if("x" %in% slotNames(m1)){
+    mat1 <- sparseMatrix(i = 1+c(m1@i, m2@i+nrow(m1)),
+                         j = 1+c(m1@j, m2@j),
+                         x = c(m1@x, m2@x))
+  }else{
+    mat1 <- sparseMatrix(i = 1+c(m1@i, m2@i+nrow(m1)),
+                         j = 1+c(m1@j, m2@j))
+  }
+  }else{
+    if("x" %in% slotNames(m1)){
+      mat1 <- sparseMatrix(j = 1+c(m1@j, m2@j+ncol(m1)),
+                           i = 1+c(m1@i, m2@i),
+                           x = c(m1@x, m2@x))
+    }else{
+      mat1 <- sparseMatrix(j = 1+c(m1@j, m2@j+ncol(m1)),
+                           i = 1+c(m1@i, m2@i))
+    }
+  }
   mat1
 }
+
+expandSparseMatrix<-function(counts, n,  vec, by="row"){
+  mat1=replicate(n,vec,simplify = F)
+  if(by=="row"){
+     mat =do.call(rbind,mat1 )
+  }else{
+    mat = do.call(cbind,mat1)
+  }
+ mergeSparseMatrices(counts, Matrix(mat,sparse=T),by=by)
+}
+
+getSparseSubMatrix<-function(counts, inds,by='col'){
+  colInds = inds
+  rowInds = inds
+  if(by=='col' && ncol(counts)==length(inds)){
+    #check if we even need submatrix
+     if(max(apply(cbind(colInds, 1:ncol(counts)),1,function(v) abs(v[2]-v[1])))==0) return(counts);
+  }
+  if(by=='row' && nrow(counts)==length(inds)){
+    #check if we even need submatrix
+    if(max(apply(cbind(rowInds, 1:nrow(counts)),1,function(v) abs(v[2]-v[1])))==0) return(counts);
+  }
+  if(by=='col'){
+        colinds1 = colInds -1
+        X2 <- as(counts, "TsparseMatrix")
+        subinds = which(X2@j %in% colinds1)
+        mi = match( X2@j[subinds],colinds1)
+        dimnames = list(dimnames(X2)[[1]], dimnames(X2)[[2]][colInds])
+        dims = c(dim(X2)[[1]], length(colInds))
+        
+        if("x" %in% slotNames(X2)){
+          mat1 <- sparseMatrix(i = X2@i[subinds]+1, 
+                             j = mi,
+                           x = X2@x[subinds],
+                           dims = dims, 
+                           dimnames = dimnames)
+        }else{
+          mat1 <- sparseMatrix(i = X2@i[subinds]+1, 
+                               j = mi,
+                               dims = dims, 
+                               dimnames = dimnames)
+                           
+        }
+         
+  }else{
+    rowinds1 = rowInds -1
+    X2 <- as(counts, "TsparseMatrix")
+    subinds = which(X2@i %in% rowinds1)
+    mi = match( X2@i[subinds],rowinds1)
+    dimnames = list(dimnames(X2)[[1]][rowInds], dimnames(X2)[[2]])
+    dims = c(length(rowInds), dim(X2)[[2]])
+    if("x" %in% slotNames(X2)){
+      mat1 <- sparseMatrix(j = X2@j[subinds]+1, 
+                           i = mi,
+                           x = X2@x[subinds],
+                           dims = dims, 
+                           dimnames = dimnames)
+    }else{
+      mat1 <- sparseMatrix(j = X2@j[subinds]+1, 
+                           i = mi,
+                           dims  =dims, 
+                           dimnames = dimnames)
+      
+    }
+  }
+    mat1
+}
 sparse_norm<-function(X){ 
-  #converts a sparse Matrix into a list of its columns
-  #each list item contains only the nonzero elements of the column
+  
  nrow = nrow(X)
   X<-as(X,"CsparseMatrix")
   res<-split(X@x, findInterval(seq_len(nnzero(X)), X@p, left.open=TRUE))
-  #names(res)<-colnames(X)
-  
   aa=unlist(vapply(res,
                    function(x) {
                      mean = sum(x)/nrow
@@ -137,6 +217,20 @@ sparse_variance<-function(X){
                      mean = sum(x)/nrow
                      nzero = nrow -length(x)
                      (sum((x - mean)^2)+ nzero *(mean^2))/nrow
+                   },
+                   FUN.VALUE = c(1)))
+  res1 = rep(0, ncol(X))
+  res1[as.numeric(names(aa))] = aa
+  names(res1) = colnames(X)
+  res1
+}
+sparse_levs<-function(X){ 
+  nrow = nrow(X)
+  X<-as(X,"CsparseMatrix")
+  res<-split(X@x, findInterval(seq_len(nnzero(X)), X@p, left.open=TRUE))
+  aa=unlist(vapply(res,
+                   function(x) {
+                    length(unique(x))
                    },
                    FUN.VALUE = c(1)))
   res1 = rep(0, ncol(X))
@@ -605,26 +699,47 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   pchisq(sum(chisq), df = length(pvs), lower.tail=F)
 }
 
-.plotArea<-function(predictions, rename=T, len = 1){
+.plotArea<-function(predictions, family="binomial",rename=T, len = 1,grid="model~pheno", p_incl=""){
   area_p=.merge1_new(lapply(predictions, function(model){
     .merge1_new(lapply(model, function(train){
       .merge1_new(lapply(train, function(test){
         phens = names(test$ypred); names(phens)=phens
+        phens = phens[unlist(lapply(phens, function(p)length(grep(p_incl,p))))>0]
         .merge1_new(lapply(phens, function(phen){
   #        indsk = 1:ncol(test$ypred[[phen]]);
   #        names(indsk)=dimnames(test$ypred[[phen]])[[2]]
          # .merge1_new(lapply(indsk , function(k){
-            getAreaPlot(test$ypred[[phen]], test$y[[phen]])
+            if(family=="gaussian"){
+               ap  = data.frame(list(knots = test$y[[phen]],value=test$ypred[[phen]]))
+               names(ap)=c("knots","value")
+            }else{
+              ap = getAreaPlot(test$ypred[[phen]], test$y[[phen]])
+            }
+            ap
           #}),addName="subpheno")
         }), addName="pheno")
       }), addName="train")
     }), addName="test")
   }), addName="model")
   #area_p$model
+  print("now plotting")
   area_p1=if(rename) .renameModels(area_p, len=len) else area_p
-  area_p1$subpheno = factor(area_p1$subpheno)
-  ggp<-ggplot(area_p1, aes(x=knots, y=value, color=subpheno, linetype=test))+geom_line()+facet_grid(model~pheno)
-  if(max(area_p1$counts)>5) ggp=ggp+geom_point(aes(size=counts)) else ggp=ggp+geom_point()
+  if(!is.null(area_p1[['subpheno']])) area_p1$subpheno = factor(area_p1$subpheno)
+  lens = vapply(area_p1$model, function(x) length(strsplit(x,";")[[1]]), FUN.VALUE = c(1))
+  area_p1 = area_p1%>% tibble::add_column(lens = factor(lens))
+  if(is.null(area_p1[['subpheno']])){
+    ggp<-ggplot(area_p1, aes(x=knots, y=value, color=pheno, linetype=lens))
+    
+  }else{
+  ggp<-ggplot(area_p1, aes(x=knots, y=value, color=subpheno, linetype=lens))
+  }
+  if(family!="gaussian") ggp<-ggp+geom_line()
+  if(length(grep("~",grid))>0){
+    ggp<-ggp+facet_grid(grid,scales="free")
+  }else{
+    ggp<-ggp+facet_wrap(grid)
+  }
+  if(max(area_p1$counts)>5) ggp=ggp+geom_point(aes(size=counts, shape=lens), alpha = 0.5) else ggp=ggp+geom_point(aes(shape=lens), size=2,alpha = 0.5)
   ggp
 }
 
@@ -1180,3 +1295,27 @@ fromJSONM<-function(json){
   datasets
 }
 
+.getFinalModel<-function(all_models, target_size=NULL){
+  full_models = lapply(all_models, function(all_models1) all_models1[['full']])
+  full_models = full_models[unlist(lapply(full_models, length))>0]
+  model_size= unlist(lapply(names(full_models), function(x) length(strsplit(x,";")[[1]])))
+  if(is.null(target_size) || is.character(target_size)){
+    target_size = max(model_size)
+  }
+  final_model = full_models[[which(model_size==target_size)]]
+  final_model
+}
+
+.extractWeights<-function(final_model){
+unlist(lapply(final_model, function(mod1){
+  phen1= names(mod1$betas)
+  names(phen1) = phen1
+  lapply(phen1, function(p1){
+    bet=mod1$betas[[p1]]
+    varn = data.frame(t(data.frame(lapply(names(mod1$var_names), function(str)strsplit(str,"\\.")[1]))))
+    names(varn)=c("type","var")
+    df=cbind(varn,bet)
+    df
+  })
+}),rec=F)
+}

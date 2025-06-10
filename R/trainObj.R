@@ -43,16 +43,19 @@ trainObj<-R6Class("trainObj",
                       
                                    
                       ##should move cols_incl to dataObj
-                      
-                      yvar=apply(yTr,2,function(v1) all(duplicated(v1[!is.na(v1)])))
-                      ycols = which(!yvar)
-                      if(length(ycols)==0){
-                        warning(" all phenotype cols have zero variance")  
-                        return (NULL)
+                      if(FALSE){
+                        yvar=apply(yTr,2,function(v1) all(duplicated(v1[!is.na(v1)])))
+                        ycols = which(!yvar)
+                        if(length(ycols)==0){
+                          warning(" all phenotype cols have zero variance")  
+                          return (NULL)
+                        }
+                      }else{
+                        ycols = 1:ncol(yTr)
                       }
 #                      y1 = yTr[nonNA,ycols,drop=F]
                      
-                      self$y2 = yTr[,ycols,drop=F]
+                      #self$y2 = yTr[,ycols,drop=F]
                       y1 = vector("list", ncol(yTr))
                       names(y1) = names(yTr)
                       maxy1 =vector("list",ncol(yTr))
@@ -89,11 +92,10 @@ trainObj<-R6Class("trainObj",
                       #}
                       
                       y=y1
-                      ymod = vector("list", ncol(yTr))
-                      #if(family!="multinomial"){
+#                      ymod = vector("list", ncol(yTr))   
                       for(colk in 1:length(y1)){
                         for(j in 1:length(mean_y[[colk]])){
-                          y[[colk]][,j] = y1[[colk]][,j]  - mean_y[[colk]][j] #yTr[,j]  - mean_y[j]
+                          y[[colk]][,j] = data$weights[,colk]*(y1[[colk]][,j]  - mean_y[[colk]][j]) #yTr[,j]  - mean_y[j]
                         }
                         y[[colk]][!nonNA[[colk]],] = rep(0, ncol(y[[colk]]))
                         if(family[[colk]] %in% c("binomial","multinomial")){
@@ -101,20 +103,22 @@ trainObj<-R6Class("trainObj",
                         ymean = mean_y[[colk]] #mean(y, na.rm=T)  ##NEED TO ADD BACK Y MEAN HERE
                         ymean1 = log(ymean) - log(maxy1[[colk]][[1]]-ymean)
                         #        ymean1 = log(ymean) - log(1-ymean)
-                        ymod[[colk]] =  t(as.matrix(data$weights[,colk]*((y[[colk]]+ymean)-1/(1+exp(-ymean1)))))
+ #                       ymod[[colk]] =  t(as.matrix(data$weights[,colk]*((y[[colk]]+ymean)-1/(1+exp(-ymean1)))))
                       }else{
-                        ymod[[colk]]=t(as.matrix(data$weights[,colk]*(y[[colk]])))
+  #                      ymod[[colk]]=t(as.matrix(data$weights[,colk]*(y[[colk]])))
                       }
                       #if(family!="multinomial"){
-                      mean_check= apply(ymod[[colk]][,nonNA[[colk]],drop=F],1,mean)
-                      if(max(abs(mean(mean_check)))>1e-5){
-                        stop(paste("assumption of mean 0 ymod", mean_check))
-                      }
+   #                   mean_check= apply(ymod[[colk]][,nonNA[[colk]],drop=F],1,mean)
+  #                    if(max(abs(mean(mean_check)))>1e-5){
+   #                     stop(paste("assumption of mean 0 ymod", mean_check))
+    #                  }
                       }
                       
-                      self$y = y
-                      self$y1 = y1
-                      self$ymod = ymod
+                      self$yTr = lapply(y, t)  #should this be ymod??
+                      ymean = lapply(self$yTr,function(yTr1) apply(yTr1,1,mean)) ## should be mean 0
+                      if(max(abs(unlist(ymean)))>1e-5)stop("problem")
+                     # self$y1 = y1
+                    #  self$ymod = ymod
                     #  self$weights = d_weights
                   #    self$norm = norm
                       self$nonNA = nonNA
@@ -133,23 +137,20 @@ trainObj<-R6Class("trainObj",
                       
                       
                       
-                      prevs1 = stateObj$new(phensi, data, self,k,var=var, varnames=varnames, W_all = W_all)
-                      #if(length(varnames)>0){
-                      #  names(prevs1) = paste(varnames, collapse=",");
-                      #}
-                      #names(prevs1) = lapply(prevs1, function(p)p$name)
-                      self$prev= prevs1
-                      self$prev_old=NULL
+                      self$prev = stateObj$new(phensi, data, self,k,var=var, varnames=varnames, W_all = W_all)
+                    
+                    #  self$prev= prevs1
+                    #  self$prev_old=NULL
                       
 #                      yTr = lapply(self$y, t)   #precalculate products
                     #  print("precalc products")
                       self$products= lapply(1:length(data$data), function(ik){
                         x = data$data[[ik]]
-                        lapply(self$y, function(yTr1){
+                        lapply(self$yTr, function(yTr1){
                          # print(dim(yTr1))
                         #  print(dim(x))
-                          resu1=if(isbigmatrix(x)) dgemm(A=t(yTr1),B=x) else t(yTr1) %*% x
-                          dimnames(resu1) = list(dimnames(yTr1)[[2]],dimnames(x)[[2]])
+                          resu1=if(isbigmatrix(x)) dgemm(A=(yTr1),B=x) else yTr1 %*% x
+                          dimnames(resu1) = list(dimnames(yTr1)[[1]],dimnames(x)[[2]])
                           resu1
                         })
                       })
@@ -182,8 +183,11 @@ getMaxBetaProj=function(){
   #   })
   mabv
 },                    
-                    y="list",y1="list",ymod="list", y2="matrix",
-                    weights = "matrix",
+                    yTr="list",
+          #ymod="list", 
+                    #y1="list",
+                   # y2="matrix",
+                    #weights = "matrix",
                
                     nonNA="list",
                     family="character",
@@ -191,11 +195,11 @@ getMaxBetaProj=function(){
 #na_y = "logical",
 #                    non_na_inds = "vector",
 looc_incl_k_ij = "vector",
-                    ypred="ypredObj",
-                    rmsv_ ="matrix",
+                 #   ypred="ypredObj",
+                  #  rmsv_ ="matrix",
                     prev="list",
 products="list",
-                    prev_old="list",
+                  #  prev_old="list",
           
 #                    mean_x = "vector",
 mean_y="vector"

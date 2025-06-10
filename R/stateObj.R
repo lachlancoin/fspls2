@@ -258,7 +258,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj, var_names = self$var_names)
                   },
-                  updateConst=function(phensi,data, train, consts_prev,CHECK=F){   #REVISIT THIS FOR MULTINOM
+                  updateConst=function(phensi,data, train, consts_prev=NULL,CHECK=F){   #REVISIT THIS FOR MULTINOM
                     ##need to consider non_na_x
                     family = data$family
                     non_na_x = data$getNonNA(self$var) 
@@ -300,7 +300,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                      }else {  
                        na_k=non_na_x & nonNA
                        spike_slab_iter = getOption("spike_slab_iter",0)
-                       yp1 = .calcYpred_1(self,  data$data, non_na_x &nonNA, numvar=NULL,kk=kk1,constants=rep(0, ncol(train$y[[kk]]))) 
+                       yp1 = .calcYpred_1(self,  data$data, non_na_x &nonNA, numvar=NULL,kk=kk1,constants=rep(0, nrow(train$yTr[[kk]]))) 
                        y=data$y[non_na_x & nonNA,kk]
                        if(spike_slab_iter>1){
                         # print("using spike slab for const")
@@ -318,16 +318,26 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                          #const_term 
                        }else{
                        
+                         if(TRUE){
+                           ones = rep(1, length(yp1[,1]))
+                           ridge=glmnet(cbind(ones,yp1[,1]),data$y[non_na_x & nonNA,kk],family=data$family[[kk]], alpha = 0)
+                           rbeta <- coef(ridge,s=min(ridge$lambda))
+                           self$constants_proj[[kk1]] = rbeta[1,1]
+                         }else{
                         self$constants_proj[[kk1]]  <- tryCatch({
                           gl = glm(data$y[non_na_x & nonNA,kk]~ yp1[,1], family=data$family[[kk]])
                           gl$coefficients[1]
                         }, warning=function(w) {
-                          print("using glmnet")
+                          print("using glmnet to regularise ")
                           ones = rep(1, length(yp1[,1]))
                           ridge=glmnet(cbind(ones,yp1[,1]),data$y[non_na_x & nonNA,kk],family=data$family[[kk]], alpha = 0)
                           rbeta <- coef(ridge,s=min(ridge$lambda))
                           rbeta[1,1]
                         })
+                         }
+                        
+                        
+                        
                        }
                      }
                   

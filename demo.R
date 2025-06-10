@@ -26,33 +26,38 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 
-datasets =examples[3]
+datasets =examples[2]
+#datasets[[1]]$y =Matrix(datasets[[1]]$y, sparse=T)
 
-flags = list(pthresh = 5e-2, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1)
+flags = list(pthresh = 5e-2, nrep=5,batch=0, train=names(datasets)[1],topn=20,beam=1)
 
 ## MAKE THE FSPLS DATA OBJECT
 datas =datasEnv$new(datasets,flags=flags) 
-
-
 phens=datas$pheno()[1]
 ## FIND VARIABLES
 variables = datas$select(phens, flags)
+#names(variables)[1]="x"
 print(variables)
 ## FIT MODELS
 all_models = datas$makeAllModels(variables, phens, flags)
+
+options("fspls.types"=
+          fromJSON('{"gaussian": ["correlation","var"],"binomial":"AUC","multinomial":"AUC_all","ordinal" : "AUC_all"}'))
+
 eval = datas$evaluateAllModels(all_models, phens, flags)
 
 ##PLOT
-ggps = .plotEval1(eval, rename=F, len=1)
+eval2 = .calcEval1(eval,sep="subpheno")
+ggps = .plotEval1(eval2, rename=F,len=1)
 #for multinomial or ordinal
-#ggps = .plotEval1(eval, rename=F,grid="subpheno~cv", sep="pheno")
+#ggps = .plotEval1(eval, rename=F,grid="subpheno~cv")
 ggps
 
 
 ##VISUALISE PREDICTIONS
 predictions =datas$extractPredictions(all_models,phens, flags, CV = F);
 #aa=roc(predictions[[2]]$y, predictions[[2]]$X0)
-.plotArea(predictions, rename=F)
+.plotArea(predictions, rename=F,datas$datas[[1]]$family[1])
 
 
 

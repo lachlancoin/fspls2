@@ -39,7 +39,7 @@ invisible(try(lapply(paste("./R",src1,sep="/"), function(x) {print(x);source(x)}
 path="~/github/FSPLS-publication-repo/input"
 print(dir(path,full=T,rec=T))
 rawl = .readRawlinsonData(filenames=list(golub = 'coin_data/coin_multiclass_data.prepd.Rds'), path= path)
-#rawl = .readRawlinsonData(filenames=list(golub = 'ng_data/ng_counts.prepd.Rds'), path= path)
+rawl = .readRawlinsonData(filenames=list(golub = 'ng_data/ng_counts.prepd.Rds'), path= path)
 
 
 flags = list(pthresh = 1e-5, nrep=10,batch=0, train=names(rawl$datasets)[1],topn=100,beam=1)
