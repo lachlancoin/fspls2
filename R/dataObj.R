@@ -1,6 +1,26 @@
-default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC_all","ordinal" :"AUC_all"}')
+default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC_all"}')
 
 ## gets matrices without NAs
+
+.expandFactors<-function(y){
+  res = lapply(1:ncol(y), function(i){
+    y1 = y[,i]
+    if(!is.factor(y1)) y1 = factor(y1, levels = sort(unique(y1)))
+    levs1 = levels(y1)
+    mat = Matrix(0, nrow = length(y1), ncol = length(levs1), dimnames = list(rownames(y), levs1),sparse=T)
+    if(length(which(is.na(y1)))>0){
+      mat[is.na(y1),]=rep(NA, length(levs1))
+    }
+    for(j in 1:length(levs1)){
+      mat[y1==levs1[[j]],j]=1
+    }
+    attr(mat,"factor")=y1
+    mat
+  })
+  names(res) = names(y)
+  
+  res
+}
 
 
 .combineAngles<-function(angles, incl=names(angles[[1]]), topn=100){
@@ -298,7 +318,7 @@ dataObj1<-R6Class("dataObj", public = list(
   looc="loocObj",
   ypreds_all="ypredObj",
   family="character",
-  train="list",
+  train="trainObj",
   #UDVP="UDVPObj",  
   initialize=function(data){
     self$y = data$y
@@ -324,7 +344,7 @@ dataObj<-R6Class("dataObj", public = list(
 #  ones_x="matrix",
   #ymod="matrix",
   weights="matrix",
-  train="list",
+  train="trainObj",
   seed="integer",
   subset="logical",  ### used to restrict to subsets in looc Obj
   looc="loocObj",
@@ -347,22 +367,48 @@ convert=function(b_i1){
   var_ind = which(dimnames(self$data[[data_ind]])[[2]]==b_i1[2])
   c(data_ind, var_ind)
 },
-calcBetaProj1=function(phens,k, b_i1, prev_var1){
-  phensi = match(phens, names(self$y))
-  self$calcBetaProj(phensi, k, self$convert(b_i1), lapply(prev_var1, self$convert))
+pheno = function(){
+lapply(self$y, function(y1) colnames(y1))
 },
-calcBetaProj=function(phensi,k,b_i,prev_var){
+calcBetaProj1=function(phensi,k,b_i1,prev_var1, convert=T){
+  if(convert){
+    b_i1 = self$convert(b_i1)
+    prev_var1 = lapply(prev_var1, self$convert)
+    phensi = self$phensi(phensi)
+  }
+  nmesi = names(phensi)
+  names(nmesi) = nmesi
+  res = lapply(nmesi, function(nme){
+    phensi1 =  match(nme, names(self$y))
+    family=self$family[phensi1]
+    phensi_=phensi[[nme]]
+   # print(names(self$y))
+  #  print(nme)
+#    family = strsplit(nme,"\\.")[[1]][1]
+    self$calcBetaProj(nme,phensi_,family,  k, b_i1, prev_var1)
+  })
+  nme = names(res[[1]])
+  names(nme)=nme
+  res1 = unlist(lapply(nme, function(n){
+    lapply(res, function(r) r[[n]])
+  }),rec=F)
+  res1
+},
+calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var){
   data = self
-  train = data$train[[k]]
-  family=data$family[phensi]
+  train = data$train
   d = train
   # print(family)
-  nonNA = train$nonNA
+  nonNA = self$looc$incl[,k]
   vars1 = c(prev_var,list(b_i))
   data$updateUDVP(prev_var)
   UDV = data$UDVP ## should check it corresponds to prev_i
   #train = data$train
-  ys =self$y[phensi] ##  if(family %in% c("binomial","ordinal")) (d$y1) else if(family =="multinomial") d$y2 else d$y
+  ys =self$y[[nme]] ##  if(family %in% c("binomial","ordinal")) (d$y1) else if(family =="multinomial") d$y2 else d$y
+  if(family=="multinomial"){
+    ys = data.frame(list(attr(ys,"factor")))
+    names(ys) = nme
+  }
   ncoly = ncol(ys)
   betas = apply(ys,2,function(v1) list())# apply(train$y,2, function(v1) list())
   tbls =  apply(ys,2, function(v1) list())
@@ -402,10 +448,10 @@ calcBetaProj=function(phensi,k,b_i,prev_var){
   #if(varx<1e-10)stop("variance  too small")
   #k =NULL ##delete this later
   for(kk in 1:ncoly){
-    nonNAk = d$nonNA[[kk]] & non_na_x
+    nonNAk = nonNA & non_na_x
     x = x_[nonNAk ]
-    y = ys[nonNAk,kk]
-    w = data$weights[nonNAk,kk]
+    y = ys[,kk][nonNAk]
+    w = data$weights[nonNAk]
     beta_new1=0;
     
     if(family[[kk]]=="multinomial"){
@@ -618,8 +664,8 @@ calcWall=function(b_i, var, W_all1){
   }
   Wall
 },
-makeNextModel=function(phensi,var,  prev_is= self$train[[k]]$prev,k
-                      #lapply(1:length(self$train), function(k) self$train[[k]]$prev),
+makeNextModel=function(phensi,var,  prev_is= self$train$prev[[k]],k
+                      #lapply(1:self$nreps(), function(k) self$train$prev[[k]]),
                                        ){
  
   #.check(prev_i$var, vars[-length(vars)])
@@ -628,8 +674,9 @@ makeNextModel=function(phensi,var,  prev_is= self$train[[k]]$prev,k
   #prevs_all =lapply(fold_inds, function(k){
 #       lapply(prev_is[[k]], function(prevk){
          prevk = prev_is
-          prev_i1=stateObj$new(phensi,self, self$train[[k]],k,prevk , b_i,b_i_name=var)
-          prev_i1$updateConst(phensi,self, self$train[[k]])
+         mean_y = self$train$means_y[[k]]
+          prev_i1=stateObj$new(phensi,self, self$train,k,mean_y,prevk , b_i,b_i_name=var)
+          prev_i1$updateConst(phensi,self, self$train,k)
           prev_i1
  #      })
   #})
@@ -639,10 +686,10 @@ makeModels=function(phens,vars1, k, verbose=F){
   if(length(vars1)==0){
     return(list(prev_is$simplify()))
   }
-  phensi = match(phens, names(self$y))
+  phensi = self$phensi(phens)
   models = vector("list", length(vars1))
  # prev_is = lapply(fold_inds, function(k) stateObj$new(phensi,self,self$train[[k]], k))
- prev_is= self$train[[k]]$prev  #lapply(fold_inds, function(k) self$train[[k]]$prev)
+ prev_is= self$train$prev[[k]]  #lapply(fold_inds, function(k) self$train$prev[[k]])
   #if(length(prev_i$var)>0) stop("problem")
   nmes = c()
  
@@ -660,27 +707,38 @@ makeModels=function(phens,vars1, k, verbose=F){
   names(models) = nmes
   models
 },
+nreps=function(){
+  ncol(self$looc$incl)
+},
 updateYpredsInds=function(phens,prev,k2,ypred ){
-  phensi = match(phens, names(self$y))
-  within=(k2==length(self$train))
+  phensi = self$phensi(phens)
+  within=(k2==self$nreps())
   self$updateYpreds(phensi,k2,within=within, ypred=ypred, prev)
 },
-getNonNAInds=function(inds,kk){
+getNonNAInds=function(inds){
     df=data.frame(lapply(inds, function(k){
-      self$train[[k]]$nonNA[[kk]] 
+      self$train$looc_incl[,k]#  $nonNA1(k, self$y)
+      #nonNAs[[kk]] 
     }))
     apply(df,1,min)!=0
 },
 getRMSVInds=function(phens,inds, ypred ){
-  phensi = match(phens, names(self$y))
-  within=(length(inds)==1 && inds[[1]]==length(self$train))
+  phensi =self$phensi(phens)
+  within=(length(inds)==1 && inds[[1]]==self$nreps())
   ## if not within then all
-  nonNAs=lapply(phensi,function(kk){
-   self$getNonNAInds(inds,kk); 
-  })
+  
+  #nonNAs=lapply(names(phensi),function(kk){
+  #  t(self$train$nonNA[[kk]])
+  #})
+  nonNAs=#lapply(phensi,function(kk){
+    self$getNonNAInds(inds); 
+  #})
+#  nonNAs = lapply(inds, function(ind1){
+#    self$train$looc_incl[,ind1]
+#  })
   res1 =   .calcRMSV_1(phensi,ypred$ypreds, self,nonNAs, 
                        flip=!within,
-                       types_=getOption("fspls.types", default_types),family=self$family)
+                       types_=getOption("fspls.types", default_types))
   res1
 },
 
@@ -697,7 +755,7 @@ extractPredictions=function(all_models1,phens, flags, CV = FALSE){
       ypred = ypredObj$new(d,NULL, d$family)
     #  dim(ypred$ypreds[[1]])
       if(!is.null(full_model) && ! CV){
-        d$updateYpredsInds(phens,full_model[[nmes1]], length(d$train), ypred )
+        d$updateYpredsInds(phens,full_model[[nmes1]], d$nreps(), ypred )
         return(list(y=d$y[phens],ypred=ypred$ypreds[phens]) )
       }
       if(length(nmesm)>0 && CV){
@@ -723,7 +781,7 @@ evaluateAllModels=function(all_models,phens, flags){
   ypred = ypredObj$new(d,NULL, d$family)
   mod_nme = names(all_models); names(mod_nme)=mod_nme
   evals = .merge1_new(lapply(mod_nme, function(mod_nme1){
-    #print(mod_nme1)
+   # print(mod_nme1)
     all_models1 = all_models[[mod_nme1]]
     full_ind = names(all_models1)=="full"
     full_model = all_models1[["full"]]
@@ -734,14 +792,14 @@ evaluateAllModels=function(all_models,phens, flags){
     .merge1_new(lapply(nmes_models, function(nmes1){
       res1 = NULL; res2 = NULL
       if(!is.null(full_model)){
-        self$updateYpredsInds(phens,full_model[[nmes1]], length(d$train), ypred )
-        res1 = self$getRMSVInds(phens, length(d$train), ypred)  
+        self$updateYpredsInds(phens,full_model[[nmes1]], d$nreps(), ypred )
+        res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
       }
       if(length(nmesm)>0){
         for(j in 1:length(nmesm)){
           self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
         }
-        res2 = d$getRMSVInds(phens, inds, ypred)  
+        res2 = self$getRMSVInds(phens, inds, ypred)  
        
       }
      rbind(res1,res2)
@@ -754,15 +812,15 @@ evaluateAllModels=function(all_models,phens, flags){
 },
 
 evaluateModels=function(phens,models,inds){
-  fold = !(length(inds)==1 && inds[[1]] == length(self$train))
+  fold = !(length(inds)==1 && inds[[1]] == self$nreps())
   phensi = match(phens, names(self$y))
   if(length(which(is.na(phensi)))>0) stop("phens not matching")
-  #doCV = length(self$train)>1
+  #doCV = self$nreps()>1
   res = lapply(models, function(x) NULL)
   #res_cv = lapply(models, function(x) NULL)
-  #fold_inds = if(fold) k else 1:length(self$train)
-  #prev_is= self$train[[k]]$prev  
-  prev_is = lapply(inds, function(k) self$train[[k]]$prev)
+  #fold_inds = if(fold) k else 1:self$nreps()
+  #prev_is= self$train$prev[[k]]  
+  prev_is = lapply(inds, function(k) self$train$prev[[k]])
   ypred = ypredObj$new(self,NULL, self$family)
   for(jk in 1:length(models)){
     prevsk=models[[jk]]
@@ -785,8 +843,8 @@ evaluateModels=function(phens,models,inds){
 },
 
   updateModel=function(k,best_all_i, model_prev,to_keep,CHECK=T){
-   # if(TRUE) stop("not updating")
-    sprev = self$train[[k]]$prev
+    if(TRUE) stop("not updating")
+    sprev = self$train$prev[[k]]
     best_all=lapply(1:length(best_all_i), function(j){
       prev_i= sprev[[to_keep[j]]]
       best_i = best_all_i[[j]]
@@ -796,7 +854,7 @@ evaluateModels=function(phens,models,inds){
       #data_ind = which(names(self$data)==b_i[[1]])
       #b_i1 = c(data_ind, which(dimnames(self$data[[data_ind]])[[2]]==b_i[2]))
       nxt_v= lapply(best_i, function(b_i) stateObj$new(self, self$train[[k]], k,prev_i,self$convert(b_i1)))
-         lapply(nxt_v, function(nv) nv$updateConst(self, self$train[[k]]))
+         lapply(nxt_v, function(nv) nv$updateConst(self, self$train[[k]],k))
       #                       nxt_v = nxt_v[!unlist(lapply(nxt_v, is.null))]
       names(nxt_v) = unlist(lapply(nxt_v,  function(nv)paste(unlist(lapply(nv$var, function(vv){
         paste(names(self$data)[vv[1]],dimnames(self$data[[vv[1]]])[[2]][vv[2]],sep=".")
@@ -1015,12 +1073,12 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
   ##NOTE PROJOUT1 ALSO SUBTRACTS MEAN, BUT FOR PROJOUT WE HAVE TO ADJUST FOR MEAN
   ##IF WE USE PROJOUT1 then x is actually W
   #mean_x = if(type %in% c("slow","assoc")) NULL else self$mean_x[[ik]]#  x_s$mean_x
-  yTr =self$train[[k]]$yTr  #this is zero in the NA positions of d,ie yTr[,d$nonNA]  should be all zero
+  yTr =self$train$yTr  #this is zero in the NA positions of d,ie yTr[,d$nonNA]  should be all zero
   ## should we store this as transpose??
  
   #y = self$y
-  d = self$train[[k]]
-  nonNA = d$nonNA
+ d = self$train
+  nonNA = lapply(d$nonNA,t)
 #  yTr[,!nonNA]=0
      if(assoc){
        stop("rethink this")
@@ -1044,17 +1102,20 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
      }else{
         norm = self$getNorm(W,var, ik, type)
         P = self$UDVP$P
-        angles1 = lapply(phensi, function(ii){
-          yTr1 = yTr[[ii]]
+        angles1 = lapply(names(phensi), function(ii){
+         #phi = phensi[[nme_i]]
+          nme_i = ii
+       #  lapply(phi, function(ii){
+          yTr1 = yTr[[nme_i]]
           if(length(var)==0){
-            product = self$train[[k]]$products[[ik]][[ii]]  #[,self$cols_incl[[ik]],drop=F]
+            product = self$train$products[[ik]][[ii]]  #[,self$cols_incl[[ik]],drop=F]
           }else{
             #PW = P %*% W
             #diff = dgemm(A=yTr1,B=PW)
             PY = yTr1 %*% P
             #diff1 = PY %*% W
-            product= self$train[[k]]$products[[ik]][[ii]] -  PY %*% W  #[,self$cols_incl[[ik]],drop=F]
-            dimnames(product) = dimnames(self$train[[k]]$products[[ik]][[ii]])
+            product= self$train$products[[ik]][[ii]] -  PY %*% W  #[,self$cols_incl[[ik]],drop=F]
+            dimnames(product) = dimnames(self$train$products[[ik]][[ii]])
           }
           angle= t(abs(product[]))/(norm)
           if(nrow(angle) !=nrow(yTr1)) angle = t(angle)
@@ -1073,15 +1134,20 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
       #  print(length(self$cols_incl[[ik]]))
         
         # angle = matrix(999,nrow=nrow(yTr1),ncol = ncol(W))  ## we could try not to calculate this each time
-         angle[,!self$cols_incl[[ik]]] = 999 #product2#  [self$cols_incl[[ik]]]
+       #   if(length(which(!self$cols_incl))>0){
+      #      angle[,!self$cols_incl[[ik]]] = 999 #product2#  [self$cols_incl[[ik]]]
+        #  }
          norm_sel = abs(norm[unlist(lapply(var, function(v) if(v[1]==ik) v[2] else NULL))])
-         if(length(which(norm_sel>var_thresh))>0) stop(" not projecting out properly ")
+         if(length(which(norm_sel>var_thresh))>0) stop(" not projecting out properly !")
          ##because norm is actually negative number
-         angle[,norm>-var_thresh]=999  #after we project out the projected out columns have zero norm
+         to_rem = which(norm>-var_thresh)
+         if(length(to_rem)>0){
+              angle[,to_rem]=999  #after we project out the projected out columns have zero norm
+         }
          angle
         })
      }
-  names(angles1) = names(yTr)[phensi]
+  names(angles1) = names(phensi)
      return(angles1)
 },
 getAngleInner=function(phensi,ik,k,var){
@@ -1112,10 +1178,18 @@ getAngleInner=function(phensi,ik,k,var){
   angle1
   #}
 },
+phensi=function(phens){
+  phensi=lapply(names(phens), function(nme){
+    match(phens[[nme]], colnames(self$y[[nme]]))
+  })
+  names(phensi) = names(phens)
+  phensi
+},
 ##incl is which of the layers to include
 getAngles1=function(phens,vars,incl=names(self$data), k=1,type="slow1"){
   var=lapply(vars, self$convert)
-  phensi = match(phens, names(self$y))
+ phensi = self$phensi(phens)
+ names(phensi)=names(phens)
   self$getAngles(phensi,var ,incl=incl, k=k, type=type)
 },
   getAngles=function(phensi, var,incl=names(self$data), k=1,type="slow1"){  ## type can be fast, slow, assoc, slow1 .. fast gives wrong results
@@ -1123,7 +1197,7 @@ getAngles1=function(phens,vars,incl=names(self$data), k=1,type="slow1"){
     self$updateUDVP(var)
     ntrans=attr(self$data,"ntrans") 
     if(is.null(ntrans)) ntrans=1
-    d = self$train[[k]]
+    #d = self$train
     nmesd = names(self$norm)
     angles_d= vector('list', length(self$data)) ## need angle object
     names(angles_d) = names(self$data)
@@ -1164,18 +1238,9 @@ storeWeights = function(flags, remote=""){
   try(dbWriteTable(dist$mydb, "weights", df1,overwrite=F,append=T)
 )
 },
-getWeights=function(){
- 
-  weights = .getWeights11_1(self$train[[length(self$train)]]$prev, const=F)
-  offset=.getWeights11_1(self$train[[length(self$train)]]$prev, const=T)
- nme = names(weights);
- names(nme) =nme
- lapply(nme, function(n){
-   list(weights=weights[[nme]], offset = offset[[nme]])
- })
-},
 
-getRMSV=function(phensi,k,prev=self$train[[k]]$prev, ypred =self$train[[k]]$ypred, within=TRUE){
+
+getRMSV=function(phensi,k,prev=self$train$prev[[k]], ypred =self$train[[k]]$ypred, within=TRUE){
   self$updateYpreds(phensi,k,within=within, ypred=ypred, prev= prev )
   self$updateRMSV(phensi,k, within=within, ypred=ypred)
 },
@@ -1198,17 +1263,19 @@ updateYP=function(phensi,prev, ypred, nonNA, flip, ignore.na=F){
     prev_kj$varnames = prev_kj$varbanes[vars_to_incl]
     prev_kj$betas = lapply(prev_kj$betas, function(xx)xx[vars_to_incl,,drop=F])
     na_x = if(ignore.na) rep(F, self$nrow) else self$getNA(prev_kj$var)
-    for(kk1 in 1:length(phensi)){ #} 1:length( ypred$ypreds)){
+    for(kk1 in names(phensi)){ #} 1:length( ypred$ypreds)){
       kk = phensi[[kk1]]
       if(is.null(nonNA)){
         ind_1 = if(flip) rep(T, self$nrow) else rep(F,self$nrow)
       }else{
-        ind_1 = if(flip) !nonNA[[kk]] else nonNA[[kk]]
+        ind_1 = if(flip) !nonNA else nonNA
       }
       levs1 = NULL
-     if(self$family[kk]=="ordinal")levs1 = min(self$y[,kk], na.rm=T):max(self$y[,kk],na.rm=T) 
-    if(self$family[[kk]]=="multinomial") levs1=levels(self$y[,kk])
-      ypred$calcYpred(prev_kj,self$data,ind_1,kk1, kk,na_x, levs1)
+      family = strsplit(kk1,"\\.")[[1]][1]
+     # if(family=="multinomial") levs1=dimnames(self$y[[kk1]])[[2]]
+    #  if(family=="ordinal")levs1 = min(self$y[[kk1]][,kk], na.rm=T):max(self$y[[kk1]][,kk],na.rm=T) 
+  
+      ypred$calcYpred(prev_kj,self$data,ind_1,kk1, kk,na_x, family=family)
   
     }
  #   names(ypred$ypreds) = names(self$y)
@@ -1253,7 +1320,7 @@ importModel=function(phensi,prev,ypred = self$ypreds_all, family,within=T){  #sh
 },
 getRMSVAll=function(phensi,ypred = self$ypreds_all,
                     numvar = NULL,
-                    prevsk = lapply(1:length(self$train), function(k) self$train[[k]]$prev),
+                    prevsk = lapply(1:self$nreps(), function(k) self$train$prev[[k]]),
                     nme = names(prevsk[[length(prevsk)]])
                     ){
   self$updateYpredsAll(phensi,ypred = ypred, numvar = numvar, prevsk = prevsk, nme = nme)
@@ -1270,19 +1337,18 @@ getRMSVAll=function(phensi,ypred = self$ypreds_all,
 
 updateYpredsAll=function( phensi, 
                           ypred = self$ypreds_all,
-                           prevsk = lapply(1:length(self$train), function(k) self$train[[k]]$prev),
+                           prevsk = lapply(1:self$nreps(), function(k) self$train$prev[[k]]),
                            nme = names(prevsk[[length(prevsk)]])
                            ){ ## within=T  means predict on samples trained on
-  for(k in 1:(length(self$train)-1)){
+  for(k in 1:(self$nreps()-1)){
      ind_1=     self$train[[k]]$nonNA
      #d = self$train[[k]]
      self$updateYP(phensi,prevsk[[k]], ypred, ind_1, TRUE)  
   }
 },
-updateYpreds=function(phensi,k2,within=T,
-                      ypred=self$train[[k2]]$ypred, 
-                      prev =self$train[[k2]]$prev, 
-                      nonNA = self$train[[k2]]$nonNA
+updateYpreds=function(phensi,k2,within=T,ypred=NULL,
+                      prev =self$train$prev[[k2]], 
+                      nonNA = self$train$looc_incl[,k2]
 ){ ## within=T  means predict on samples trained on
   #d = self$train[[k]]
   #prev=d$prev
@@ -1316,11 +1382,20 @@ getNA=function(var){
   initTrain=function(varn=c()){
     #self$train = NULL
 #    beam = getOption("fspls.beam",c(1,1));
-    var = self$extractVar(varn)
+ 
    nrep = ncol(self$looc$incl)
-      W_all = if(length(var)==0) matrix(nrow=0, ncol=0) else  .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
-      self$train = lapply(1:nrep, function(k)trainObj$new( self,k, var=var,varnames=varn, W_all = W_all) ) #lapply(1:ncol,function(k) )
+   
+      self$train = #lapply(1:nrep, function(k){
+        trainObj$new( self$y,self$looc , self$family) #lapply(1:ncol,function(k) 
+     # t$update(self,k,var=var,varnames=varn, W_all = W_all)
+        #t             
+     #})
   },
+update=function(k,varn = c()){
+  var = self$extractVar(varn)
+  W_all = if(length(var)==0) matrix(nrow=0, ncol=0) else  .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
+  self$train$update(self,k,var=var,varnames=varn, W_all = W_all)
+},
   init1=function( var_threshs,nrep = getOption("fspls.nrep",1), batch = getOption("fspls.batch",0),
                  genes_incls = list()){  ## this function initialises training paramaters for this dataset
     set.seed(self$seed)
@@ -1384,35 +1459,30 @@ getNA=function(var){
     matching_vals = dimnames(self$data[[1]])[[1]][!is.na(mi1)]
     missing_vals = dimnames(self$data[[1]])[[1]][is.na(mi1)]
     if(length(matching_vals)==0) stop("could not match pheno with matrix")
-    y=  if(typeof(y1)=="list") y1[mi1,,drop=F] else  data.frame(as.matrix(y1[mi1,,drop=F]))
-    dimnames(y)[[1]] =  dimnames(self$data[[1]])[[1]] #y1$id[mi1]
-    self$family=if(!is.null(family)) family else .inferFamily(y)
-    self$subset = NULL
-    nrowy = nrow(self$data[[1]])
-    ncoly = ncol(y)
-  #  self$ones =     matrix(1, nrow=nrowy, ncol = ncoly)
-  #  self$ones_x =     matrix(1, ncol=nrowy, nrow= 1)
-    nme = dimnames(y)[[2]]
-    self$weights = array(1, dim = dim(y), dimnames = dimnames(y))
-    #self$updateY(y, weights =weights, CHECK=T)
+    family=if(!is.null(family)) family else .inferFamily(y1)
+    fams = unique(family)
+    names(fams) = fams
+    y = lapply(fams, function(fam){
+      inds = which(family==fam)
+      names(inds) = names(y1)[inds]
+      if(fam=="multinomial"){
+        return(.expandFactors(y1[mi1,inds,drop=F]))
+      }else if(fam=="ordinal"){
+        return(lapply(inds, function(ind){
+          Matrix(as.matrix(y1[,ind,drop=F]))
+        }))
+      }else{
+        if(typeof(y1)=="S4"){
+          return(list(getSparseSubMatrix(getSparseSubMatrix(y1, inds, by="col"), mi1, by="row")))
+        }
+        
+        return(list(Matrix(as.matrix(y1[,inds,drop=F]), sparse=T)))
+      }
+    })
+   self$family = unlist(lapply(names(y), function(nme) rep(nme,length(y[[nme]]))),rec=F)
+   self$y = unlist(y, rec=F)
+   self$weights = rep(1, length(mi1))
     
-   # if(CHECK){
-    dimnames(y)[[2]] = nme
-    #mi1 = match(rownames(self$data[[1]]), rownames(y))
-    #if(length(which(is.na(mi1)))>0) stop("!!")
-    self$y = y
-   # self$weights = if(is.null(weights)) matrix(1, nrow=self$nrow, ncol = ncol(self$y)) else weights
-   
-    nrow = ncol(self$y)
-   
-   # self$ymod =lapply(self$data, function(d){
-  #    nrowd =  nrow(d)
-  #    matrix(0, nrow=nrow, ncol = nrowd)
-  #  })  
-    self$min_minor =apply(self$y,2, function(yv){
-      t1 = table(yv)
-      min_minor = if(length(t1)<=1)0 else min(t1)
-    }) 
     list(missing=missing_vals, matching=matching_vals)
    #self$weights = weights
   },

@@ -205,7 +205,7 @@ liability<-function(xM){
 }
 
 .calcYpred_1<-function(prev_kj, data, ind_1,
-                       numvar=NULL, DRS_thresh = 1e-5,kk=1,
+                       numvar=NULL, kk=1,
                        constants= prev_kj$constants_proj[[kk]]
                        #constants= unlist(prev_kj$constants_proj)
 ){
@@ -227,11 +227,15 @@ liability<-function(xM){
   
   
   if(nrow(df1)>0){
-    for(kk in 1:length(data)){
-      inds_11 = which(df1[1,]==kk)
+    for(kj in 1:length(data)){
+      inds_11 = which(df1[1,]==kj)
       if(length(inds_11)>0){
         ##CHECK IF CORRECT
-        yp = yp + data[[kk]][ind_1,df1[2,inds_11], drop=F]%*% betas1[inds_11,,drop=F]
+       # print(dim(data[[kk]]))
+      #  print(length(which(ind_1)))
+      #  print(df1[2,inds_11])
+      #  d1 = (data[[kj]][,,drop=F])
+        yp = yp + data[[kj]][ind_1,df1[2,inds_11], drop=F]%*% betas1[inds_11,,drop=F]
       }
     }
     #  yp = yp+ unlist(prev_kj$constants_proj)
@@ -380,46 +384,46 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
 .calcRMSV_1<-function(phensi,ypreds, data, nonNAs, 
                     types_ = getOption("fspls.types", 
                                       default_types),
-                    flip=F,
-                    family=data$family){
+                    flip=F){
  # inds1 = 1:maxl
-  mtype = match(family,names(types_))
-  #print(mtype)
+  nme_phens = names(phensi)
+  names(nme_phens) = nme_phens
+  ind_1 = if(flip) !nonNAs else nonNAs
+  w1= if(is.null(ind_1)) data$weights else data$weights[ind_1]
+  nsamps = length(which(ind_1))
   if(length(which(is.na(mtype)))>0) stop("could not find match in types_")
- # names(mtype)=family
-#  print(mtype)
-#  names(inds1)=names(ypreds)[inds1]
- # rms_3=lapply(inds1, function(jj){
-      ycols = phensi
-      names(ycols) = names(ypreds)[phensi]
-      if(is.null(names(ypreds))) names(ycols) =dimnames(ypreds)[[2]]
+  
+  .merge1_new(lapply(nme_phens, function(nme_p1){
+      family= strsplit(nme_p1,"\\.")[[1]][1]
+      fam = family
+      mtype = match(family,names(types_))
+      types_i = types_[[mtype]]
+      names(types_i) = types_i
+      ycols = phensi[[nme_p1]]
+      ypreds1 = ypreds[[nme_p1]]
+      names(ycols) = names(ypreds1)
     #  print(names(ycols))
-      phens = names(ypreds)
+      phens = dimnames(ypreds1)[[2]]
       ycol_inds = 1:length(ycols)
       names(ycol_inds) = names(ycols)
+      y2 = if(is.null(ind_1)) data$y[[nme_p1]] else  data$y[[nme_p1]][ind_1,,drop=F]
+      yp2 = if(is.null(ind_1))ypreds1 else  ypreds1[ind_1,,drop=F] 
+      
       rms_1=lapply(ycol_inds, function(ycol_ind){
-        #print(ycol_ind)
         ycol = ycols[ycol_ind]
-        ind_1 = if(flip) !nonNAs[[ycol_ind]] else nonNAs[[ycol_ind]]
-        nsamps = length(which(ind_1))
-        #print(paste(ycol_inds,ycol))
-        types_i = types_[[mtype[[ycol]]]]
-        names(types_i) = types_i
-        .merge1_new(lapply(types_i, function(type_i1){
-        # print(type_i1)
-          type_i1s = strsplit(type_i1,"\\.")[[1]]
-          type_i= type_i1s[[1]]
-          thresh = if(length(type_i1s)>1) type_i1s[2] else NA
-        y1 =  if(is.null(ind_1)) data$y[,ycol] else  data$y[ind_1,ycol]
-        fam = family[[ycol]]
-        yp = if(is.null(ind_1))ypreds[[ycol]] else  ypreds[[ycol]][ind_1,,drop=F] 
-        w1= if(is.null(ind_1)) data$weights[,ycol] else data$weights[ind_1,ycol]
+        y1 =  y2[,ycol]
+        yp =if(fam=="ordinal") yp2 else yp2[,ycol,drop=F] 
         nonNA = !is.na(y1)
-        nonNA = nonNA & !is.na(yp[,1])
-        rms =.scoreInternal(yp[nonNA,,drop=F], y1[nonNA],w1[nonNA], type_i, fam,thresh)
-        if(is.null(rms)) stop(paste(type_i,"rms NULL"))
-        if(is.null(names(rms))) names(rms) = 1:length(rms)
-        if(typeof(rms)=="list"){
+        nonNA = nonNA & !is.na(yp[,1]) 
+        .merge1_new(
+          lapply(types_i, function(type_i1){
+            type_i1s = strsplit(type_i1,"\\.")[[1]]
+            type_i= type_i1s[[1]]
+            thresh = if(length(type_i1s)>1) type_i1s[2] else NA
+          rms =.scoreInternal(yp[nonNA,,drop=F], y1[nonNA],w1[nonNA], type_i, fam,thresh)
+          if(is.null(rms)) stop(paste(type_i,"rms NULL"))
+         if(is.null(names(rms))) names(rms) = 1:length(rms)
+          if(typeof(rms)=="list"){
           return(rms)
         }else{
           df12=data.frame(cbind(names(rms), rms)) #, type_i) #as.matrix(rms)
@@ -429,10 +433,11 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
         df12
         }), num_cols="value", addName="measure")%>% tibble::add_column(nsamps = nsamps, cv=flip)
       })
+      names(rms_1)=ycol_inds
       rms_2 = .fixBeforeMerge(rms_1)
-      df3=.merge1_new(rms_2,num_cols="value", addName="pheno")
+      df3=.merge1_new(rms_2,num_cols="value", addName="subpheno")
     df3    
-  ##})
+  }),addName="pheno")
   #.merge1_new(rms_3, num_cols = "value", addName="beam")
   # dimnames(res_df)[[1]] = names(rms_3)
   # as.matrix(res_df)
@@ -443,7 +448,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
   minlength = 1;
   if(type_i %in% c("correlation","rank_correlation","area","area_full","AUC","AUC_full","AUC_all")) minlength=2
   if(length(y1)<minlength){
-    print('h')
+   # print('h')
     return(unlist(list(low=NA, mid=NA, high=NA)))
   }
   if(type_i=="misclass"){
@@ -534,13 +539,15 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
 .initYpred1<-function(data, family){
   #inds1 = 1:maxn
   #names(inds1)=inds1
-  ycols = 1:ncol(data$y)
-  names(ycols) = names(data$y)
+  nmey =names(data$y)
+  names(nmey) = nmey
+  family = unlist(lapply(nmey, function(x) strsplit(x,"\\.")[[1]][1]))
+  
   #lapply(inds1, function(x)  {
-    res = lapply(ycols, function(i){
-      yi = data$y[,i]
+    res = lapply(nmey, function(i){
+      yi = data$y[[i]]
       if(family[[i]]=="multinomial"){
-         if(!is.factor(yi)) stop(" yi needs to be a factor for multinomial")
+        yi = attr(yi,"factor")
          levs1 = levels(yi)
          names(levs1) = levs1
          rr1 = unlist(lapply(levs1, function(l1){
@@ -625,33 +632,40 @@ ypredObj<-R6Class("ypredObj", public = list(
 #  list(params=params,wname=wname,ypreds = ypreds, weights = weights,rms_prev=rms_prev, rmsv=rmsv)
   },
 #calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, kk)
-  calcYpred=function(prev_kj, data, ind_1,  kk1, kk,na_x, levs1){  ## kk1 in model space 
-    family = self$family[[kk]]
+  calcYpred=function(prev_kj, data, ind_1,  kk1, kk,na_x,   family = self$family[[kk]]){  ## kk1 in model space 
+  
     #      ypred$ypreds[[kk]]$calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, self$family[[kk]])
     if(family=="multinomial"){
-      levs = dimnames( self$ypreds[[kk]])[[2]]
+      levs = dimnames( self$ypreds[[kk1]])[[2]]
       ab=.calcYpred_multinom(prev_kj,  data, ind_1, levs, kk=kk1)  ## for multi-prediction
-      mi22 = match(dimnames( self$ypreds[[kk]])[[2]], levs)
-      self$ypreds[[kk]][ind_1,is.na(mi22)]=0
-      self$ypreds[[kk]][ind_1,!is.na(mi22)] =  ab[,mi22[!is.na(mi22)]] 
+      mi22 = match(dimnames( self$ypreds[[kk1]])[[2]], levs)
+      self$ypreds[[kk1]][ind_1,is.na(mi22)]=0
+      self$ypreds[[kk1]][ind_1,!is.na(mi22)] =  ab[,mi22[!is.na(mi22)]] 
     }else if(family=="ordinal"){
-      constants = prev_kj$constants_proj[[kk1]]
-      if(length(constants)<length(levs1)-1){
-        constants = c(constants, rep(constants[length(constants)],length(levs1)-1-length(constants)))
+      for(kk_1 in 1:length(kk)){
+        constants = prev_kj$constants_proj[[kk1]][[kk]]
+        levs1 = 0:length(constants)
+         ab= .calcYpred_ord(prev_kj,  data, ind_1, levs = levs1,
+                                                 kk=kk_1, constants = constants)  ## for multi-prediction
+           self$ypreds[[kk1]][ind_1,] =  ab
       }
-      constants = constants[1:length(levs1)-1]  ##if too long.  We assume that the lower counts are common but might not have higer counts
-   aa= .calcYpred_ord(prev_kj,  data, ind_1, levs = levs1,
-                                                 kk=kk1, constants = constants)  ## for multi-prediction
-    self$ypreds[[kk]][ind_1,] =  aa
     }else if(family=="binomial"){
       constants = prev_kj$constants_proj[[kk1]]
-      self$ypreds[[kk]][ind_1,] =  .calcYpred_binomial(prev_kj,  data, ind_1, 
-                                                    kk=kk1, constants = constants)  ## for multi-prediction
+      for(kk_1 in 1:length(kk)){
+        self$ypreds[[kk]][ind_1,kk_1] =  .calcYpred_binomial(prev_kj,  data, ind_1, 
+                                                    kk=kk_1, constants = constants)  ## for multi-prediction
+      }
     }else{
-      ab = .calcYpred_1(prev_kj,  data, ind_1,kk=kk1) 
-      self$ypreds[[kk]][ind_1,] =  unlist(ab[,1]) ##why need unlist here??
+     # self$ypreds[[kk]]= array(dim=c(length(ind_1),length(kk)))
+     
+      for(kk_1 in 1:length(kk)){
+        ab = .calcYpred_1(prev_kj,  data, ind_1,kk=kk_1) 
+        self$ypreds[[kk1]][ind_1,kk_1] = ab[,1]
+      }
     }
-    self$ypreds[[kk]][na_x,] = rep(NA, ncol(self$ypreds[[kk]]))
+    if(length(which(na_x))>0){
+      self$ypreds[[kk1]][na_x,] = rep(NA, ncol(self$ypreds[[kk1]]))
+    }
     
   }
 )

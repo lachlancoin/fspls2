@@ -3,7 +3,7 @@
   pvs_all= lapply(datas, function(d){
     b_i1 = vars[[length(vars)]]
     prev_var =  vars[-length(vars)]
-    sig_res = d$calcBetaProj1(phens,k, b_i1, prev_var )
+    sig_res = d$calcBetaProj1(phens,k, b_i1, prev_var , convert=T)
     unlist(sig_res$pvs)
     #d$train[[k]]$getPvs(prev)
   })
@@ -108,7 +108,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   #    missing_vals = self$updateY(y1, family=family, CHECK=T)
       
       datas[[ik]]$initTrain(varn=varn)
-      #data[[ik]]$initY()
+    #data[[ik]]$initY()
      return(NULL)
     }))
     self$datas = datas
@@ -130,7 +130,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     })
   },
   pheno=function(){
-    colnames(self$datas[[1]]$y)
+   self$datas[[1]]$pheno();
   },
   angles=function(vars,phens,flags){
     datas = self$datas
@@ -231,7 +231,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     logpv=-100
     
  #   k = .readFlag(flags, 'rep',length(datas1[[1]]$train))
-    nreps1 =unlist(lapply(datas1, function(x) length(x$train)))
+    nreps1 =unlist(lapply(datas1, function(x) ncol(x$looc$incl)))
     if(length(table(nreps1))>1) stop(" must have same number of reps in each dataset, use nrep instead of bach")
     nreps = 1:nreps1[[1]]
    names(nreps) = nreps
@@ -243,6 +243,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     variables =lapply(nreps, function(k){
       print(paste("cv",k,"of",length(nreps)))
       jj1=0
+      invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k))); ### update training object
     while(logpv<logpvthresh && length(vars_l[[1]]$var)<maxsize){
       angles_all = lapply(vars_l, function(vars){
         angles=lapply(train_nme, function(data_nme) datas1[[data_nme]]$getAngles1(phens,vars$var,incl=incl,k=k, type=self$type))
@@ -310,6 +311,10 @@ datasEnv<-R6Class("datasEnv", public = list(
  },
   evaluateAllModels=function(all_models, phens,flags){ ## different folds with same variables
 ##                          inds = as.numeric(names(all_models))){
+    
+    full_models = lapply(all_models, function(all_model1) all_model1[['full']])
+    full_models = full_models[unlist(lapply(full_models, length))>0]
+    full_model_nmes = names(full_models)
     nme_d = .readFlag(flags,"test",names(self$datas))
     names(nme_d) = nme_d
     print(nme_d)
@@ -322,8 +327,11 @@ datasEnv<-R6Class("datasEnv", public = list(
       }
       resd
     }),addName="data")
+ 
     if(is.null(eval1)) return(NULL)
-    eval1%>% pivot_wider(names_from="submeasure")
+    eval2 = eval1%>% pivot_wider(names_from="submeasure")
+    isfull=eval2$model %in% full_model_nmes
+    eval2%>%tibble::add_column(isfull=isfull)
   },
   pvalues=function(vars,phens,flags){
     datas = self$datas
@@ -332,7 +340,8 @@ datasEnv<-R6Class("datasEnv", public = list(
       lapply(datas, function(d){
         b_i1 = vars1[[length(vars1)]]
         prev_var =  vars1[-length(vars1)]
-        sig_res = d$calcBetaProj1(phens,k, b_i1, prev_var )
+        
+        sig_res = d$calcBetaProj1(phens,k, b_i1, prev_var, convert=T )
         unlist(sig_res$pvs)
         #d$train[[k]]$getPvs(prev)
       }) 

@@ -116,7 +116,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     mean_x = "list",
                     tbls="list",
                     mean_y="list",
-                    initialize = function(phensi,data,train, k,
+                    initialize = function(phensi,data,train, k,mean_y,
                                           prev_i = NULL,
                                           b_i = NULL,b_i_name=NULL,
                                           var = list(), varnames = list(),
@@ -124,16 +124,20 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                                          ){
                       #if(is.null(train)) train = data$train[[k]]
                       #  names(data_nmes) = data_nmes
-                      self$constants_proj=lapply(1:length(data$family), function(ik){
-                        if(data$family[[ik]]=="multinomial") {
-                          return(rep(0,length(levels(data$y[,ik]))-1 ))
-                        }else if(data$family[[ik]]=="ordinal"){
-                          return(rep(0,length(min(data$y[,ik], na.rm=T):max(data$y[,ik],na.rm=T))-1 ))
+                  #   mean_y = train$means_y[[k]]
+                      family = unlist(lapply(names(phensi), function(x) strsplit(x,"\\.")[[1]][1]))
+                      self$constants_proj=lapply(1:length(phensi), function(ik){
+                        nme = names(phensi)[[ik]]
+                        if(family[[ik]]=="multinomial") {
+                          fact = attr(data$y[[ik]],"factor")
+                          return(rep(0,length(levels(fact))-1 ))
+                        }else if(family[[ik]]=="ordinal"){
+                          return(rep(0,length(min(data$y[[ik]], na.rm=T):max(data$y[[ik]],na.rm=T))-1 ))
                         }else{
-                          return(train$mean_y[[ik]])
+                          return(mean_y[[ik]])
                         }
                       })
-                      names(self$constants_proj) = names(data$y)
+                      names(self$constants_proj) = names(phensi)
                       self$constants_proj_all = list()
                       if(is.null(prev_i)){
                         self$var = var
@@ -153,7 +157,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                       }else{
                        # train = data$train
                         self$name_prev=prev_i$name
-                        family = train$family #unlist(lapply(train, function(xx) xx$family))
+                        #family = train$family #unlist(lapply(train, function(xx) xx$family))
                         var = prev_i$var
                         var_st = unlist(lapply(var, paste, collapse="."))
                         #betas_offset=prev_i$betasoffset
@@ -178,17 +182,9 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         betas_newP = NULL
                        # constants_proj=as.list(self$train[[1]]$mean_y)
                         pvs_proj = NULL
-                       
-                        
-                        #if(!is.null(UDVP_h))  
-                      
                           W_all_new =  data$calcWall(b_i, prev_i$var, prev_i$W_all)
-                          b_new_proj = data$calcBetaProj(phensi,k,b_i,prev_i$var)
-                           
-                                         
                           
-#                       
-#                          beta1=betas_proj,
+                          b_new_proj = data$calcBetaProj1(phensi,k,b_i,prev_i$var, convert=F)
                           betas_new_proj = lapply(1:length(b_new_proj$betas), function(kk){
                             dff=data.frame(cbind(prev_i$betas_proj[[kk]], b_new_proj$betas[[kk]]) )
                             names(dff) = c(names(prev_i$betas_proj)[[kk]], varnames)
@@ -215,7 +211,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         mean_x = unlist(lapply(vars, function(vv) data$mean_x[[vv[1]]][vv[2]]))
                           #lapply(train, function(t) unlist(lapply(vars, function(vv) t$mean_x[[vv[1]]][vv[2]])))
                         #names(mean_x) = names(train)
-                        mean_y = train$mean_y #lapply(train, function(t) t$mean_y)
+                        #mean_y = train$mean_y #lapply(train, function(t) t$mean_y)
                         #names(mean_y) =names(train)
                         ##if family is binomial we dont offset by mean y
                         const_off_proj=NULL
@@ -258,33 +254,43 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj, var_names = self$var_names)
                   },
-                  updateConst=function(phensi,data, train, consts_prev=NULL,CHECK=F){   #REVISIT THIS FOR MULTINOM
+                  updateConst=function(phensi,data, train, k,consts_prev=NULL,CHECK=F){   #REVISIT THIS FOR MULTINOM
                     ##need to consider non_na_x
-                    family = data$family
+                    #family = data$family
+                    nonNA = data$looc$incl[,k]
+                    family = unlist(lapply(names(phensi), function(x) strsplit(x,"\\.")[[1]][1]))
+                    names(family)=names(phensi)
                     non_na_x = data$getNonNA(self$var) 
                     self$constants_proj = vector("list", length(phensi))
-                  
+                    names(self$constants_proj) = names(phensi)
+                    na_k=non_na_x & nonNA
                     for(kk1 in 1:length(phensi)){
-                      kk = phensi[kk1]
-                      nonNA = train$nonNA[[kk]]
+                      phensi1 = phensi[[kk1]]
+                      kk = names(phensi)[[kk1]]
+#                      nonNA = train$nonNA[[kk]]
                       if(family[[kk]]=="multinomial"){
-                       levs = levels(data$y[[kk]])# c(0,1:length(self$betas[[k]]))
-                       yp1 = .calcYpred_multinom(self,  data$data, non_na_x & nonNA,levs, numvar=NULL,kk=kk1,constants=rep(0, ncol(self$betas[[kk1]])), liab=F) 
+                        y = attr(data$y[[kk]],"factor")
+                        #names(y) = kk
+                       levs = levels(y)# c(0,1:length(self$betas[[k]]))
+                       yp1 = .calcYpred_multinom(self,  data$data, non_na_x & nonNA,levs, numvar=NULL,kk=kk1,constants=rep(0, ncol(self$betas[[kk]])), liab=F) 
 #                       ypred$ypreds[[j]][[kk]][ind_1,] =  .calcYpred_multinom(prev_kj,  self$data, ind_1, levs, numvar = numvar,kk=kk)  ## for multi-prediction
  #                      ypred$ypreds[[j]][[kk]][na_x,] = rep(NA, ncol(ypred$ypreds[[j]][[kk]]))
-                       m1 = try(multinom(data$y[non_na_x & nonNA,kk]~as.matrix(yp1),trace=F))
+                       m1 = try(multinom(y[non_na_x & nonNA]~as.matrix(yp1),trace=F))
                        sm  = summary(m1, digits=3)
                        const_term = sm$coefficients[,1]
                        self$constants_proj[[kk1]] = const_term
                       }else if(family[[kk]]=="ordinal"){
-                        levs1 = min(data$y[,kk], na.rm=T):max(data$y[,kk],na.rm=T)
-                        consts = rep(0, length(levs1)-1)
-                        names(consts) = levs1[-length(levs1)]
-                       yp1 = .calcYpred_ord(self,  data$data, non_na_x &nonNA, levs = levs1,numvar=NULL,kk=kk1,
+                        y = data$y[[kk]]
+                        for(kk_1 in 1:length(phensi1)){
+                          kk_ = phensi1[kk_1]
+                          levs1 = min(y[,kk_], na.rm=T):max(y[,kk_],na.rm=T)
+                          consts = rep(0, length(levs1)-1)
+                          names(consts) = levs1[-length(levs1)]
+                       yp1 = .calcYpred_ord(self,  data$data, non_na_x & nonNA, levs = levs1,numvar=NULL,kk=kk_1,
                                             constants=consts, liab=F) 
                        #yp1 = .calcYpred_1(self,  data$data, non_na_x, kk=1,numvar=NULL,constants=rep(0, ncol(data$y)))
                       
-                          y1c = (data$y[non_na_x & nonNA,kk])
+                          y1c = (y[non_na_x & nonNA,kk_])
                           
                           
                         df = data.frame(list(y=factor(y1c,levels=min(y1c):max(y1c) ),x= yp1))
@@ -293,15 +299,17 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           waring("polr error")
                           ##prob not a great way to do this but avoids errors
                          # gl = glm(data$y[non_na_x & nonNA,kk]~ yp1[,1], family="gaussian")
-                          self$constants_proj[[kk1]] = consts_prev[[kk1]] #rep(NA, length(levs1)-1) #gl$coefficients[1]
+                          self$constants_proj[[kk]][[kk_1]] = consts_prev[[kk]] #rep(NA, length(levs1)-1) #gl$coefficients[1]
                         }else{
-                          self$constants_proj[[kk1]]= m1$zeta
+                          self$constants_proj[[kk]][[kk_1]]= m1$zeta
+                        }
                         }
                      }else {  
-                       na_k=non_na_x & nonNA
                        spike_slab_iter = getOption("spike_slab_iter",0)
-                       yp1 = .calcYpred_1(self,  data$data, non_na_x &nonNA, numvar=NULL,kk=kk1,constants=rep(0, nrow(train$yTr[[kk]]))) 
-                       y=data$y[non_na_x & nonNA,kk]
+                       for(kk_1 in 1:length(phensi1)){
+                         kk_ = phensi1[kk_1]
+                       yp1 = .calcYpred_1(self,  data$data, non_na_x &nonNA, numvar=NULL,kk=kk_1,constants=rep(0, nrow(train$yTr[[kk]]))) 
+                       y=data$y[[kk]][non_na_x & nonNA,kk_1]
                        if(spike_slab_iter>1){
                         # print("using spike slab for const")
                          if(family[[kk]]=="binomial"){
@@ -320,17 +328,17 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                        
                          if(TRUE){
                            ones = rep(1, length(yp1[,1]))
-                           ridge=glmnet(cbind(ones,yp1[,1]),data$y[non_na_x & nonNA,kk],family=data$family[[kk]], alpha = 0)
+                           ridge=glmnet(cbind(ones,yp1[,1]),data$y[[kk]][non_na_x & nonNA,kk_],family=family[[kk]], alpha = 0)
                            rbeta <- coef(ridge,s=min(ridge$lambda))
                            self$constants_proj[[kk1]] = rbeta[1,1]
                          }else{
                         self$constants_proj[[kk1]]  <- tryCatch({
-                          gl = glm(data$y[non_na_x & nonNA,kk]~ yp1[,1], family=data$family[[kk]])
+                          gl = glm(data$y[[kk]][non_na_x & nonNA,kk_]~ yp1[,1], family=family[[kk]])
                           gl$coefficients[1]
                         }, warning=function(w) {
                           print("using glmnet to regularise ")
                           ones = rep(1, length(yp1[,1]))
-                          ridge=glmnet(cbind(ones,yp1[,1]),data$y[non_na_x & nonNA,kk],family=data$family[[kk]], alpha = 0)
+                          ridge=glmnet(cbind(ones,yp1[,1]),data$y[[kk]][non_na_x & nonNA,kk_],family=family[[kk]], alpha = 0)
                           rbeta <- coef(ridge,s=min(ridge$lambda))
                           rbeta[1,1]
                         })
@@ -339,14 +347,15 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         
                         
                        }
+                       }
                      }
                   
                     if(CHECK && FALSE ){
                       yp2 = .calcYpred_1(self,  data$data, non_na_x, numvar=NULL,constants=unlist(self$constants_proj) )
-                        gl = glm(data$y[non_na_x,kk]~ yp2[,kk], family=train$family)
+                        gl = glm(data$y[[kk]][non_na_x,kk_]~ yp2[,kk_], family=train$family)
                         if(abs(gl$coefficients[1])>1e-10) stop(" coefficients not right")
                     }
-          names(  self$constants_proj) = names(data$y)[ phensi]
+          names(  self$constants_proj) = names(phensi)
                     }
                   }
                     

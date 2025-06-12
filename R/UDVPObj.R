@@ -22,7 +22,7 @@ UDVPObj<-R6Class("UVDPObj", public = list(
   initialize=function(data,var1, check=F,centralise=F
                       ){  ## d = train[[i]] ## already centralised
     #d = data$train
-    nonNA = rep(T, nrow(data$y)) # use all  data$train$nonNA
+    nonNA = rep(T, data$nrow) # use all  data$train$nonNA
     var_df = data.frame(var1)
     self$var = var1
     #var=var1
