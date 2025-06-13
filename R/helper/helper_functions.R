@@ -704,27 +704,35 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
 }
 
 .plotArea<-function(predictions, family="binomial",rename=T, len = 1,grid="model~pheno", p_incl=""){
-  area_p=.merge1_new(lapply(predictions, function(model){
-    .merge1_new(lapply(model, function(train){
-      .merge1_new(lapply(train, function(test){
-        phens = names(test$ypred); names(phens)=phens
+  area_p=.merge1_new(lapply(predictions, function(train){  
+    .merge1_new(lapply(train, function(model){
+      .merge1_new(lapply(model, function(test){
+        .merge1_new(lapply(test, function(fam){
+        phens = dimnames(fam$y)[[2]]; names(phens)=phens
         phens = phens[unlist(lapply(phens, function(p)length(grep(p_incl,p))))>0]
-        .merge1_new(lapply(phens, function(phen){
-  #        indsk = 1:ncol(test$ypred[[phen]]);
-  #        names(indsk)=dimnames(test$ypred[[phen]])[[2]]
+        phensi= 1:length(phens)
+        names(phensi) = phens
+        .merge1_new(lapply(phensi, function(j){
+  #        indsk = 1:ncol(fam$ypred[[phen]]);
+  #        names(indsk)=dimnames(fam$ypred[[phen]])[[2]]
          # .merge1_new(lapply(indsk , function(k){
             if(family=="gaussian"){
-               ap  = data.frame(list(knots = test$y[[phen]],value=test$ypred[[phen]]))
+               ap  = data.frame(list(knots = fam$y[,j],value=fam$ypred[,j]))
                names(ap)=c("knots","value")
-            }else{
-              ap = getAreaPlot(test$ypred[[phen]], test$y[[phen]])
+            }else if(family=="ordinal" || family=="gaussian"){
+              ap = getAreaPlot(fam$ypred, fam$y[,j])
+        }else{
+            ap = getAreaPlot(fam$ypred[,j], fam$y[,j])
+          
             }
             ap
           #}),addName="subpheno")
         }), addName="pheno")
-      }), addName="train")
-    }), addName="test")
-  }), addName="model")
+        }), addName="family")
+      }), addName="test")
+    }), addName="model")
+    }), addName="train")
+ 
   #area_p$model
   print("now plotting")
   area_p1=if(rename) .renameModels(area_p, len=len) else area_p

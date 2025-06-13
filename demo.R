@@ -26,32 +26,34 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 
-datasets =examples[2]
-#datasets[[1]]$y =Matrix(datasets[[1]]$y, sparse=T)
-
-flags = list(pthresh = 5e-2, nrep=5,batch=0, train=names(datasets)[1],topn=20,beam=1)
-
-## MAKE THE FSPLS DATA OBJECT
-datas =datasEnv$new(datasets,flags=flags) 
-phens=datas$pheno()[1]
-## FIND VARIABLES
-variables = datas$select(phens, flags)
-#names(variables)[1]="x"
-print(variables)
-## FIT MODELS
-all_models = datas$makeAllModels(variables, phens, flags)
-
+datasets =examples[4]
 options("fspls.types"=
-          fromJSON('{"gaussian": ["correlation","var"],"binomial":"AUC","multinomial":"AUC_all","ordinal" : "AUC_all"}'))
-
-eval = datas$evaluateAllModels(all_models, phens, flags)
-
+          fromJSON('{"gaussian": ["correlation","var"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
+runAll<-function(datasets, randomise=F){
+  y = datasets[[1]]$y
+  #y1=y[sample.int(nrow(y), nrow(y)),1]
+  #datasets[[1]]$y = as.matrix(data.frame(list(y = y[,1], y1 = y1,y2=y[,1])))
+  flags = list(pthresh = 5e-3, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1)
+  ## MAKE THE FSPLS DATA OBJECT
+  datas =datasEnv$new(datasets,flags=flags) 
+  if(randomise) datas$randomise()
+  phens=datas$pheno()
+  
+  ## FIND VARIABLES
+  variables = datas$select(phens, flags,verbose=F)
+  #names(variables)[1]="x"
+  print(variables)
+  ## FIT MODELS
+  all_models = datas$makeAllModels(variables, phens, flags)
+  eval = datas$evaluateAllModels(all_models, phens, flags)
 ##PLOT
-eval2 = .calcEval1(eval,sep="subpheno")
-ggps = .plotEval1(eval2, rename=F,len=1)
+  if(is.null(eval)) return (NULL)
+  eval2 = .calcEval1(eval,sep="pheno")
+  ggps = .plotEval1(eval2, rename=F,len=1)
 #for multinomial or ordinal
 #ggps = .plotEval1(eval, rename=F,grid="subpheno~cv")
 ggps
+if(TRUE) return(ggps)
 
 
 ##VISUALISE PREDICTIONS
@@ -60,5 +62,29 @@ predictions =datas$extractPredictions(all_models,phens, flags, CV = F);
 .plotArea(predictions, rename=F,datas$datas[[1]]$family[1])
 
 
+varnames = variables[[length(variables)]]$var
+projOut=datas$getProjectedData(varnames)
+variance_before = datas$getVariance()
+variance_after =   lapply(projOut, function(p1){
+  lapply(p1, function(p2){
+    sparse_variance(p2)
+  })
+})
 
+##PRINT VARIANCE BEFORE AND AFTER
+for(j in 1:length(datas$datas)){
+  for(k in 1:length(datas$datas[[j]]$data)){
+    inds = match(unlist(lapply(varnames, function(v)v[2])),colnames(datas$datas[[j]]$data[[k]]))
+    print("before")
+    df = data.frame(cbind(variance_before[[j]][[k]][inds],variance_after[[j]][[k]][inds]))
+    names(df) = c("before","after")
+    print(df)
+  }
+}
+
+}
+
+ggp_all = lapply(1:length(examples), function(i) runAll(examples[i], randomise=F))
+names(ggp_all) = names(examples)
+#runAll(datasets[1])
 

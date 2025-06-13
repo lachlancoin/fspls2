@@ -128,13 +128,14 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                       family = unlist(lapply(names(phensi), function(x) strsplit(x,"\\.")[[1]][1]))
                       self$constants_proj=lapply(1:length(phensi), function(ik){
                         nme = names(phensi)[[ik]]
+                        phensi1 = phensi[[ik]]
                         if(family[[ik]]=="multinomial") {
                           fact = attr(data$y[[ik]],"factor")
                           return(rep(0,length(levels(fact))-1 ))
                         }else if(family[[ik]]=="ordinal"){
                           return(rep(0,length(min(data$y[[ik]], na.rm=T):max(data$y[[ik]],na.rm=T))-1 ))
                         }else{
-                          return(mean_y[[ik]])
+                          return(mean_y[[ik]][phensi1])
                         }
                       })
                       names(self$constants_proj) = names(phensi)
@@ -252,7 +253,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     },
                   simplify=function(){
                     names(self$var_names)=self$varnames
-                    list(betas=self$betas, constants_proj = self$constants_proj, var_names = self$var_names)
+                    list(betas=self$betas, constants_proj = self$constants_proj, var_names = self$var_names, pvs = self$pvs_proj)
                   },
                   updateConst=function(phensi,data, train, k,consts_prev=NULL,CHECK=F){   #REVISIT THIS FOR MULTINOM
                     ##need to consider non_na_x
@@ -304,12 +305,13 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           self$constants_proj[[kk]][[kk_1]]= m1$zeta
                         }
                         }
-                     }else {  
+                     }else {
+                       #y = data$y[[kk]]
                        spike_slab_iter = getOption("spike_slab_iter",0)
                        for(kk_1 in 1:length(phensi1)){
                          kk_ = phensi1[kk_1]
-                       yp1 = .calcYpred_1(self,  data$data, non_na_x &nonNA, numvar=NULL,kk=kk_1,constants=rep(0, nrow(train$yTr[[kk]]))) 
-                       y=data$y[[kk]][non_na_x & nonNA,kk_1]
+                         yp1 = .calcYpred_1(self,  data$data, non_na_x &nonNA, kk=kk_1,constants=0) #rep(0, nrow(train$yTr[[kk]]))) 
+                          y=data$y[[kk]][non_na_x & nonNA,kk_1]
                        if(spike_slab_iter>1){
                         # print("using spike slab for const")
                          if(family[[kk]]=="binomial"){
@@ -322,17 +324,22 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                          sm = summary(ab)
                          x_ind = match(c("x","(Intercept)"),dimnames(sm$coefficients)[[1]])
                          coeff = sm$coefficients[x_ind[1],c(1,2,3,5)]
-                         self$constants_proj[[kk1]]= sm$coefficients[x_ind[2],1]
+                         self$constants_proj[[kk1]][kk_1]= sm$coefficients[x_ind[2],1]
                          #const_term 
                        }else{
                        
                          if(TRUE){
+                           self$constants_proj[[kk1]][kk_1] = tryCatch({
                            ones = rep(1, length(yp1[,1]))
                            ridge=glmnet(cbind(ones,yp1[,1]),data$y[[kk]][non_na_x & nonNA,kk_],family=family[[kk]], alpha = 0)
                            rbeta <- coef(ridge,s=min(ridge$lambda))
-                           self$constants_proj[[kk1]] = rbeta[1,1]
+                          rbeta[1,1]
+                           }, error=function(w) {
+                             gl = glm(data$y[[kk]][non_na_x & nonNA,kk_]~ yp1[,1], family=family[[kk]])
+                             gl$coefficients[1]
+                           })
                          }else{
-                        self$constants_proj[[kk1]]  <- tryCatch({
+                        self$constants_proj[[kk1]][kk_1]  <- tryCatch({
                           gl = glm(data$y[[kk]][non_na_x & nonNA,kk_]~ yp1[,1], family=family[[kk]])
                           gl$coefficients[1]
                         }, warning=function(w) {

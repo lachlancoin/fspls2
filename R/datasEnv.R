@@ -114,6 +114,27 @@ datasEnv<-R6Class("datasEnv", public = list(
     self$datas = datas
   },
   
+  update=function( flags = list()){
+    types_all = getOption("types_all",names(datas[[1]]$data))
+    names(types_all) = types_all
+    var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_thresh",0.00))
+    genes_incls=.readFlag(flags,"genes_incls",NULL) #,getOption("genes_incls",NULL)
+    batch=.readFlag(flags, "batch",0)
+    
+    nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
+    invisible(lapply(datas, function(data) data$init1(var_threshs, nrep=nrep,  batch = batch,genes_incls=genes_incls)))
+    varn = getOption("varn",c())
+    for(i in 1:length(self$data)){
+      datas[[ik]]$initTrain(varn=varn)
+    }
+  },
+  
+  randomise=function(){
+    for(i in 1:length(self$datas)){
+      self$datas[[i]]$randomise();
+    }
+  },
+  
   
   
   
@@ -129,8 +150,8 @@ datasEnv<-R6Class("datasEnv", public = list(
       }))
     })
   },
-  pheno=function(){
-   self$datas[[1]]$pheno();
+  pheno=function(maxpheno=1e9){
+   self$datas[[1]]$pheno(maxpheno=maxpheno);
   },
   angles=function(vars,phens,flags){
     datas = self$datas
@@ -149,6 +170,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     angles_all
   },
   makeAllModels=function(variables, phens, flags, all_models = list()){
+    if(length(variables)==0) return(list())
     variables =variables[order(unlist(lapply(variables, function(v) length(v$var))),decreasing=T)]
   
     verbose=.readFlag(flags,"verbose",F)
@@ -301,17 +323,15 @@ datasEnv<-R6Class("datasEnv", public = list(
   },
   extractPredictions=function(all_models,phens, flags, CV = FALSE){
     #datas = self$datas
-    res2=lapply(all_models, function(all_models1){
-    res1 = lapply(self$datas, function(d){
-      d$extractPredictions(all_models1,phens,flags,CV=CV)
+    res2=lapply(self$datas, function(d){
+      d$extractPredictions(all_models, phens, falgs, CV=CV)
     })
-    res1[lapply(res1,length)>0]
-    })
+   
     res2[lapply(res2,length)>0]
  },
   evaluateAllModels=function(all_models, phens,flags){ ## different folds with same variables
 ##                          inds = as.numeric(names(all_models))){
-    
+    if(length(all_models)==0) return(NULL)
     full_models = lapply(all_models, function(all_model1) all_model1[['full']])
     full_models = full_models[unlist(lapply(full_models, length))>0]
     full_model_nmes = names(full_models)
