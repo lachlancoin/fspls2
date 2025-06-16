@@ -387,7 +387,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
 
 .scoreInternal=function(yp,y1, w1, type_i, fam,thresh){
   minlength = 1;
-  if(type_i %in% c("correlation","rank_correlation","area","area_full","AUC","AUC_full","AUC_all")) minlength=2
+  if(type_i %in% c("correlation","rank_correlation","area","area_full","AUC","AUC_full","AUC_all","var")) minlength=2
   if(length(y1)<minlength){
    # print('h')
     return(unlist(list(low=NA, mid=NA, high=NA)))
@@ -448,6 +448,9 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
     rms=calcRMS(yp[,1],y1)
   }else if(type_i=="var"){
     rms=calcVar(yp[,1],y1)
+  }else if(type_i=="mad"){
+    rms=c(NA,median(abs(yp[,1]-y1)),NA)
+    names(rms)=c("low","mid","high")
   }else if(type_i=="youden"){
     rms=1*.youden(yp,y1)
   } else if(type_i=="youden_full"){

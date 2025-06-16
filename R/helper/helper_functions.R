@@ -35,6 +35,7 @@
   eval2 = .merge1_new(lapply(cvs, function(cv1){
     .merge1_new(lapply(cohorts, function(cm){
     eval1 = subset(eval, cv==cv1 & cohort_measure_pheno_trained==cm)
+    if(nrow(eval1)==0) return(NULL)
     .merge1_new(lapply(1:nrow(eval1), function(i){
       inds1 = grep(paste0("^",eval1$model[[i]]), eval1$model)
       inds2 = which(eval1$numvars[inds1]==max(eval1$numvars[inds1]))
@@ -78,8 +79,8 @@
 #      maxn = max(eval2$nsamps)
   #head(eval4)#pivot_wider(eval2, names_from = c("cv", "fullmodel", "numvars"), values_from ="value")
 .plotEval1<-function(eval2, rename=F, len=1,
-           shape_color="subpheno",linetype="fullmodel",
-           txtsize=1,logy=F,
+           shape_color="pheno",linetype="fullmodel",showranges=F,
+           txtsize=1,logy=F,legend=F,
            grid="cohort_measure~cv_full"){
   if(rename)eval2=.renameModels(eval2, len=len)
   phenos = unique(eval2$sep_by)
@@ -88,8 +89,10 @@
   ggps=lapply(phenos, function(ph){ 
     eval5 = subset(eval2, sep_by==ph)
   ggp<-ggplot(eval5)+geom_point(aes_string(x="numvars", y="mid",  shape=shape_color,size="nsamps", color=shape_color))+
-    geom_line(aes_string(x="numvars", y="mid", linetype=linetype,  color=shape_color)) +
-    geom_errorbar(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype,color=shape_color ))
+    geom_line(aes_string(x="numvars", y="mid", linetype=linetype,  color=shape_color)) 
+  if(showranges){
+   ggp<-ggp+ geom_errorbar(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype,color=shape_color ))
+  }
   if(!is.null(grid)){
     if(length(grep("~",grid))>0){
     ggp<-ggp+facet_grid(grid,scales="free")
@@ -97,7 +100,8 @@
       ggp<-ggp+facet_wrap(grid)
     }
   }
-  ggp<- ggp+ theme(legend.position = "bottom",legend.title = element_text(size = txtsize));#+theme(,    legend.text = element_text(size = 3))
+  legend_position=if(legend) "bottom" else "none";
+  ggp<- ggp+ theme(legend.position = legend_position,legend.title = element_text(size = txtsize));#+theme(,    legend.text = element_text(size = 3))
   if(logy)ggp<-ggp+ scale_y_log10() 
   ggp
   })

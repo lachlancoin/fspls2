@@ -367,8 +367,26 @@ convert=function(b_i1){
   var_ind = which(dimnames(self$data[[data_ind]])[[2]]==b_i1[2])
   c(data_ind, var_ind)
 },
-pheno = function(maxpheno=1e9){
-lapply(self$y, function(y1) colnames(y1)[1:min(maxpheno, ncol(y1))])
+pheno = function(maxpheno=1e9,sep=F, families = names(self$y)){
+  phens = 
+                  lapply(self$y[names(self$y) %in% families], function(y1) colnames(y1)[1:min(maxpheno, ncol(y1))])
+  if(sep){
+    nmes = names(phens)
+    names(nmes)=nmes
+   l1= lapply(nmes, function(nme){
+     ph = phens[[nme]]
+     inds = 1:length(ph)
+     names(inds)= inds
+    lapply(inds, function(i){
+       l3 = list(ph[i])
+       names(l3) = nme
+       l3
+     })
+   })
+    return(unlist(l1,rec=F))
+  }else{
+    return(list(all=phens))
+  }
 },
 calcBetaProj1=function(phensi,k,b_i1,prev_var, convert=T){
   if(convert){
@@ -769,18 +787,25 @@ extractPredictions=function(all_models,phens, flags, CV = FALSE,
 res_all[lapply(res_all,length)>0]
 },
 ypred=function(phens){
-  phensi = self$phensi(phens)
-  ypredObj$new(self,phensi, self$family)
+  ypredObj$new(self,self$phensi(phens))
+
 },
 evaluateAllModels=function(all_models,phens, flags,
-                           ypred = self$ypred(phens)){
+                           ypreds = lapply(phens, function(phens1) self$ypred(phens1))
+                         ){
   d = self
   phensi = self$phensi(phens)
 #  ypred = self$ypred(phens)
-  mod_nme = names(all_models); names(mod_nme)=mod_nme
-  evals = .merge1_new(lapply(mod_nme, function(mod_nme1){
-   # print(mod_nme1)
-    all_models1 = all_models[[mod_nme1]]
+  var_names= names(all_models); names(var_names)=var_names
+  evals = .merge1_new(lapply(var_names, function(var_name){
+    print(var_name)
+   # print(pheno_nme)
+    all_models1_ = all_models[[var_name]]
+    pheno_nmes = names(all_models1_); names(pheno_nmes)=pheno_nmes
+   .merge1_new(lapply(pheno_nmes, function(pheno_nme){
+     all_models1 = all_models1_[[pheno_nme]]
+     ypred = ypreds[[pheno_nme]]
+     if(is.null(ypred)) stop("ypred is null")
     full_ind = names(all_models1)=="full"
     full_model = all_models1[["full"]]
     nmesm = names(all_models1)[!full_ind];
@@ -793,7 +818,7 @@ evaluateAllModels=function(all_models,phens, flags,
         #ypredObj$updateYP(self, phens, )#= self$train$looc_incl[,k2]
         nonNA =self$train$looc_incl[,self$nreps()]
         ypred$updateYP(self, full_model[[nmes1]], nonNA, flip=FALSE )
-        res1 = ypred$calcRMSV(self$y, nonNA,       flip=FALSE)
+        res1 = ypred$calcRMSV(self$y, nonNA,       flip=FALSE)%>% tibble::add_column(isfull=T)
         #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
       }
       if(length(nmesm)>0){
@@ -803,15 +828,17 @@ evaluateAllModels=function(all_models,phens, flags,
 #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
         }
         nonNA=self$getNonNAInds(inds)
-        res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)
+        res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)%>% tibble::add_column(isfull=F)
        
       }
      rbind(res1,res2)
       #    }),addName="variable")
     }),addName="trainedOn")
-    #}),addName="fullmodel")
+    }),addName="pheno_group")
   }),addName="model")
   numvars = unlist(lapply(evals$model, function(x) length(strsplit(x,";")[[1]])))
+  evals1 = unite(evals,"phenomodel","pheno","model")
+  evals$isfull[evals1$phenomodel %in% evals1$phenomodel[evals1$isfull]] = T
   evals%>% tibble::add_column(numvars=numvars)
 },
 
