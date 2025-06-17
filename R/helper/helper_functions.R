@@ -22,10 +22,10 @@
     eval
 }
 
-.calcEval1<-function(eval0,sep_by=c("trainedOn","measure","subpheno")){
+.calcEval1<-function(eval0,sep_by=""){ #c("trainedOn","measure","subpheno")
 
-  
    eval = eval0 %>% tibble::add_column(cohort_measure= apply(eval0[,names(eval0) %in% c("data","measure")],1,paste, collapse=" "),
+                                       pheno_subpheno= apply(eval0[,names(eval0) %in% c("pheno","subpheno")],1,paste, collapse=" "),
                                        cohort_measure_pheno_trained= apply(eval0[,names(eval0) %in% c("data","subpheno","measure","pheno","trainedOn")],1,paste, collapse=" "),
                                        sep_by = apply(eval0[,names(eval0) %in% sep_by],1,paste, collapse=" "))
   #fullmodels = eval$model[which(eval$numvars==max(eval$numvars))]
@@ -79,7 +79,7 @@
 #      maxn = max(eval2$nsamps)
   #head(eval4)#pivot_wider(eval2, names_from = c("cv", "fullmodel", "numvars"), values_from ="value")
 .plotEval1<-function(eval2, rename=F, len=1,
-           shape_color="pheno",linetype="fullmodel",showranges=F,
+           shape_color="pheno_subpheno",linetype="fullmodel",showranges=F,
            txtsize=1,logy=F,legend=F,
            grid="cohort_measure~cv_full"){
   if(rename)eval2=.renameModels(eval2, len=len)
