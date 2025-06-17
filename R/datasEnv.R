@@ -261,7 +261,36 @@ datasEnv<-R6Class("datasEnv", public = list(
       d$getVariance();      
     })
   },
-  select=function(phens,flags,verbose=F){#, all_reps=F ## used to be train
+  post_process=function(variables, full_index,flags_out){
+    lens = unlist(lapply(variables, length))
+    if(max(lens)==0) return(list())
+    vars_all = list()
+    vars_all1 = list()
+    for(repn in names(variables)){
+      full = repn==full_index
+      var1 = variables[[repn]]
+      for(phenn in names(var1)){
+        var2 = var1[[phenn]]
+        varn = paste(names(var2), collapse=";")
+        if(is.null(vars_all[[varn]])){
+          vars_all[[varn]] = list()
+          vars_all1[[varn]] = var2
+        }
+        repn1 = as.list(as.numeric(repn))
+        names(repn1) = if(full) "full" else repn
+        if(is.null(vars_all[[varn]][[phenn]])){
+          vars_all[[varn]][[phenn]] =repn1
+        }else{
+          vars_all[[varn]][[phenn]] = c(vars_all[[varn]][[phenn]] , repn1)
+        }
+      }
+    }
+    vars_combined = list(variables = vars_all1, inds = vars_all) 
+     attr(vars_combined,"flags_out")=toJSON(flags_out, simplifyVector=T, flatten=T)
+    vars_combined
+  },
+  select=function(phens,flags,verbose=F,
+                  variables = list()){
     datas1 = self$datas
     topn = .readFlag(flags,'topn', 20)
  #   return_type = .readFlag(flags,'return','model') ##model,eval,plot
@@ -280,12 +309,12 @@ datasEnv<-R6Class("datasEnv", public = list(
  #   k = .readFlag(flags, 'rep',length(datas1[[1]]$train))
     nreps1 =unlist(lapply(datas1, function(x) ncol(x$looc$incl)))
     if(length(table(nreps1))>1) stop(" must have same number of reps in each dataset, use nrep instead of bach")
-    nreps = 1:nreps1[[1]]
+    nreps = (length(variables)+1):nreps1[[1]]
    names(nreps) = nreps
    #names(nreps)[length(nreps)]="full"
    #if(!all_reps) 
     beam = .readFlag(flags,"beam",2)
-    variables =lapply(nreps, function(k){
+    for(k in nreps){
       print(paste("cv",k,"of",length(nreps)))
       jj1=0
       invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k))); ### update training object
@@ -321,39 +350,14 @@ datasEnv<-R6Class("datasEnv", public = list(
           ##just take the top
         vars_l[[1]]$var
         })
-         res2[unlist(lapply(res2,length))>0]
-    })
-    lens = unlist(lapply(variables, length))
-    if(max(lens)==0) return(list())
-    #lens = unlist(lapply(variables, function(v1)lapply(v1, function(v1) length(names(v1)))),rec=T)
-  
-    vars_all = list()
-    vars_all1 = list()
-    for(repn in names(variables)){
-      full = repn==nreps1[[1]]
-      var1 = variables[[repn]]
-      for(phenn in names(var1)){
-        var2 = var1[[phenn]]
-        varn = paste(names(var2), collapse=";")
-        if(is.null(vars_all[[varn]])){
-          vars_all[[varn]] = list()
-          vars_all1[[varn]] = var2
-        }
-        repn1 = as.list(as.numeric(repn))
-        names(repn1) = if(full) "full" else repn
-        if(is.null(vars_all[[varn]][[phenn]])){
-          vars_all[[varn]][[phenn]] =repn1
-        }else{
-          vars_all[[varn]][[phenn]] = c(vars_all[[varn]][[phenn]] , repn1)
-        }
-      }
+         variables[[k]] = res2[unlist(lapply(res2,length))>0]
     }
-    vars_combined = list(variables = vars_all1, inds = vars_all)
     flags_out = list(train=train_nme,  max=maxsize, 
                      nreps = nreps, beam=beam,
                      topn = num_pvals, pthresh =exp(logpvthresh), data_types = incl)
-    attr(vars_combined,"flags_out")=toJSON(flags_out, simplifyVector=T, flatten=T)
-    vars_combined
+    self$post_process(variables, nreps1[[1]],flags_out)
+  
+   
   },
   extractPredictions=function(all_models,phens, flags, CV = FALSE){
     #datas = self$datas
