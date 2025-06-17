@@ -79,7 +79,7 @@
 #      maxn = max(eval2$nsamps)
   #head(eval4)#pivot_wider(eval2, names_from = c("cv", "fullmodel", "numvars"), values_from ="value")
 .plotEval1<-function(eval2, rename=F, len=1,
-           shape_color="pheno_subpheno",linetype="fullmodel",showranges=F,
+           shape_color="pheno_subpheno",linetype="fullmodel",showranges=T,
            txtsize=1,logy=F,legend=F,
            grid="cohort_measure~cv_full"){
   if(rename)eval2=.renameModels(eval2, len=len)
@@ -1311,8 +1311,10 @@ fromJSONM<-function(json){
   datasets
 }
 
-.getFinalModel<-function(all_models, target_size=NULL){
-  full_models = lapply(all_models, function(all_models1) all_models1[['full']])
+.getFinalModel<-function(all_models, pheno_groups=names(all_models[[1]]),target_size=NULL){
+  names(pheno_groups) = pheno_groups
+  final_models = lapply(pheno_groups, function(pg){
+  full_models = lapply(all_models, function(all_models1) all_models1[[pg]][['full']])
   full_models = full_models[unlist(lapply(full_models, length))>0]
   model_size= unlist(lapply(names(full_models), function(x) length(strsplit(x,";")[[1]])))
   if(is.null(target_size) || is.character(target_size)){
@@ -1320,10 +1322,12 @@ fromJSONM<-function(json){
   }
   final_model = full_models[[which(model_size==target_size)]]
   final_model
+  })
 }
 
-.extractWeights<-function(final_model){
-unlist(lapply(final_model, function(mod1){
+.extractWeights<-function(final_models){
+  weights = lapply(final_models, function(final_model){
+model_weights = unlist(lapply(final_model, function(mod1){
   phen1= names(mod1$betas)
   names(phen1) = phen1
   lapply(phen1, function(p1){
@@ -1334,4 +1338,7 @@ unlist(lapply(final_model, function(mod1){
     df
   })
 }),rec=F)
+cbind(model_weights[[1]][,1:2], data.frame(lapply(model_weights, function(mw)mw[,3])))
+
+  })
 }

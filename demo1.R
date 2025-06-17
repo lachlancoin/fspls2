@@ -83,29 +83,26 @@ datas =datasEnv$new(NULL, ys,mats=mats,flags=flags)
 phens=datas$pheno()
 ## FIND VARIABLES
 variables = datas$select(phens, flags)
-variables1 = variables[unlist(lapply(variables, function(var) "full" %in% names(var$inds)))]
-print(unlist(lapply(variables1[[length(variables1)]]$var, function(v) v[2])))
 
 ## FIT MODELS
 all_models = list()
 all_models = 
-  datas$makeAllModels(variables[seq(1,length(variables),by=20)], phens, flags, all_models)
+  datas$makeAllModels(variables, phens, flags, all_models)
 
 
 
 eval = datas$evaluateAllModels(all_models, phens, flags)
 
 ## GET WEIGHTS FROM FULL MODEL
-final_model = .getFinalModel(all_models, target_size = "max")
-model_weights = .extractWeights(final_model)
-names(model_weights) = gsub("pbmc.","",names(model_weights))
-combined = list(combined=cbind(model_weights[[1]][,1:2], data.frame(lapply(model_weights, function(mw)mw[,3]))))
+final_models = .getFinalModel(all_models, target_size = "max")
+model_weights = .extractWeights(final_models)
 outw = paste0("weights",max(eval$numvars),".xlsx");
-write_xlsx(combined,outw)
+write_xlsx(model_weights,outw)
 
 ##PLOT
 #ggps = .plotEval1(eval, rename=F, len=1)
- ggps=.plotEval1(eval, rename=F, len=1, grid="pheno")
+eval1 = .calcEval1(eval)
+ ggps=.plotEval1(eval1, rename=F, len=1, grid="pheno")
 
 #for multinomial or ordinal
 #ggps = .plotEval1(eval, rename=T,grid="cv~subpheno", sep="pheno", txtsize=1,len=0)

@@ -1326,8 +1326,16 @@ update=function(k,varn = c()){
   W_all = if(length(var)==0) matrix(nrow=0, ncol=0) else  .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
   self$train$update(self,k,var=var,varnames=varn, W_all = W_all)
 },
-randomise=function(){
- self$y = lapply(self$y, function(y1)y1[indices,,drop=F])
+randomise=function(n= nrow(self$y[[1]]),
+                   indices=sample.int(n,n)){
+ self$y = lapply(self$y, function(y1){
+   y2 = y1[indices,,drop=F]
+   fact = attr(y1,"factor")
+   if(!is.null(fact)){
+     attr(y2,"factor")=fact[indices]
+   }
+   y2
+ })
   if(!is.null(self$train)){
     self$initTrain();  
   }

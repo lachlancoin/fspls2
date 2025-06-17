@@ -21,19 +21,27 @@ if(rev(strsplit(getwd(),"/")[[1]])[1]!="fspls2")stop("not in right directory")
 src1=grep(".R$",dir("./R",rec=T),v=T)
 invisible(try(lapply(paste("./R",src1,sep="/"), function(x) {print(x);source(x)})))
 
+if(TRUE){
+rdats = grep("rdat",dir("data",full=T),v=T)
+examples = lapply(rdats, function(rdat){
+  load(rdat)
+  .convert(data, max=nrow(data$data),factor=length(grep("multi", rdat))>0)
+})
+names(examples)=lapply(rdats, function(str)strsplit(str,"/")[[1]][2])
+}else{
 ## LOAD EXAMPLE DATASETS
 example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
-
+}
 datasets =examples[4]
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation","var"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
-runAll<-function(datasets, randomise=F){
+runAll<-function(datasets, randomise=F,pthresh = 0.001){
   y = datasets[[1]]$y
   #y1=y[sample.int(nrow(y), nrow(y)),1]
   #datasets[[1]]$y = as.matrix(data.frame(list(y = y[,1], y1 = y1,y2=y[,1])))
-  flags = list(pthresh = 5e-3, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1)
+  flags = list(pthresh = pthresh, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1)
   ## MAKE THE FSPLS DATA OBJECT
   datas =datasEnv$new(datasets,flags=flags) 
   if(randomise) datas$randomise()
@@ -48,7 +56,7 @@ runAll<-function(datasets, randomise=F){
   eval = datas$evaluateAllModels(all_models, phens, flags)
 ##PLOT
   if(is.null(eval)) return (NULL)
-  eval2 = .calcEval1(eval,sep="pheno")
+  eval2 = .calcEval1(eval)
   ggps = .plotEval1(eval2, rename=F,len=1)
 #for multinomial or ordinal
 #ggps = .plotEval1(eval, rename=F,grid="subpheno~cv")
@@ -84,7 +92,7 @@ for(j in 1:length(datas$datas)){
 
 }
 
-ggp_all = lapply(1:length(examples), function(i) runAll(examples[i], randomise=F))
+ggp_all = lapply(1:length(examples), function(i) runAll(examples[i], randomise=F, pthresh = 0.001))
 names(ggp_all) = names(examples)
 #runAll(datasets[1])
 
