@@ -387,6 +387,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
 
 .scoreInternal=function(yp,y1, w1, type_i, fam,thresh){
   minlength = 1;
+  if(type_i=="AUC" && fam=="ordinal") type_i = "AUC_all"
   if(type_i %in% c("correlation","rank_correlation","area","area_full","AUC","AUC_full","AUC_all","var")) minlength=2
   if(length(y1)<minlength){
    # print('h')
@@ -536,7 +537,7 @@ ypredObj<-R6Class("ypredObj", public = list(
   phensi="numeric",
   nrow="numeric",
   
-  initialize=function(data, phensi,  family = data$family,
+  initialize=function(data, phensi,  family = unlist(lapply(names(phensi), function(str)strsplit(str,"\\.")[[1]][1])),
                      
                       types_=getOption("fspls.types", 
                                      default_types)){
@@ -604,11 +605,20 @@ updateYP=function(data,prev,  nonNA, flip=T, ignore.na=F){
       self$ypreds[[kk1]][ind_1,!is.na(mi22)] =  ab[,mi22[!is.na(mi22)]] 
     }else if(family=="ordinal"){
       constants = prev_kj$constants_proj[[kk1]]
+      
       for(kk_1 in 1:length(kk)){
-        levs1 = 0:length(constants[[kk_1]])
+        ncols = ncol(self$ypreds[[kk1]])
+        constk = constants[[kk_1]]
+        if(length(constk)<ncols){
+          constk = c(constk,rep(constk[length(constk)],ncols - length(constk)))
+        }else if(length(constk)>ncols){
+          constk = constk[1:ncols]
+        }
+        levs1 = 0:length(constk)
          ab= .calcYpred_ord(prev_kj,  data, ind_1, levs = levs1,
-                                                 kk=kk_1, constants = constants[[kk_1]])  ## for multi-prediction
-           self$ypreds[[kk1]][ind_1,] =  ab
+                                                 kk=kk_1, constants = constk)  ## for multi-prediction
+       
+        self$ypreds[[kk1]][ind_1,] =  ab
       }
     }else if(family=="binomial"){
       constants = prev_kj$constants_proj[[kk1]]

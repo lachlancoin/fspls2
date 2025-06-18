@@ -1,6 +1,28 @@
-default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC_all"}')
+default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC"}')
 
 ## gets matrices without NAs
+
+.expandAllvAll<-function(y){
+  res = data.frame(lapply(1:ncol(y), function(i){
+    y1 = y[,i]
+    if(!is.factor(y1)) y1 = factor(y1, levels = sort(unique(y1)))
+    levs = levels(y1)
+    inds = 1:length(levs)
+    names(inds) = levs[inds]
+    unlist(lapply(inds[-1], function(ind){
+      inds2 = 1:(ind-1)
+      names(inds2) = levs[inds2]
+      lapply(inds2, function(ind2){
+        y1 = rep(NA,  length(y))
+        y1[y==levs[[ind]]]=0
+        y1[y==levs[[ind2]]]=1
+        y1
+      })
+    }),rec=F)
+  }))
+  rownames(res) = rownames(y)
+  m1 = Matrix(as.matrix(res),sparse=T)
+}
 
 .expandFactors<-function(y){
   res = lapply(1:ncol(y), function(i){
@@ -17,17 +39,19 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
     attr(mat,"factor")=y1
     mat
   })
-  names(res) = names(y)
+  names(res) = dimnames(y)[[2]]
   
   res
 }
 
 
-.combineAngles<-function(angles, incl=names(angles[[1]]), topn=100){
+.combineAngles<-function(angles,cols_incl, incl=names(angles[[1]]), topn=100){
   names(incl)=incl
   comb_all = lapply(incl,function(inc1){
-    comb1 = lapply(angles, function(angle1){
-      ang1=angle1[[inc1]]
+    comb1 = lapply(1:length(angles), function(i){
+      ang1 = angles[[i]][[inc1]]
+      col_incl = cols_incl[[i]][[inc1]]
+      #ang1=angle1[[inc1]]
       ang2=ang1[[1]]
       cs = colSums(ang2)
       if(length(ang1)>1){
@@ -35,7 +59,7 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
           cs = cs+colSums(ang1[[jk]])
         }
       }
-      cs
+      cs[col_incl]
     })
     .sumMatrices(comb1)
   })
@@ -338,6 +362,8 @@ dataObj<-R6Class("dataObj", public = list(
   dataNA="list",
   types="vector",
   nrow="integer",
+  vars="list",
+  var_thresh="double",
   min_minor="double",
   y="matrix",
  # ones="matrix",
@@ -367,13 +393,20 @@ convert=function(b_i1){
   var_ind = which(dimnames(self$data[[data_ind]])[[2]]==b_i1[2])
   c(data_ind, var_ind)
 },
-pheno = function(maxpheno=1e9,sep=F, families = names(self$y)){
-  phens = 
-                  lapply(self$y[names(self$y) %in% families], function(y1) colnames(y1)[1:min(maxpheno, ncol(y1))])
+pheno = function(maxpheno=1e9,sep=F, sep_group=F){ 
+ phens =  lapply(self$y, function(y1) colnames(y1)[1:min(maxpheno, ncol(y1))])
+ nmes = names(phens)
+ names(nmes)=nmes
+ if(sep_group){
+   return(lapply(nmes, function(nme){
+    phens[nme]
+   }))
+ }
+mult = grep("multinomial",names(phens))
   if(sep){
-    nmes = names(phens)
-    names(nmes)=nmes
-   l1= lapply(nmes, function(nme){
+   
+    nmes1 = if(length(mult)>0) nmes[-mult] else nmes
+   l1= lapply(nmes1, function(nme){
      ph = phens[[nme]]
      inds = 1:length(ph)
      names(inds)= inds
@@ -383,7 +416,13 @@ pheno = function(maxpheno=1e9,sep=F, families = names(self$y)){
        l3
      })
    })
-    return(unlist(l1,rec=F))
+   l12= lapply(nmes[mult], function(nme){
+     ph = phens[[nme]]
+       l3 = list(ph)
+       names(l3) = nme
+       l3
+   })
+   return( c(l12,(unlist(l1,rec=F))))
   }else{
     return(list(all=phens))
   }
@@ -786,20 +825,18 @@ extractPredictions=function(all_models,phens, flags, CV = FALSE,
   })
 res_all[lapply(res_all,length)>0]
 },
-ypred=function(phens){
-  ypredObj$new(self,self$phensi(phens))
+ypred=function(phens1){
+  family = unlist(lapply(names(phens1), function(str)strsplit(str,"\\.")[[1]][1]))
+  ypredObj$new(self,self$phensi(phens1), family)
 
 },
 evaluateAllModels=function(all_models,phens, flags,
                            ypreds = lapply(phens, function(phens1) self$ypred(phens1))
                          ){
   d = self
-  phensi = self$phensi(phens)
 #  ypred = self$ypred(phens)
   var_names= names(all_models); names(var_names)=var_names
   evals = .merge1_new(lapply(var_names, function(var_name){
-    print(var_name)
-   # print(pheno_nme)
     all_models1_ = all_models[[var_name]]
     pheno_nmes = names(all_models1_); names(pheno_nmes)=pheno_nmes
    .merge1_new(lapply(pheno_nmes, function(pheno_nme){
@@ -1213,7 +1250,6 @@ getAngles1=function(phens,vars,incl=names(self$data), k=1,type="slow1"){
           angles_d[[ik]] = self$getAngleInnerOld(phensi,ik, k,var,type)
         }
       }
-      
     }     
     # angle[which(dnorm==0)]=999
     #  if(FALSE){
@@ -1310,9 +1346,6 @@ getNA=function(var){
     })
   },
   initTrain=function(varn=c()){
-    #self$train = NULL
-#    beam = getOption("fspls.beam",c(1,1));
- 
    nrep = ncol(self$looc$incl)
    
       self$train = #lapply(1:nrep, function(k){
@@ -1368,23 +1401,29 @@ randomise=function(n= nrow(self$y[[1]]),
     norm=self$norm
     n = nrow(self$data[[1]])
     incls_all1 = unique(unlist(getOption("incls", list(names(self$data)))))
+    vars = lapply(names(norm), function(norm_nme){
+      norm1 = norm[[norm_nme]]
+      (norm1*norm1)/(n-1)
+    })
+    names(vars) = names(norm)
+    var_thresh =  lapply(names(norm), function(norm_nme){
+      max(quantile(vars[[norm_nme]], pr=var_threshs[[norm_nme]] ,na.rm=T), 1e-20)
+    })
+    names(var_thresh) = names(norm)
+    
     self$cols_incl = lapply(names(norm), function(norm_nme){
       if(!(norm_nme %in% incls_all1)) return(NULL)
       genes_inc = genes_incls[[norm_nme]]
-      norm1 = norm[[norm_nme]]
-      if(var_threshs[[norm_nme]]==0){
-        var_res = (rep(T, length(norm1)))
-      }else{
-       variance=(norm1*norm1)/(n-1)
-       #varthresh = if(var_threshs[[norm_nme]]<=1e-8) - quantile(variance, pr=var_threshs[[norm_nme]] ,na.rm=T)
-       varthresh = max(quantile(variance, pr=var_threshs[[norm_nme]] ,na.rm=T), 1e-20)
+      variance = vars[[norm_nme]]
+      varthresh = var_thresh[[norm_nme]]
        var_res = variance>=varthresh
-      }
       if(!is.null(genes_inc)){
         var_res = var_res & (names(norm1) %in% genes_inc)
       }
       var_res
     })
+    self$vars = vars
+    self$var_thresh = var_thresh
     names( self$cols_incl) = names(norm)
     
     self$UDVP=NULL;
@@ -1393,7 +1432,7 @@ randomise=function(n= nrow(self$y[[1]]),
    
   #  self$ypred=ypredObj$new(self,NULL,  params,family)
   },
-  updateY=function(y1,    family=NULL,CHECK=T){ ## updates y
+  updateY=function(y1,    family=NULL,CHECK=T, all_v_all=T){ ## updates y
     if(is.null(rownames(y1))){
       if(nrow(y1)==nrow(self$data[[1]])){
         rownames(y1) = rownames(self$data[[1]])
@@ -1408,8 +1447,11 @@ randomise=function(n= nrow(self$y[[1]]),
     names(fams) = fams
     y = lapply(fams, function(fam){
       inds = which(family==fam)
-      names(inds) = names(y1)[inds]
+      names(inds) = dimnames(y1)[[2]][inds]
       if(fam=="multinomial"){
+        if(all_v_all){
+          return(.expandAllvAll(y1[mi1,inds,drop=F]))
+        }
         return(.expandFactors(y1[mi1,inds,drop=F]))
       }else if(fam=="ordinal"){
         return(lapply(inds, function(ind){
@@ -1423,11 +1465,13 @@ randomise=function(n= nrow(self$y[[1]]),
         return(list(Matrix(as.matrix(y1[,inds,drop=F]), sparse=T)))
       }
     })
-   self$family = unlist(lapply(names(y), function(nme) rep(nme,length(y[[nme]]))),rec=F)
+    if(all_v_all) names(y) = gsub("multinomial","binomial.multiway",names(y))
+   self$family = unlist(lapply(names(y), function(nme) rep(gsub(".multiway","",nme),
+                                                           if(is.list(y[[nme]])) length(y[[nme]]) else ncol(y[[nme]]))),rec=F)
    self$y = unlist(y, rec=F)
    self$weights = rep(1, length(mi1))
-    
-    list(missing=missing_vals, matching=matching_vals)
+    return(NULL)
+   # list(missing=missing_vals, matching=matching_vals)
    #self$weights = weights
   },
   initialize_dist=function(dist,types, seed=42){

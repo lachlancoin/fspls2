@@ -294,7 +294,8 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           y1c = (y[non_na_x & nonNA,kk_])
                           
                           
-                        df = data.frame(list(y=factor(y1c,levels=min(y1c):max(y1c) ),x= yp1))
+                        df = data.frame(list(y=factor(y1c,levels=levs1),x= yp1))
+                       # df = data.frame(list(y = y1c,x=yp1))
                         m1=try(polr(y~x,  data=df,Hess=T, method="logistic"))  
                         if(inherits(m1,"try-error")){
                           waring("polr error")
