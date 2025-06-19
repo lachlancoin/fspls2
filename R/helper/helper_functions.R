@@ -84,8 +84,11 @@
            shape_color="pheno_subpheno",linetype="fullmodel",showranges=T,
            txtsize=1,logy=F,legend=F,sep_by="",
            grid="cohort_measure~cv_full"){
-  
-  eval2 = eval2 %>% tibble::add_column( sep_by = apply(eval2[,names(eval2) %in% sep_by,drop=F],1,paste, collapse=" "))
+  shape_color_nme = paste(shape_color, collapse="_");
+  eval2 = eval2 %>% tibble::add_column( sep_by = apply(eval2[,names(eval2) %in% sep_by,drop=F],1,paste, collapse=" "),
+                                        shape_color_nme = apply(eval2[,names(eval2) %in% shape_color,drop=F],1,paste, collapse=" ")
+                                        )
+  names(eval2) = gsub("shape_color_nme", shape_color_nme, names(eval2))
   
   if(rename)eval2=.renameModels(eval2, len=len)
   phenos = unique(eval2$sep_by)
@@ -99,10 +102,10 @@
 # eval2$isfull = (eval2$isfull+1)/2.0
   ggps=lapply(phenos, function(ph){ 
     eval5 = subset(eval2, sep_by==ph)
-  ggp<-ggplot(eval5)+geom_point(aes_string(x="numvars", y="mid",  shape=shape_color,size="nsamps", color=shape_color))+
-    geom_line(aes_string(x="numvars", y="mid", linetype=linetype,  color=shape_color)) +ggtitle(ph)
+  ggp<-ggplot(eval5)+geom_point(aes_string(x="numvars", y="mid",  shape=shape_color_nme,size="nsamps", color=shape_color_nme))+
+    geom_line(aes_string(x="numvars", y="mid", linetype=linetype,  color=shape_color_nme)) +ggtitle(ph)
   if(showranges){ ## geom_ribbon vs geom_errorbar
-   ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype,color=shape_color, fill = shape_color ), alpha = 0.1)
+   ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype,color=shape_color_nme, fill = shape_color_nme ), alpha = 0.1)
   }
   if(!is.null(grid)){
     if(length(grep("~",grid))>0){

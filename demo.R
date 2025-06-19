@@ -34,14 +34,14 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[4]
+datasets =examples[1]
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation","var"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
 runAll<-function(datasets, randomise=F,pthresh = 0.001){
   y = datasets[[1]]$y
   #y1=y[sample.int(nrow(y), nrow(y)),1]
   #datasets[[1]]$y = as.matrix(data.frame(list(y = y[,1], y1 = y1,y2=y[,1])))
-  flags = list(pthresh = pthresh, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1)
+  flags = list(pthresh = pthresh, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F)
   ## MAKE THE FSPLS DATA OBJECT
   datas =datasEnv$new(datasets,flags=flags) 
   if(randomise) datas$randomise()
@@ -92,7 +92,10 @@ for(j in 1:length(datas$datas)){
 
 }
 
-ggp_all = lapply(1:length(examples), function(i) runAll(examples[i], randomise=F, pthresh = 0.001))
+ggp_all = lapply(1:length(examples), function(i) {
+  print(i)
+  runAll(examples[i], randomise=F, pthresh = 0.0001)
+  })
 names(ggp_all) = names(examples)
 #runAll(datasets[1])
 
