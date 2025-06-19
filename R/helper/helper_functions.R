@@ -22,12 +22,13 @@
     eval
 }
 
-.calcEval1<-function(eval0,sep_by=""){ #c("trainedOn","measure","subpheno")
-
+.calcEval1<-function(eval0){ #c("trainedOn","measure","subpheno")
+ 
    eval = eval0 %>% tibble::add_column(cohort_measure= apply(eval0[,names(eval0) %in% c("data","measure")],1,paste, collapse=" "),
                                        pheno_subpheno= apply(eval0[,names(eval0) %in% c("pheno","subpheno")],1,paste, collapse=" "),
-                                       cohort_measure_pheno_trained= apply(eval0[,names(eval0) %in% c("data","subpheno","measure","pheno","trainedOn")],1,paste, collapse=" "),
-                                       sep_by = apply(eval0[,names(eval0) %in% sep_by],1,paste, collapse=" "))
+                                       cohort_measure_pheno_trained= apply(eval0[,names(eval0) %in% c("data","subpheno","measure","pheno","trainedOn")],1,paste, collapse=" ")
+   )
+    #                                   sep_by = apply(eval0[,names(eval0) %in% sep_by],1,paste, collapse=" "))
   #fullmodels = eval$model[which(eval$numvars==max(eval$numvars))]
 
   cvs = unique(eval$cv)
@@ -74,24 +75,34 @@
     
  eval3=eval2%>% tibble::add_column(cv_full= apply(eval2[,names(eval) %in% c("cv","isfull")],1,paste, collapse=" "))
       eval3$cv_full[eval3$cv=="CV= avg"]=eval3$cv[eval3$cv=="CV= avg"]
+     
       eval3
 }
 #      maxn = max(eval2$nsamps)
   #head(eval4)#pivot_wider(eval2, names_from = c("cv", "fullmodel", "numvars"), values_from ="value")
 .plotEval1<-function(eval2, rename=F, len=1,
            shape_color="pheno_subpheno",linetype="fullmodel",showranges=T,
-           txtsize=1,logy=F,legend=F,
+           txtsize=1,logy=F,legend=F,sep_by="",
            grid="cohort_measure~cv_full"){
+  
+  eval2 = eval2 %>% tibble::add_column( sep_by = apply(eval2[,names(eval2) %in% sep_by,drop=F],1,paste, collapse=" "))
+  
   if(rename)eval2=.renameModels(eval2, len=len)
   phenos = unique(eval2$sep_by)
   names(phenos)=phenos
+  
+  
+  subphens = table(eval2$subpheno)
+  subphens = subphens[order(as.numeric(unlist(lapply(names(subphens), function(str)strsplit(str,"\\|")[[1]][1]))))]
+  eval2$subpheno = factor(eval2$subpheno, levels = names(subphens))
+  
 # eval2$isfull = (eval2$isfull+1)/2.0
   ggps=lapply(phenos, function(ph){ 
     eval5 = subset(eval2, sep_by==ph)
   ggp<-ggplot(eval5)+geom_point(aes_string(x="numvars", y="mid",  shape=shape_color,size="nsamps", color=shape_color))+
-    geom_line(aes_string(x="numvars", y="mid", linetype=linetype,  color=shape_color)) 
-  if(showranges){
-   ggp<-ggp+ geom_errorbar(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype,color=shape_color ))
+    geom_line(aes_string(x="numvars", y="mid", linetype=linetype,  color=shape_color)) +ggtitle(ph)
+  if(showranges){ ## geom_ribbon vs geom_errorbar
+   ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype,color=shape_color, fill = shape_color ), alpha = 0.1)
   }
   if(!is.null(grid)){
     if(length(grep("~",grid))>0){

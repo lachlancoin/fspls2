@@ -65,10 +65,11 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
   })
   top_angles=whichpart1(comb_all, n=topn, return_scores=T)
   t1=sort(unlist(top_angles, rec=T))
-  t1
+  t1[t1<999]
 }
 
 .summariseAngles<-function(t1, topn){
+  if(length(t1)<topn)topn = length(t1)
   outp =lapply(names(t1)[1:topn], function(str){
     spl=strsplit(str,"\\.")[[1]]
     c(spl[1],paste(spl[-1],collapse="."))
@@ -430,6 +431,10 @@ mult = grep("multinomial",names(phens))
 calcBetaProj1=function(phensi,k,b_i1,prev_var, convert=T){
   if(convert){
     b_i1 = self$convert(b_i1)
+    if(length(b_i1)<2) {
+      pvs = unlist(lapply(phensi,function(xx) 999)) ## returning large positive value since its not in dataset
+       return(list(pvs=pvs))
+    }
     prev_var = lapply(prev_var, self$convert)
     phensi = self$phensi(phensi)
   }
@@ -439,7 +444,6 @@ calcBetaProj1=function(phensi,k,b_i1,prev_var, convert=T){
     phensi1 =  match(nme, names(self$y))
     family=self$family[phensi1]
     phensi_=phensi[[nme]]
-   # print(names(self$y))
   #  print(nme)
 #    family = strsplit(nme,"\\.")[[1]][1]
     self$calcBetaProj(nme,phensi_,family,  k, b_i1, prev_var)
@@ -530,7 +534,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var){
       use_bin = length(unique(y))<=2
       if(!use_bin){
         df = data.frame(cbind(y,x ))
-        df$y = factor(y, levels = min(y):max(y))  
+        df$y = factor(y, levels = sort(unique(y)))  
         # print("using polr")
         m1=try(polr(y~x,  data=df,weights=w,Hess=T, method="logistic"))
         #predict(m1, df, type = "p")
@@ -1412,12 +1416,13 @@ randomise=function(n= nrow(self$y[[1]]),
     names(var_thresh) = names(norm)
     
     self$cols_incl = lapply(names(norm), function(norm_nme){
+      norm1 = norm[[norm_nme]]
       if(!(norm_nme %in% incls_all1)) return(NULL)
-      genes_inc = genes_incls[[norm_nme]]
+      genes_inc = genes_incls
       variance = vars[[norm_nme]]
       varthresh = var_thresh[[norm_nme]]
        var_res = variance>=varthresh
-      if(!is.null(genes_inc)){
+      if(!is.null(genes_inc) && length(genes_inc)>0){
         var_res = var_res & (names(norm1) %in% genes_inc)
       }
       var_res

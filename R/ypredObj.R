@@ -321,7 +321,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
                     conf.level=getOption("conf.level",0.95)
                     ){
   if(TRUE){
-    if(length(which(y==1))==0 || length(which(y==0))==0 ) return(c(NA,0.5,NA))
+    if(length(which(y==1))==0 || length(which(y==0))==0 ) return(c(0,0.5,1))
     ##NOTE THE WEIGHTED VERSION SEEMS NOT TO WORK WELL
   #  print(y)
   #  print(ypred)
@@ -332,6 +332,8 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
     #print(ci(roc1)[1:3])
    cir = ci(roc1, conf.level=conf.level)[1:3]
    if(is.na(cir[2])) cir[2] = roc1$auc
+   if(is.na(cir[1])) cir[1] = 0
+   if(is.na(cir[3])) cir[3] = 1
    return(cir)
   }
   
@@ -417,10 +419,10 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
       lev_inds = 1:length(levs)
       names(lev_inds)=unlist(lapply(levs, function(l)paste(l,l+1,sep="|")))
       rms_l = .merge1_new(lapply(lev_inds, function(kj){
-        gt =y1>levs[kj]
+        gt =y1<=levs[kj]  ##interpret as probability of being less or equal to  count
         if(length(which(gt))==0) return(NA)
         y2 = ifelse(gt,1,0)
-        data.frame(value= 1*(.calcAUCW(yp[,kj],y2, w1)[2]), submeasure=c("low","mid","high"))
+        data.frame(value= 1*(.calcAUCW(yp[,kj],y2, w1)), submeasure=c("low","mid","high"))
       }),addName="subpheno")
       #names(rms_l )=paste(names(y)[[ycol]],levs,sep=".")
       rms = rms_l #+0.5
@@ -609,7 +611,9 @@ updateYP=function(data,prev,  nonNA, flip=T, ignore.na=F){
       for(kk_1 in 1:length(kk)){
         ncols = ncol(self$ypreds[[kk1]])
         constk = constants[[kk_1]]
-        if(length(constk)<ncols){
+        if(length(constk)==0){
+          constk = rep(0, ncols)      
+        }else if(length(constk)<ncols){
           constk = c(constk,rep(constk[length(constk)],ncols - length(constk)))
         }else if(length(constk)>ncols){
           constk = constk[1:ncols]

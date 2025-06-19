@@ -133,7 +133,8 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           fact = attr(data$y[[ik]],"factor")
                           return(rep(0,length(levels(fact))-1 ))
                         }else if(family[[ik]]=="ordinal"){
-                          return(rep(0,length(min(data$y[[ik]], na.rm=T):max(data$y[[ik]],na.rm=T))-1 ))
+                          levs = sort(unique(data$y[[ik]][,1]))
+                          return(rep(0,length(levs )-1))
                         }else{
                           return(mean_y[[ik]][phensi1])
                         }
@@ -294,14 +295,14 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           y1c = (y[non_na_x & nonNA,kk_])
                           
                           
-                        df = data.frame(list(y=factor(y1c,levels=levs1),x= yp1))
+                        df = data.frame(list(y=factor(y1c,levels=sort(unique(y1c))),x= yp1))
                        # df = data.frame(list(y = y1c,x=yp1))
                         m1=try(polr(y~x,  data=df,Hess=T, method="logistic"))  
                         if(inherits(m1,"try-error")){
-                          waring("polr error")
+                          warning("polr error in updating constant")
                           ##prob not a great way to do this but avoids errors
                          # gl = glm(data$y[non_na_x & nonNA,kk]~ yp1[,1], family="gaussian")
-                          self$constants_proj[[kk]][[kk_1]] = consts_prev[[kk]] #rep(NA, length(levs1)-1) #gl$coefficients[1]
+                          #self$constants_proj[[kk]][[kk_1]] = consts_prev[[kk]] #rep(NA, length(levs1)-1) #gl$coefficients[1]
                         }else{
                           self$constants_proj[[kk]][[kk_1]]= m1$zeta
                         }

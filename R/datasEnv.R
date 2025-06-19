@@ -246,9 +246,10 @@ datasEnv<-R6Class("datasEnv", public = list(
     nmes_inds = names(inds);names(nmes_inds)=nmes_inds
     
     models = lapply(nmes_inds, function(nmes_inds1){
+      #print(nmes_inds1)
       inds1 = inds[[nmes_inds1]]
       phens1 = phens[[nmes_inds1]]
-        lapply(inds1, function(k){
+        mods1 = lapply(inds1, function(k){
          # fold = (k<length(datas[[1]]$train))
          # lapply(var_eg, function(vars1){
             lapply(datas[names(datas) %in% train_nme], function(d){
@@ -258,6 +259,8 @@ datasEnv<-R6Class("datasEnv", public = list(
             })
           #})
         })
+        if(length(mods1)==0) stop("!!")
+        mods1
     })
     vars = names(models[[1]][[1]][[1]])
     names(vars) = vars
@@ -312,43 +315,72 @@ datasEnv<-R6Class("datasEnv", public = list(
      attr(vars_combined,"flags_out")=toJSON(flags_out, simplifyVector=T, flatten=T)
     vars_combined
   },
+  
+  convert=function(genes_incl, phens){
+    variables = lapply(names(self$datas[[1]]$data), function(nme){
+      d1 = self$datas[[1]]$data[[nme]]
+      genes1=genes_incl[which(genes_incl %in% colnames(d1))]
+      vars2 = lapply(genes1,function(x){
+        c(nme,x)
+      })
+      names(vars2) = lapply(vars2, function(vv)paste(vv,collapse="."))
+      vars2
+    })
+    names(variables) = lapply(variables, function(l2)paste(names(l2), collapse=";"))
+    nreps1 =unlist(lapply(self$datas, function(x) ncol(x$looc$incl)))
+    inds = lapply(variables, function(v){
+      lapply(phens, function(phens1){
+        ii = 1:nreps1[[1]]
+        names(ii)= ii
+        names(ii)[[length(ii)]]="full"
+        as.list(ii)
+      })
+    })
+    vars_ = list(variables = variables, inds = inds)
+    vars_
+  },
   select=function(phens,flags,verbose=F,
-                  variables = list()){
+                  nreps1 =ncol(self$datas[[1]]$looc$incl),
+                  variables = vector("list", length = nreps1)
+                                     ){
     datas1 = self$datas
     topn = .readFlag(flags,'topn', 20)
  #   return_type = .readFlag(flags,'return','model') ##model,eval,plot
+    
     train_nme = .readFlag(flags,'train', names(datas1))
-    if(!(train_nme %in% names(datas1))) train_nme = names(datas1)[[1]]
-    test_nme = .readFlag(flags,'test', names(datas1))
+    train_nme = train_nme[train_nme %in% names(datas1)]
+    if(length(train_nme)==0) train_nme = names(datas1)[[1]]
     maxsize=.readFlag(flags,'max',50)
     num_pvals = min(topn, 10)
     #type='slow1'  #.readFlag(flags, 'type', 'slow1') 
     incl = .readFlag(flags,'data_types',names(datas1[[1]]$data))
     names(incl )= incl
     logpvthresh = log(.readFlag(flags,"pthresh",1e-5))
-    vars_l = list(mStateObj$new(c(),c(), NULL))
+   
     logpv=-100
     
  #   k = .readFlag(flags, 'rep',length(datas1[[1]]$train))
-    nreps1 =unlist(lapply(datas1, function(x) ncol(x$looc$incl)))
-    if(length(table(nreps1))>1) stop(" must have same number of reps in each dataset, use nrep instead of bach")
-    nreps = (length(variables)+1):nreps1[[1]]
+  
+    nreps = 1:nreps1
    names(nreps) = nreps
    #names(nreps)[length(nreps)]="full"
    #if(!all_reps) 
-    beam = .readFlag(flags,"beam",2)
+    beam = .readFlag(flags,"beam",1)
     for(k in nreps){
+     
       print(paste("cv",k,"of",length(nreps)))
       jj1=0
       invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k))); ### update training object
-        res2=  lapply(phens, function(subphens){
+      res2=  lapply(phens, function(subphens){
+        vars_l = list(mStateObj$new(c(),c(), NULL))  ## initialise vars_l
         while(logpv<logpvthresh && length(vars_l[[1]]$var)<maxsize){
           angles_all = lapply(vars_l, function(vars){
             angles=lapply(train_nme, function(data_nme) datas1[[data_nme]]$getAngles1(subphens,vars$var,incl=incl,k=k, type=self$type))
             cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl)
             comb=.summariseAngles(.combineAngles(angles,cols_incl,topn=topn),topn)
-            nxt_vars = lapply(1:num_pvals, function(ik){
-              #print(ik)
+            num_pvals1 = min(num_pvals, length(comb))
+            nxt_vars = lapply(1:num_pvals1, function(ik){
+            # print(ik)
               pv =  .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], c(vars$var,comb[ik]),k)
               mStateObj$new(comb[ik],  .sumChisq(pv) , prev_i=vars)
             })
