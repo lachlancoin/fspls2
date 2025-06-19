@@ -92,7 +92,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     self$type="slow1"
     types_all = getOption("types_all",names(datas[[1]]$data))
     names(types_all) = types_all
-    var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_thresh",0.00))
+    var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_quantile",0.00))
     genes_incls=.readFlag(flags,"genes_incls",NULL) #,getOption("genes_incls",NULL)
     batch=.readFlag(flags, "batch",0)
     all_v_all = .readFlag(flags,"all_v_all",T)
@@ -117,7 +117,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   update=function( flags = list()){
     types_all = getOption("types_all",names(self$datas[[1]]$data))
     names(types_all) = types_all
-    var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_thresh",0.00))
+    var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_quantile",0.00))
     genes_incls=.readFlag(flags,"genes_incls",NULL) #,getOption("genes_incls",NULL)
     batch=.readFlag(flags, "batch",0)
     
@@ -367,11 +367,14 @@ datasEnv<-R6Class("datasEnv", public = list(
    #if(!all_reps) 
     beam = .readFlag(flags,"beam",1)
     for(k in nreps){
-     
       print(paste("cv",k,"of",length(nreps)))
       jj1=0
       invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k))); ### update training object
-      res2=  lapply(phens, function(subphens){
+      phens_index = 1:length(phens)
+      names(phens_index) = names(phens)
+      res2=  lapply(phens_index, function(p_index){
+        subphens = phens[[p_index]]
+        cat(p_index); cat("\t");
         vars_l = list(mStateObj$new(c(),c(), NULL))  ## initialise vars_l
         while(logpv<logpvthresh && length(vars_l[[1]]$var)<maxsize){
           angles_all = lapply(vars_l, function(vars){
@@ -401,12 +404,16 @@ datasEnv<-R6Class("datasEnv", public = list(
              jj1 = jj1+1
           }
         }
+       
         #lapply(datas1, function(d)d$saveParquet())
         #lapply(vars_l, function(v) v$var)
           ##just take the top
+        if(length(vars_l[[1]]$var)>0) print(vars_l)
         vars_l[[1]]$var
         })
+      
          variables[[k]] = res2[unlist(lapply(res2,length))>0]
+         print(variables[[k]])
     }
     flags_out = list(train=train_nme,  max=maxsize, 
                      nreps = nreps, beam=beam,

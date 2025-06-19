@@ -111,7 +111,7 @@
     if(length(grep("~",grid))>0){
     ggp<-ggp+facet_grid(grid,scales="free")
     }else{
-      ggp<-ggp+facet_wrap(grid)
+      ggp<-ggp+facet_wrap(grid, scales="free")
     }
   }
   legend_position=if(legend) "bottom" else "none";

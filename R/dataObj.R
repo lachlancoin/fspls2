@@ -1411,6 +1411,8 @@ randomise=function(n= nrow(self$y[[1]]),
     })
     names(vars) = names(norm)
     var_thresh =  lapply(names(norm), function(norm_nme){
+      vt = var_threshs[[norm_nme]]
+      if(vt==0) vt = 1e-9
       max(quantile(vars[[norm_nme]], pr=var_threshs[[norm_nme]] ,na.rm=T), 1e-20)
     })
     names(var_thresh) = names(norm)
