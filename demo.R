@@ -34,14 +34,13 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[1]
+datasets =examples[4]
 options("fspls.types"=
-          fromJSON('{"gaussian": ["correlation","var"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
+          fromJSON('{"gaussian": ["correlation","var","mad"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
 runAll<-function(datasets, randomise=F,pthresh = 0.001){
   y = datasets[[1]]$y
-  #y1=y[sample.int(nrow(y), nrow(y)),1]
-  #datasets[[1]]$y = as.matrix(data.frame(list(y = y[,1], y1 = y1,y2=y[,1])))
-  flags = list(pthresh = pthresh, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F)
+  flags = list(pthresh = pthresh, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,
+               funcs = '{"x":"x","x2":"x^2"}')
   ## MAKE THE FSPLS DATA OBJECT
   datas =datasEnv$new(datasets,flags=flags) 
   if(randomise) datas$randomise()
@@ -65,12 +64,12 @@ if(TRUE) return(ggps)
 
 
 ##VISUALISE PREDICTIONS
-predictions =datas$extractPredictions(all_models,phens, flags, CV = F);
+#predictions =datas$extractPredictions(all_models,phens, flags, CV = F);
 #aa=roc(predictions[[2]]$y, predictions[[2]]$X0)
-.plotArea(predictions, rename=F,datas$datas[[1]]$family[1])
+#.plotArea(predictions, rename=F,datas$datas[[1]]$family[1])
 
 
-varnames = variables[[length(variables)]]$var
+varnames = variables$variables[[length(variables$variables)]]
 projOut=datas$getProjectedData(varnames)
 variance_before = datas$getVariance()
 variance_after =   lapply(projOut, function(p1){
