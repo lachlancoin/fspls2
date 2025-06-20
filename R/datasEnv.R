@@ -88,6 +88,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     datas = lapply(names(mats), function(nme){
       dataObj$new(mats[[nme]], incl_full=T,seed = getOption("seed",42), memDir=if(is.null(memDir)) NULL else paste(memDir, nme,sep="/"))
     })
+  
     names(datas) = names(mats)
     self$type="slow1"
     types_all = getOption("types_all",names(datas[[1]]$data))
@@ -285,34 +286,41 @@ datasEnv<-R6Class("datasEnv", public = list(
       d$getVariance();      
     })
   },
-  post_process=function(variables, flags_out){
+  post_process=function(variables){
     full_index = length(variables)
-    lens = unlist(lapply(variables, length))
-    if(max(lens)==0) return(list())
+    #lens = unlist(lapply(variables, function(x) length(x$var)))
+    #if(max(lens)==0) return(list())
     vars_all = list()
     vars_all1 = list()
+    vars_all2 = list()
     names(variables) = 1:length(variables)
     for(repn in names(variables)){
       full = repn==full_index
       var1 = variables[[repn]]
       for(phenn in names(var1)){
-        var2 = var1[[phenn]]
+        var2 = var1[[phenn]]$var
+        cumpv = var1[[phenn]]$cumpv
         varn = paste(names(var2), collapse=";")
         if(is.null(vars_all[[varn]])){
           vars_all[[varn]] = list()
           vars_all1[[varn]] = var2
+          vars_all2[[varn]] = list()
         }
         repn1 = as.list(as.numeric(repn))
+        repn2 = as.list(cumpv)
         names(repn1) = if(full) "full" else repn
+        names(repn2) = if(full) "full" else repn
         if(is.null(vars_all[[varn]][[phenn]])){
           vars_all[[varn]][[phenn]] =repn1
+          vars_all2[[varn]][[phenn]] =repn2
         }else{
           vars_all[[varn]][[phenn]] = c(vars_all[[varn]][[phenn]] , repn1)
+          vars_all2[[varn]][[phenn]] = c(vars_all2[[varn]][[phenn]] , repn2)
         }
       }
     }
-    vars_combined = list(variables = vars_all1, inds = vars_all) 
-     attr(vars_combined,"flags_out")=toJSON(flags_out, simplifyVector=T, flatten=T)
+    vars_combined = list(variables = vars_all1, inds = vars_all,cumpv=vars_all2) 
+  
     vars_combined
   },
   
@@ -345,31 +353,24 @@ datasEnv<-R6Class("datasEnv", public = list(
                                      ){
     datas1 = self$datas
     topn = .readFlag(flags,'topn', 20)
- #   return_type = .readFlag(flags,'return','model') ##model,eval,plot
-    
     train_nme = .readFlag(flags,'train', names(datas1))
     train_nme = train_nme[train_nme %in% names(datas1)]
     if(length(train_nme)==0) train_nme = names(datas1)[[1]]
     maxsize=.readFlag(flags,'max',50)
     num_pvals = min(topn, 10)
-    #type='slow1'  #.readFlag(flags, 'type', 'slow1') 
     incl = .readFlag(flags,'data_types',names(datas1[[1]]$data))
     names(incl )= incl
     logpvthresh = log(.readFlag(flags,"pthresh",1e-5))
-   
     logpv=-100
-    
- #   k = .readFlag(flags, 'rep',length(datas1[[1]]$train))
-  
     nreps = 1:nreps1
-   names(nreps) = nreps
-   #names(nreps)[length(nreps)]="full"
-   #if(!all_reps) 
+    names(nreps) = nreps
     beam = .readFlag(flags,"beam",1)
+    func_str = fromJSON(.readFlag(flags,"funcs",'{"x":"x"}'))
+    vars_combined=lapply(func_str,function(funcst){
     for(k in nreps){
       print(paste("cv",k,"of",length(nreps)))
       jj1=0
-      invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k))); ### update training object
+      invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst))); ### update training object
       phens_index = 1:length(phens)
       names(phens_index) = names(phens)
       res2=  lapply(phens_index, function(p_index){
@@ -379,8 +380,10 @@ datasEnv<-R6Class("datasEnv", public = list(
         while(logpv<logpvthresh && length(vars_l[[1]]$var)<maxsize){
           angles_all = lapply(vars_l, function(vars){
             angles=lapply(train_nme, function(data_nme) datas1[[data_nme]]$getAngles1(subphens,vars$var,incl=incl,k=k, type=self$type))
+            names(angles) = train_nme
             cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl)
-            comb=.summariseAngles(.combineAngles(angles,cols_incl,topn=topn),topn)
+             comb1=.combineAngles(angles,cols_incl,topn=topn)
+            comb=.summariseAngles(comb1,topn)
             num_pvals1 = min(num_pvals, length(comb))
             nxt_vars = lapply(1:num_pvals1, function(ik){
             # print(ik)
@@ -408,19 +411,22 @@ datasEnv<-R6Class("datasEnv", public = list(
         #lapply(datas1, function(d)d$saveParquet())
         #lapply(vars_l, function(v) v$var)
           ##just take the top
-        if(length(vars_l[[1]]$var)>0) print(vars_l)
-        vars_l[[1]]$var
+       # if(length(vars_l[[1]]$var)>0) print(vars_l)
+        vars_l[[1]]#$var
         })
-      
-         variables[[k]] = res2[unlist(lapply(res2,length))>0]
-         print(variables[[k]])
+         
+         variables[[k]] = res2[unlist(lapply(res2,function(xx) length(xx$var)))>0]
+        # print(variables[[k]])
     }
-    flags_out = list(train=train_nme,  max=maxsize, 
-                     nreps = nreps, beam=beam,
-                     topn = num_pvals, pthresh =exp(logpvthresh), data_types = incl)
-   vars =  self$post_process(variables,flags_out)
-  vars
    
+    self$post_process(variables)
+  })
+  
+  flags_out = list(train=train_nme,  max=maxsize, 
+                   nreps = nreps, beam=beam,func_str = func_str,
+                   topn = num_pvals, pthresh =exp(logpvthresh), data_types = incl)
+  attr(vars_combined,"flags_out")=toJSON(flags_out, simplifyVector=T, flatten=T)
+   vars_combined
   },
   extractPredictions=function(all_models,phens, flags, CV = FALSE){
     #datas = self$datas

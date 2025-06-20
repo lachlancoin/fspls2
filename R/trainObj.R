@@ -18,21 +18,32 @@ trainObj<-R6Class("trainObj",
                     looc_incl = "vector",
                     prev="list",
                     products="list",
+                    func_str="character",
+                  #  funcs="closure",
+                  #  func_str = "character",
+                  #  ifuncs="list",
                     
-                    initialize = function(y, looc, family=names(y)){  #y is a list of sparse matrices
+                    initialize = function(y, looc, family=names(y)
+                                          ){  #y is a list of sparse matrices
                     #  types_ =     getOption("fspls.types", fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC"}'))
                       self$family=family
+                   #   self$func_str = func_str
+                   #   self$funcs =  eval(str2lang(paste("function(x)",func_str)))
+                    
                       self$prev=list()
                       self$means_y = list()
                       self$looc_incl=looc$incl
                       self$y1=y
 #                      self$yNA = yNA
-                      self$yTr = lapply(self$y1,function(y11){
-                        t(y11)
-                      })
+                      self$yTr =
+                        lapply(self$y1,function(y11){
+                            t(y11)
+                          })
                       self$k=NA
                     },
-                    transform=function(weights, k){
+                    transform=function(weights, k, func_str){
+                      self$func_str = func_str
+                      funcs =  eval(str2lang(paste("function(x)",func_str)))
                       y1 = self$y1
                       looc_incl_k_ij = self$looc_incl[,k]
                       means_y = lapply(y1, function(y1)rep(0, ncol(y1)))
@@ -40,14 +51,16 @@ trainObj<-R6Class("trainObj",
                         ncols=ncol(y1[[colk]])
                         meansy = rep(0, ncols)
                         for(j in 1:ncols){
-                             v = y1[[colk]][,j]
+                             v = funcs(y1[[colk]][,j])
                              nonNA1 = !is.na(v) & looc_incl_k_ij
                              d_w = weights[nonNA1]
                              meansy[[j]] = (v[nonNA1]%*% d_w)/sum(d_w) 
-                            self$yTr[[colk]][j,] = weights*(v  - meansy[j]) #y[,j]  - mean_y[j]
-                            if(length(which(!nonNA1))>0){
-                              self$yTr[[colk]][j,!nonNA1] =0  
-                            }
+                             #for(i in 1:length(self$funcs)){
+                                self$yTr[[colk]][j,] = weights*(v  - meansy[j]) #y[,j]  - mean_y[j]
+                                if(length(which(!nonNA1))>0){
+                                  self$yTr[[colk]][j,!nonNA1] =0  
+                                }
+                             #}
                         }
                     #    print(meansy)
                         means_y[[colk]] = meansy
@@ -63,11 +76,10 @@ trainObj<-R6Class("trainObj",
                   #    })
                   #    nonNA
                   #  },
-                    update=function(data,k,
+                    update=function(data,k,func_str,
                                     var=list(), varnames = list(), W_all = matrix(nrow=0, ncol=0)){
                         ycols = 1:length(self$y1)
-                       
-                        
+                        self$func_str = func_str
                      
                       #  if(!is.na(k)){
                       #   if(k[1]==self$k[1])  return(NULL)
@@ -76,17 +88,21 @@ trainObj<-R6Class("trainObj",
                           # no need to update
                       #phensi = ycols
                         #.transform<-function(y1,  nonNA, weights, mean_y){
-                      self$transform(data$weights, k)
-                      ymean = lapply(self$yTr,function(yTr1) apply(yTr1,1,mean)) ## should be mean 0
-                      if(max(abs(unlist(ymean)))>1e-5)stop("problem")
+                      self$transform(data$weights, k, func_str)
+                   #   for(i in 1:length(self$funcs)){
+                        ymean = lapply(self$yTr,function(yTr1) apply(yTr1,1,mean)) ## should be mean 0
+                        if(max(abs(unlist(ymean)))>1e-5)stop("problem")
+                    #  }
                       self$products= lapply(1:length(data$data), function(ik){
                         x = data$data[[ik]]
                         lapply(self$yTr, function(yTr1){
-                          # print(dim(yTr1))
-                          #  print(dim(x))
-                          resu1=if(isbigmatrix(x) && typeof(yTr1)!="S4") dgemm(A=yTr1,B=x) else yTr1 %*% x
-                          dimnames(resu1) = list(dimnames(yTr1)[[1]],dimnames(x)[[2]])
-                          resu1
+                         # lapply(yTr_, function(yTr1){ ##NEED TO ADD POWS
+                            # print(dim(yTr1))
+                            #  print(dim(x))
+                            resu1=if(isbigmatrix(x) && typeof(yTr1)!="S4") dgemm(A=yTr1,B=x) else yTr1 %*% x
+                            dimnames(resu1) = list(dimnames(yTr1)[[1]],dimnames(x)[[2]])
+                            resu1
+                          #})
                         })
                       })
                       names(self$products) = names(data$data)

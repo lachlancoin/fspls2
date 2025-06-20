@@ -993,14 +993,10 @@ getVariance=function(){
   })
 },
 projOut=function(ik){
-  #if(TRUE) stop("!!")
   UDV=self$UDVP
-  #d = self$train[[k]]
-#  nonNA = d$nonNA
   x = self$data[[ik]] #[d$nonNA,,drop=F]
   mean_x=self$mean_x[[ik]]
-  #mean_x = apply(x,2,mean,na.rm=T)
-  Dall = t(t(x[])-mean_x)
+  Dall = t(t(x)-mean_x)
   if(length(UDV$var)>0){
     alias = UDV$alias
     U = UDV$U
@@ -1358,10 +1354,10 @@ getNA=function(var){
         #t             
      #})
   },
-update=function(k,varn = c()){
+update=function(k,func_str,varn = c()){
   var = self$extractVar(varn)
   W_all = if(length(var)==0) matrix(nrow=0, ncol=0) else  .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
-  self$train$update(self,k,var=var,varnames=varn, W_all = W_all)
+  self$train$update(self,k,func_str, var=var,varnames=varn, W_all = W_all)
 },
 randomise=function(n= nrow(self$y[[1]]),
                    indices=sample.int(n,n)){
