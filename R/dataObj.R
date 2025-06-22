@@ -391,6 +391,10 @@ dataObj<-R6Class("dataObj", public = list(
 convert=function(b_i1){
   #print(b_i1)
   data_ind = which(names(self$data)==b_i1[[1]])
+  if(length(data_ind)==0){
+    print(names(self$data))
+    stop(paste("could not find",b_i1[[1]]))
+  }
   var_ind = which(dimnames(self$data[[data_ind]])[[2]]==b_i1[2])
   c(data_ind, var_ind)
 },
@@ -451,9 +455,9 @@ calcBetaProj1=function(phensi,k,b_i1,prev_var, convert=T){
   nme = names(res[[1]])
   
   names(nme)=nme
-  res1 = unlist(lapply(nme, function(n){
+  res1 = lapply(nme, function(n){
     lapply(res, function(r) r[[n]])
-  }),rec=F)
+  })
   res1
 },
 calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var){
@@ -729,44 +733,79 @@ calcWall=function(b_i, var, W_all1){
   }
   Wall
 },
-makeNextModel=function(phensi,var,  prev_is= self$train$prev[[k]],k
-                      #lapply(1:self$nreps(), function(k) self$train$prev[[k]]),
-                                       ){
- 
-  #.check(prev_i$var, vars[-length(vars)])
-  b_i = self$convert(var)
-  #names(fold_inds)=fold_inds
-  #prevs_all =lapply(fold_inds, function(k){
-#       lapply(prev_is[[k]], function(prevk){
-         prevk = prev_is
-         mean_y = self$train$means_y[[k]]
-          prev_i1=stateObj$new(phensi,self, self$train,k,mean_y,prevk , b_i,b_i_name=var)
-          prev_i1$updateConst(phensi,self, self$train,k)
-          prev_i1
- #      })
-  #})
-  #prevs_all
+getConstantsProj=function(phensi){  ##default constants
+  data = self
+  family = unlist(lapply(names(phensi), function(x) strsplit(x,"\\.")[[1]][1]))
+  constants_proj = lapply(1:length(phensi), function(ik){
+    nme = names(phensi)[[ik]]
+    phensi1 = phensi[[ik]]
+    #  if(length(phensi1)>1) stop("this should just have length 1")
+    if(family[[ik]]=="multinomial") {
+      fact = attr(data$y[[ik]],"factor")
+      return(rep(0,length(levels(fact))-1 ))
+    }else if(family[[ik]]=="ordinal"){
+      levs = sort(unique(data$y[[ik]][,1]))
+      return(rep(0,length(levs )-1))
+    }else{
+      return(rep(0,length(phensi1)))
+    }
+  })
+  names(constants_proj) = names(phensi)
+  constants_proj
 },
-makeModels=function(phens,vars1, k, verbose=F){
+makeModels=function(phens1, vars1, k, 
+                   CHECK=F,
+                    verbose=F){
+  
+ # nme_phens1 = names(phens1)
+#  names(nme_phens1) = nme_phens1
+#  lapply(nme_phens1, function(nme2){
+#    phen2=phens1[nme2]
+#    mods = d$makeModels(phen2, vars1, k,verbose)  ##single bracket to keep as 1item list
+#    mods
+#  })
+  phen2 = phens1
+  ypred=self$ypred(phen2)
+  if(length(phen2)>1) stop("just one group .. need to fix for multiple types")
   if(length(vars1)==0){
     return(list(prev_is$simplify()))
   }
-  phensi = self$phensi(phens)
+  phensi = self$phensi(phen2)
   models = vector("list", length(vars1))
  # prev_is = lapply(fold_inds, function(k) stateObj$new(phensi,self,self$train[[k]], k))
- prev_is= self$train$prev[[k]]  #lapply(fold_inds, function(k) self$train$prev[[k]])
+ prev_i= self$train$prev[[k]]  #lapply(fold_inds, function(k) self$train$prev[[k]])
   #if(length(prev_i$var)>0) stop("problem")
   nmes = c()
- 
+  mean_y = self$train$means_y[[k]]
   for(jk in 1:length(vars1)){
     if(verbose)print(jk)
-      prev_is = self$makeNextModel(phensi,vars1[[jk]], prev_is, k)
-      
-      models[[jk]] = prev_is$simplify()
-#        lapply(prev_is, function(p_is1){
- #         p_is1$simplify()  ## for serialization
-        #})
-  #    })
+    b_i_name = vars1[[jk]]
+    b_i = self$convert(vars1[[jk]])
+    data = self; train = data$train
+    b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_i$var, convert=F) 
+    betas_new = b_new_proj$betas[[1]]
+   # if(is.list(betas_new)){
+  #    if(length(betas_new)>1) stop("!!")
+  #    betas_new = betas_new[[1]]
+  #  }
+    #betas_new = as.matrix(data.frame(b_new_proj$betas[[1]]), nrow = 1)
+    #dimnames(betas_new)[[2]] = phen2[[1]]
+    constants_proj= data$getConstantsProj(phensi)
+    prev_i1=stateObj$new(phensi,data, betas_new,constants_proj, k,prev_i , b_i,b_i_name=b_i_name)
+    ypred$updateYP(data, prev_i1, self$looc$incl[,k], flip=FALSE )
+    prev_i1$updateConst(phensi,ypred, data,k)
+     if(CHECK && FALSE ){
+       ypred$updateYP(data, prev_i1, self$looc$incl[,k], flip=FALSE )
+       yp2 = ypred$ypreds$gaussian
+       nonNA = self$looc$incl[,k] & self$getNonNA(prev_i1$var)
+       for(kj in 1:ncol(yp2)){
+                        gl = glm(data$y[[kk]][self$looc$incl[,k],kj]~ yp2[ self$looc$incl[,k],kj], family=train$family)
+                        print(gl$coefficients)
+       }
+        #                if(abs(gl$coefficients[1])>1e-10) stop(" coefficients not right")
+                    }
+    prev_i = prev_i1
+      models[[jk]] = prev_i$simplify()
       nmes[[jk]] = paste(names(vars1)[1:jk],collapse=";")
   }
   names(models) = nmes
@@ -834,14 +873,14 @@ ypred=function(phens1){
   ypredObj$new(self,self$phensi(phens1), family)
 
 },
-evaluateAllModels=function(all_models,phens, flags,
+evaluateAllModels=function(all_models_y,phens, flags,
                            ypreds = lapply(phens, function(phens1) self$ypred(phens1))
                          ){
   d = self
 #  ypred = self$ypred(phens)
-  var_names= names(all_models); names(var_names)=var_names
-  evals = .merge1_new(lapply(var_names, function(var_name){
-    all_models1_ = all_models[[var_name]]
+  group_names= names(all_models_y); names(group_names)=group_names
+  evals = .merge1_new(lapply(group_names, function(group_name){
+    all_models1_ = all_models_y[[group_name]]
     pheno_nmes = names(all_models1_); names(pheno_nmes)=pheno_nmes
    .merge1_new(lapply(pheno_nmes, function(pheno_nme){
      all_models1 = all_models1_[[pheno_nme]]

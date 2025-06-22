@@ -204,43 +204,26 @@ liability<-function(xM){
   .logistic(yp+constants[[1]])
 }
 
-.calcYpred_1<-function(prev_kj, data, ind_1,
+.calcYpred_1<-function(prev_i1, data1, ind_1,
                        kk=1,
-                       constants= prev_kj$constants_proj[[kk]]
+                       constants= prev_i1$constants_proj[[kk]]
                        #constants= unlist(prev_kj$constants_proj)
 ){
  
   yp = .rep(constants, length(which(ind_1)))
-  betas =  prev_kj$betas
-  vars1 = prev_kj$var
+  betas =  prev_i1$betas
+  vars1 = prev_i1$var
   if(length(vars1)==0) return(yp)
-  betas1 = betas[[kk]]
-  
-  vars1 = prev_kj$var
-  #print(names(prev_))
-  # print(prev_kj$constants_proj)
-  #  const = prev_kj$const[[i]][[ycol]]
+  betas1 = prev_i1$betas[[kk]]
   df1 = as.matrix(data.frame(vars1))
-  
-  
-  
-  
   if(nrow(df1)>0){
-    for(kj in 1:length(data)){
+    for(kj in 1:length(data1)){
       inds_11 = which(df1[1,]==kj)
       if(length(inds_11)>0){
-        ##CHECK IF CORRECT
-       # print(dim(data[[kk]]))
-      #  print(length(which(ind_1)))
-      #  print(df1[2,inds_11])
-      #  d1 = (data[[kj]][,,drop=F])
-        prod=data[[kj]][ind_1,df1[2,inds_11], drop=F]%*% betas1[inds_11,,drop=F]
-      #  print(dim(prod))
-      #  print(dim(yp))
+        prod=data1[[kj]][ind_1,df1[2,inds_11], drop=F]%*% betas1[inds_11,,drop=F]
         yp = yp + prod
       }
     }
-    #  yp = yp+ unlist(prev_kj$constants_proj)
   }
   as.matrix(yp) 
 }
@@ -572,10 +555,10 @@ updateYP=function(data,prev,  nonNA, flip=T, ignore.na=F){
   prev_kj = prev 
   phensi=self$phensi
   prev_kj$var = lapply(prev_kj$var_names, data$convert)  ## this would not be threadsafe
-  vars_to_incl = which(unlist(lapply(prev_kj$var, length))==2)
-  prev_kj$var = prev_kj$var[vars_to_incl]
-  prev_kj$varnames = prev_kj$varbanes[vars_to_incl]
-  prev_kj$betas = lapply(prev_kj$betas, function(xx)xx[vars_to_incl,,drop=F])
+ # vars_to_incl = which(unlist(lapply(prev_kj$var, length))==2)
+#  prev_kj$var = prev_kj$var[vars_to_incl]
+#  prev_kj$varnames = prev_kj$varbanes[vars_to_incl]
+ # prev_kj$betas = lapply(prev_kj$betas, function(xx)xx[vars_to_incl,,drop=F])
   na_x = if(ignore.na) rep(F, self$nrow) else data$getNA(prev_kj$var)
   for(kk1 in names(phensi)){ #} 1:length( ypred$ypreds)){
     kk = phensi[[kk1]]

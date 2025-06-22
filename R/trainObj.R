@@ -43,7 +43,8 @@ trainObj<-R6Class("trainObj",
                     },
                     transform=function(weights, k, func_str){
                       self$func_str = func_str
-                      funcs =  eval(str2lang(paste("function(x)",func_str)))
+                     # func_str1 = paste("function(x)",func_str)
+                      funcs =  eval(str2lang(func_str))
                       y1 = self$y1
                       looc_incl_k_ij = self$looc_incl[,k]
                       means_y = lapply(y1, function(y1)rep(0, ncol(y1)))
