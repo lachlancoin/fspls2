@@ -21,7 +21,7 @@ if(rev(strsplit(getwd(),"/")[[1]])[1]!="fspls2")stop("not in right directory")
 src1=grep(".R$",dir("./R",rec=T),v=T)
 invisible(try(lapply(paste("./R",src1,sep="/"), function(x) {print(x);source(x)})))
 
-if(TRUE){
+if(FALSE){
 rdats = grep("rdat",dir("data",full=T),v=T)
 examples = lapply(rdats, function(rdat){
   load(rdat)
@@ -34,29 +34,38 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[4]
+datasets =examples[2]; pthresh = 0.001 ; randomise=F; duplicate=T
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation","var","mad"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
-runAll<-function(datasets, randomise=F,pthresh = 0.001){
+
+func_y = list(y="function(y) y")  #'{"y":"function(y) y","y1":"function(y) y^2"} '
+
+runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
+                 func_y = list(y="function(y) y")){
   y = datasets[[1]]$y
-  flags = list(pthresh = pthresh, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,
-               funcs = '{"x":"x","x2":"x^2"}')
+  flags = list(pthresh = pthresh, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  
+               transform_y =toJSON(func_y) )
   ## MAKE THE FSPLS DATA OBJECT
-  datas =datasEnv$new(datasets,flags=flags) 
-  if(randomise) datas$randomise()
-  phens=datas$pheno()
+  if(duplicate){
+  y2 = do.call(cbind,replicate(2,datasets[[1]]$y,simplify=F))
+  y2[,2] = y2[,2]^2
+  dimnames(y2)[[2]] = paste("y",1:ncol(y2),sep=".")
+  datasets[[1]]$y = y2
+  }
+  datasAll =datasEnv$new(datasets,flags=flags) 
+  if(randomise) datasAll$randomise()
+  phens=datasAll$pheno()
   
   ## FIND VARIABLES
-  variables = datas$select(phens, flags,verbose=F)
-  #names(variables)[1]="x"
-  print(variables)
+  variables_all = datasAll$select(phens, flags,verbose=F)
+  print(variables_all)
   ## FIT MODELS
-  all_models = datas$makeAllModels(variables, phens, flags)
-  eval = datas$evaluateAllModels(all_models, phens, flags)
+  all_models = datasAll$makeAllModels(variables_all, phens, flags)
+  eval = datasAll$evaluateAllModels(all_models, phens, flags)
 ##PLOT
   if(is.null(eval)) return (NULL)
   eval2 = .calcEval1(eval)
-  ggps = .plotEval1(eval2, rename=F,len=1)
+  ggps = .plotEval1(eval2, rename=F,len=1, legend=T)
 #for multinomial or ordinal
 #ggps = .plotEval1(eval, rename=F,grid="subpheno~cv")
 ggps
@@ -91,10 +100,11 @@ for(j in 1:length(datas$datas)){
 
 }
 
-ggp_all = lapply(1:length(examples), function(i) {
+ggp_all =list()
+for(i in 1:length(examples)){  
   print(i)
-  runAll(examples[i], randomise=F, pthresh = 0.0001)
-  })
+  ggp_all[[i]] = runAll(examples[i], randomise=F, pthresh = 0.0001)
+}
 names(ggp_all) = names(examples)
 #runAll(datasets[1])
 
