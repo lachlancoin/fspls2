@@ -721,7 +721,19 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   pchisq(sum(chisq), df = length(pvs), lower.tail=F)
 }
 
-.plotArea<-function(predictions, family="binomial",rename=T, len = 1,grid="model~pheno", p_incl=""){
+.plotArea1<-function(predictions,family="binomial",rename=T, len = 1,grid="model~pheno", p_incl="",max_vars = 100){
+  lapply(predictions, function(pred1){
+    lapply(pred1, function(pred2){
+      inds = 1:length(pred2);
+      names(inds) = names(pred2)
+      lapply(inds, function(i){
+        .plotArea(pred2[i],family=family, rename=rename, len=len, grid=grid, p_incl="", max_vars = max_vars)
+      })
+    })
+  })
+}
+
+.plotArea<-function(predictions, family="binomial",rename=T, len = 1,grid="model~pheno", p_incl="", max_vars = 100){
   area_p=.merge1_new(lapply(predictions, function(train){  
     .merge1_new(lapply(train, function(model){
       .merge1_new(lapply(model, function(test){
@@ -757,6 +769,7 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   if(!is.null(area_p1[['subpheno']])) area_p1$subpheno = factor(area_p1$subpheno)
   lens = vapply(area_p1$model, function(x) length(strsplit(x,";")[[1]]), FUN.VALUE = c(1))
   area_p1 = area_p1%>% tibble::add_column(lens = factor(lens))
+    area_p1 = area_p1[lens<=max_vars,,drop=F ]
   if(is.null(area_p1[['subpheno']])){
     ggp<-ggplot(area_p1, aes(x=knots, y=value, color=pheno, linetype=lens))
     

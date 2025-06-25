@@ -1,16 +1,17 @@
 
-.getPvsAll<-function(phens,datas, vars,k){
+.getPvsAll<-function(subphens,datas, var_new,k){
   pvs_all= lapply(datas, function(d){
-    b_i1 = vars[[length(vars)]]
-    prev_var =  vars[-length(vars)]
-    sig_res = d$calcBetaProj1(phens,k, b_i1, prev_var , convert=T)
+    b_i1 = var_new[[length(var_new)]]
+    prev_var =  var_new[-length(var_new)]
+    sig_res = d$calcBetaProj1(subphens,k, b_i1, prev_var , convert=T)
     unlist(sig_res$pvs)
     #d$train[[k]]$getPvs(prev)
   })
   pvs_all
 }
-.getFamily<-function(y_mat){
+.getFamily<-function(y_mat, family1=NULL){
   types = attr(y_mat, "types")
+  
   if(!is.null(types)){
     return(lapply(types, function(typ){
       if(typ=="double") return("gaussian")
@@ -109,6 +110,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   #    missing_vals = self$updateY(y1, family=family, CHECK=T)
       
       datas[[ik]]$initTrain(varn=varn)
+      datas[[ik]]$initTrain1();
     #data[[ik]]$initY()
      return(NULL)
     }))
@@ -154,7 +156,9 @@ datasEnv<-R6Class("datasEnv", public = list(
   pheno=function(maxpheno=1e9,sep=F, sep_group = F, exclude=NULL){
    res = self$datas[[1]]$pheno(maxpheno=maxpheno, sep=sep, sep_group = sep_group);
   if(!is.null(exclude)){
-    res = lapply(res, function(res1) res1[-grep(exclude,res1)])
+    lapply(res, function(res2){
+    lapply(res2, function(res1) res1[-grep(exclude,res1)])
+    })
   }
    res
   },
@@ -175,9 +179,9 @@ datasEnv<-R6Class("datasEnv", public = list(
     })
     angles_all
   },
-  makeAllModels=function(variables_all, phens, flags){
+  makeAllModels=function(vars_all, phens, flags){
     verbose=.readFlag(flags,"verbose",F)
-    lapply(variables_all, function(vars){
+    lapply(vars_all, function(vars){
       all_models = list()
       variables = vars$variables
       var_inds = vars$inds
@@ -188,12 +192,12 @@ datasEnv<-R6Class("datasEnv", public = list(
     
      for(v_nme in names(variables)){
        if(verbose)print(v_nme)
-       vars1 = variables[[v_nme]]
+       vars2 = variables[[v_nme]]
        inds =var_inds[[v_nme]]
-       nme_ = paste(names(vars1),collapse=";")
+       nme_ = paste(names(vars2),collapse=";")
        models1 = all_models[[nme_]]
        if(is.null(models1)){
-        models1 = self$makeModels( vars1, inds,phens,flags)
+        models1 = self$makeModels( vars2, inds,phens,flags)
         for(k in 1:length(models1)){
           mod1 =   all_models[[names(models1)[[k]]]]
           if(is.null(mod1)){
@@ -221,7 +225,7 @@ datasEnv<-R6Class("datasEnv", public = list(
           p_nme = names(inds)[p_i]
           models2 = all_models[[nme_]][[p_nme]]  
           if(is.null(models2)){
-            models2 = self$makeModels( vars1, inds[p_i],phens[which(names(phens) %in% p_nme)],flags)
+            models2 = self$makeModels( vars2, inds[p_i],phens[which(names(phens) %in% p_nme)],flags)
             for(k in 1:length(models2)){
               all_models[[names(models2)[[k]]]][[p_nme]] = models2[[k]][[p_nme]]
             }
@@ -231,7 +235,7 @@ datasEnv<-R6Class("datasEnv", public = list(
               models3 = all_models[[nme_]][[p_nme]][[r_nme]]  
               if(is.null(models3)){
                 inds2 = lapply(inds[p_i], function(indsk)indsk[r_i])
-                models3 = self$makeModels( vars1, inds2,phens[which(names(phens) %in% p_nme)],flags)
+                models3 = self$makeModels( vars2, inds2,phens[which(names(phens) %in% p_nme)],flags)
                 for(k in 1:length(models3)){
                   all_models[[names(models3)[[k]]]][[p_nme]][[r_nme]] = models3[[k]][[p_nme]][[r_nme]]
                 }
@@ -245,7 +249,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     all_models
     })
   },
-  makeModels=function(vars1, inds, phens,flags){
+  makeModels=function(vars2, inds, phens,flags){
     datas=self$datas
     train_nme = .readFlag(flags,'train', names(datas)[1])
     if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
@@ -258,7 +262,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       phens1 = phens[[nmes_inds1]]
         mods1 = lapply(inds1, function(k){
             lapply(datas[names(datas) %in% train_nme], function(d){
-              mods = d$makeModels(phens1, vars1,k,verbose)
+              mods = d$makeModels(phens1, vars2,k,verbose)
             })
           #})
         })
@@ -326,18 +330,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   
     vars_combined
   },
-  
-  convert=function(genes_incl, phens){
-    variables = lapply(names(self$datas[[1]]$data), function(nme){
-      d1 = self$datas[[1]]$data[[nme]]
-      genes1=genes_incl[which(genes_incl %in% colnames(d1))]
-      vars2 = lapply(genes1,function(x){
-        c(nme,x)
-      })
-      names(vars2) = lapply(vars2, function(vv)paste(vv,collapse="."))
-      vars2
-    })
-    names(variables) = lapply(variables, function(l2)paste(names(l2), collapse=";"))
+  convert1=function(variables, phens){
     nreps1 =unlist(lapply(self$datas, function(x) ncol(x$looc$incl)))
     inds = lapply(variables, function(v){
       lapply(phens, function(phens1){
@@ -350,8 +343,20 @@ datasEnv<-R6Class("datasEnv", public = list(
     vars_ = list(variables = variables, inds = inds)
     vars_
   },
-  select=function(phens,flags,verbose=F
-                                     ){
+  convert=function(genes_incl, phens){
+    variables = lapply(names(self$datas[[1]]$data), function(nme){
+      d1 = self$datas[[1]]$data[[nme]]
+      genes1=genes_incl[which(genes_incl %in% colnames(d1))]
+      vars2 = lapply(genes1,function(x){
+        c(nme,x)
+      })
+      names(vars2) = lapply(vars2, function(vv)paste(vv,collapse="."))
+      vars2
+    })
+    names(variables) = lapply(variables, function(l2)paste(names(l2), collapse=";"))
+   self$convert1(variables, phens)
+  },
+  select=function(phens,flags,verbose=F ){
     nreps1 =ncol(self$datas[[1]]$looc$incl)
     datas1 = self$datas
     topn = .readFlag(flags,'topn', 20)
@@ -377,7 +382,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       phens_index = 1:length(phens)
       names(phens_index) = names(phens)
       res2=  lapply(phens_index, function(p_index){
-        subphens = phens[[p_index]]
+      subphens = phens[[p_index]]
         if(FALSE) cat(p_index); cat("\t");
         vars_l = list(mStateObj$new(c(),c(), NULL))  ## initialise vars_l
         while(logpv<logpvthresh && length(vars_l[[1]]$var)<maxsize){
@@ -389,8 +394,9 @@ datasEnv<-R6Class("datasEnv", public = list(
             comb=.summariseAngles(comb1,topn)
             num_pvals1 = min(num_pvals, length(comb))
             nxt_vars = lapply(1:num_pvals1, function(ik){
-            # print(ik)
-              pv =  .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], c(vars$var,comb[ik]),k)
+           #   print(ik)
+              var_new = c(vars$var,comb[ik])
+              pv =  .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], var_new,k)
               mStateObj$new(comb[ik],  .sumChisq(pv) , prev_i=vars)
             })
             names(nxt_vars) = names(comb)[1:length(nxt_vars)]  
@@ -428,13 +434,26 @@ datasEnv<-R6Class("datasEnv", public = list(
   attr(vars_combined,"flags_out")=toJSON(flags_out, simplifyVector=T, flatten=T)
    vars_combined
   },
-  extractPredictions=function(all_models,phens, flags, CV = FALSE){
+  extractPredictions=function(all_models,phens, flags, CV = FALSE, liab=T, data_nme  = names(self$datas)){
     #datas = self$datas
-    res2=lapply(self$datas, function(d){
-      d$extractPredictions(all_models, phens, falgs, CV=CV)
-    })
+    names(data_nme) = data_nme
+    res3 = lapply(all_models, function(all_models_){
+      nmes_p = names(phens); names(nmes_p) = nmes_p
+      res2 = lapply(nmes_p, function(nme_p){
+        phens1 = phens[[nme_p]]
+        res2=lapply(data_nme, function(d_nme){
+          d = self$datas[[d_nme]]
+          if(is.null(d)){
+            print(d_nme)
+            stop("!!")
+          }
+          d$extractPredictions(all_models_, phens1, nme_p,flags, CV=CV, liab=liab)
+        })
+      })
    
     res2[lapply(res2,length)>0]
+    })
+    res3
  },
   evaluateAllModels=function(all_models, phens,flags){ ## different folds with same variables
 ##                          inds = as.numeric(names(all_models))){

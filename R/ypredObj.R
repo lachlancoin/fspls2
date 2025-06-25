@@ -43,9 +43,10 @@ calcVar<-function(yp,y,family="gaussian"){
 }
 #head(.logistic(-1*m1$coeff*x + m1$zeta[1]))
 ## this currently returns probablity less than or equal to
-liability1<-function(yp,const){
+liability1<-function(yp,const, liab=T){
   ab = as.matrix(data.frame(lapply(const,function(v){
-    .logistic(v-yp)  ## shouldnt this be plus??
+    if(liab) .logistic(yp-v) else yp-v  ## according to description of polr in R help
+   # if(liab) .logistic(v-yp) else v-yp  ## according to description of polr in R help
   })) )
   dimnames(ab)[[2]] = names(const)
   if(TRUE) return(ab)
@@ -71,7 +72,7 @@ liability<-function(xM){
 
 
 .calcYpred_multinom<-function(prev_kj, data, ind_1,levs,
-                              numvar=NULL, DRS_thresh = 1e-5,kk=1,
+                              kk=1,
                               liab=T,
                               vars1 = prev_kj$var,
                               betas =  prev_kj$betas,
@@ -86,17 +87,6 @@ liability<-function(xM){
     return (yp)
   }
   yp = .rep(constants, length(which(ind_1)))
-  
-  if(!is.null(numvar) && numvar==0){
-    attr(yp, "levs") =levs
-    return(liability(yp))  
-  }
-  
-  # betas1 = t(as.matrix(data.frame(betas)))
-  #print(names(prev_))
-  # print(prev_kj$constants_proj)
-  if(!is.null(numvar))vars1 = vars1[1:numvar]
-  #  const = prev_kj$const[[i]][[ycol]]
   df1 = as.matrix(data.frame(vars1))
   
   
@@ -105,13 +95,18 @@ liability<-function(xM){
       inds_11 = which(df1[1,]==ki)
       if(length(inds_11)>0){
         ##CHECK IF CORRECT
-        yp = yp + data[[ki]][ind_1,df1[2,inds_11], drop=F]%*% betas[[kk]][inds_11,,drop=F]
+        d2 =data[[ki]][ind_1,df1[2,inds_11], drop=F]
+        beta1=betas[[kk]][inds_11,,drop=F]
+        #print(beta1)
+        extra=d2%*% beta1
+        yp = yp + extra
       }
     }
     #  yp = yp+ unlist(prev_kj$constants_proj)
   }
   # print(yp)
   attr(yp, "levs") =levs
+  #print(yp)
   if(!liab) return(yp)
   liability(yp)
 }
@@ -119,9 +114,9 @@ liability<-function(xM){
 
 
 .calcYpred_ord<-function(prev_kj, data, ind_1,levs,
-                         numvar=NULL, kk=1,
+                         kk=1,
                          liab=T,
-                         constants= prev_kj$constants_proj[[kk]]){
+                         const =prev_kj$constants_proj[[kk]][[1]]){
   #  if(getOption("fspls.DRS",F)){
   #    betas1 = apply(betas1,c(1,2), function(b) if(b>DRS_thresh) 1 else if(b<-1*DRS_thresh) -1 else 0)
   #  }
@@ -129,16 +124,17 @@ liability<-function(xM){
   #  yp = .rep(zeros, length(which(ind_1)))
   yp = .rep(0, length(which(ind_1)))
   
-  if(length(vars1)==0 || !is.null(numvar) && numvar==0){
+  if(length(vars1)==0){
     attr(yp, "levs") =levs
-    return(if(liab) liability1(yp, constants) else yp)
+    return(liability1(yp, constants, liab=liab))
+#    return(if(liab) liability1(yp, constants) else yp)
   }
   
   betas =  prev_kj$betas
   betas1 = betas[[kk]]
   #print(names(prev_))
   # print(prev_kj$constants_proj)
-  if(!is.null(numvar))vars1 = vars1[1:numvar]
+  #if(!is.null(numvar))vars1 = vars1[1:numvar]
   #  const = prev_kj$const[[i]][[ycol]]
   df1 = as.matrix(data.frame(vars1))
   
@@ -156,15 +152,15 @@ liability<-function(xM){
   # print(yp)
   attr(yp, "levs") =levs
   if(typeof(yp)=="S4") yp = as.matrix(yp)
-  if(!liab) return(yp)
-  liability1(yp, constants)
+  #if(!liab) return(yp)
+  liability1(yp, const, liab=liab)
 }
 
 
 
 
 .calcYpred_binomial<-function(prev_kj, data, ind_1,
-                              numvar=NULL, kk=1,
+                               kk=1,kk1="",
                               liab=T,
                               constants= prev_kj$constants_proj[[kk]]){
   #  if(getOption("fspls.DRS",F)){
@@ -172,18 +168,17 @@ liability<-function(xM){
   #  }
   vars1 = prev_kj$var
   #  yp = .rep(zeros, length(which(ind_1)))
-  yp = .rep(0, length(which(ind_1)))
+  yp = .rep(constants, length(which(ind_1)))
   
-  if(length(vars1)==0 || !is.null(numvar) && numvar==0){
+  if(length(vars1)==0 ){
     #print(dim(yp)); print(constants)
     return(if(liab) .logistic(yp+constants[[1]]) else yp)
   }
   
   betas =  prev_kj$betas
-  betas1 = betas[[kk]]
+  betas1 = betas[[kk1]]
   #print(names(prev_))
   # print(prev_kj$constants_proj)
-  if(!is.null(numvar))vars1 = vars1[1:numvar]
   #  const = prev_kj$const[[i]][[ycol]]
   df1 = as.matrix(data.frame(vars1))
   
@@ -201,17 +196,17 @@ liability<-function(xM){
   }
   # print(yp)
   if(!liab) return(yp)
-  .logistic(yp+constants[[1]])
+  .logistic(yp)
 }
 
 .calcYpred_1<-function(prev_i1, data1, ind_1,
-                       kk=1,
+                       kk=1,kk1="",
                        constants= prev_i1$constants_proj[[kk]]
                        #constants= unlist(prev_kj$constants_proj)
 ){
  
   yp = .rep(constants, length(which(ind_1)))
-  betas =  prev_i1$betas
+  betas =  prev_i1$betas[[kk1]]
   vars1 = prev_i1$var
   if(length(vars1)==0) return(yp)
   betas1 = prev_i1$betas[[kk]]
@@ -219,8 +214,14 @@ liability<-function(xM){
   if(nrow(df1)>0){
     for(kj in 1:length(data1)){
       inds_11 = which(df1[1,]==kj)
+      meanx = prev_i1$mean_x[inds_11]
+    #  yp =  betas1[inds_11,,drop=F]*meanx%*%
+      #print(meanx)
       if(length(inds_11)>0){
-        prod=data1[[kj]][ind_1,df1[2,inds_11], drop=F]%*% betas1[inds_11,,drop=F]
+        d1 = data1[[kj]][ind_1,df1[2,inds_11], drop=F]
+      #  d2 = t(t(d1) - meanx)
+      #  print(apply(d2,2,mean))
+        prod=d1%*% betas1[inds_11,,drop=F]
         yp = yp + prod
       }
     }
@@ -466,17 +467,17 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
   }
   rms
 }
-.initYpred1<-function(y, phensi){
+.initYpred1<-function(y, phensi, family){
   #inds1 = 1:maxn
   #names(inds1)=inds1
   nmey =names(phensi)
   names(nmey) = nmey
-  family = unlist(lapply(nmey, function(x) strsplit(x,"\\.")[[1]][1]))
+  #family = unlist(lapply(nmey, function(x) strsplit(x,"\\.")[[1]][1]))
   
   #lapply(inds1, function(x)  {
     res = lapply(nmey, function(i){
       yi = y[[i]]
-      if(family[[i]]=="multinomial"){
+      if(family[[1]]=="multinomial"){
         yi = attr(yi,"factor")
          levs1 = levels(yi)
          names(levs1) = levs1
@@ -487,7 +488,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
          }))
          rr = do.call(rbind, replicate(length(yi),rr1, simplify=FALSE))
          dimnames(rr) = list(dimnames(y)[[1]],levs1)
-       }else if(family[[i]]=="ordinal"){
+       }else if(family[[1]]=="ordinal"){
            levs1 = min(yi,na.rm=T):max(yi,na.rm=T)
            names(levs1) = levs1
           rr0= unlist(lapply(levs1[-length(levs1)], function(l1){
@@ -522,7 +523,8 @@ ypredObj<-R6Class("ypredObj", public = list(
   phensi="numeric",
   nrow="numeric",
   
-  initialize=function(data, phensi,  family = unlist(lapply(names(phensi), function(str)strsplit(str,"\\.")[[1]][1])),
+  initialize=function(data, phensi,  
+                      family = unlist(lapply(names(phensi), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1]))),
                      
                       types_=getOption("fspls.types", 
                                      default_types)){
@@ -532,7 +534,7 @@ ypredObj<-R6Class("ypredObj", public = list(
   self$phensi = phensi
   self$family=family
   self$types_ = types_
-    ypreds=.initYpred1(data$y, phensi)
+    ypreds=.initYpred1(data$y, phensi, family)
  # self$params=params
   self$wname=wname
   self$ypreds=ypreds
@@ -550,16 +552,12 @@ ypredObj<-R6Class("ypredObj", public = list(
 #  ypred$updateYP(data, prev, nonNA, !within)  
 #},
 
-updateYP=function(data,prev,  nonNA, flip=T, ignore.na=F){
+updateYP=function(d,prev_i1,  nonNA, flip=T, ignore.na=F, liab=T){
   ypred = self
-  prev_kj = prev 
+  prev_kj = prev_i1 
   phensi=self$phensi
-  prev_kj$var = lapply(prev_kj$var_names, data$convert)  ## this would not be threadsafe
- # vars_to_incl = which(unlist(lapply(prev_kj$var, length))==2)
-#  prev_kj$var = prev_kj$var[vars_to_incl]
-#  prev_kj$varnames = prev_kj$varbanes[vars_to_incl]
- # prev_kj$betas = lapply(prev_kj$betas, function(xx)xx[vars_to_incl,,drop=F])
-  na_x = if(ignore.na) rep(F, self$nrow) else data$getNA(prev_kj$var)
+  prev_kj$var = lapply(prev_kj$var_names, d$convert)  ## this would not be threadsafe
+  na_x = if(ignore.na) rep(F, self$nrow) else d$getNA(prev_kj$var)
   for(kk1 in names(phensi)){ #} 1:length( ypred$ypreds)){
     kk = phensi[[kk1]]
     if(is.null(nonNA)){
@@ -568,10 +566,10 @@ updateYP=function(data,prev,  nonNA, flip=T, ignore.na=F){
       ind_1 = if(flip) !nonNA else nonNA
     }
     levs1 = NULL
-    family = strsplit(kk1,"\\.")[[1]][1]
+    family =getOption("fspls.family",strsplit(kk1,"\\.")[[1]][1])
     # if(family=="multinomial") levs1=dimnames(self$y[[kk1]])[[2]]
     #  if(family=="ordinal")levs1 = min(self$y[[kk1]][,kk], na.rm=T):max(self$y[[kk1]][,kk],na.rm=T) 
-    self$calcYpred(prev_kj,data$data,ind_1,kk1, kk,na_x, family=family)
+    self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, family=family, liab=liab)
   }
   #   names(ypred$ypreds) = names(self$y)
   
@@ -579,18 +577,20 @@ updateYP=function(data,prev,  nonNA, flip=T, ignore.na=F){
 },
 
 #calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, kk)
-  calcYpred=function(prev_kj, data, ind_1,  kk1, kk,na_x,   family = self$family[[kk]]){  ## kk1 in model space 
-  
+  calcYpred=function(prev_kj, d, ind_1,  kk1, kk,na_x,   family = self$family[[kk]],liab=T){  ## kk1 in model space 
+    data =  d$data
     #      ypred$ypreds[[kk]]$calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, self$family[[kk]])
     if(family=="multinomial"){
       levs = dimnames( self$ypreds[[kk1]])[[2]]
-      ab=.calcYpred_multinom(prev_kj,  data, ind_1, levs, kk=kk1)  ## for multi-prediction
-      mi22 = match(dimnames( self$ypreds[[kk1]])[[2]], levs)
+      ab=.calcYpred_multinom(prev_kj,  data, ind_1, levs, kk=kk1, liab=liab)  ## for multi-prediction
+      #mi22 = match(dimnames( self$ypreds[[kk1]])[[2]], levs)
+      mi22 = match(dimnames( self$ypreds[[kk1]])[[2]], dimnames(ab)[[2]])
+      
       self$ypreds[[kk1]][ind_1,is.na(mi22)]=0
-      self$ypreds[[kk1]][ind_1,!is.na(mi22)] =  ab[,mi22[!is.na(mi22)]] 
+      self$ypreds[[kk1]][ind_1,!is.na(mi22)] =  as.matrix(ab[,mi22[!is.na(mi22)]]) 
     }else if(family=="ordinal"){
       constants = prev_kj$constants_proj[[kk1]]
-      
+      betas = prev_kj$betas[[kk1]]
       for(kk_1 in 1:length(kk)){
         ncols = ncol(self$ypreds[[kk1]])
         constk = constants[[kk_1]]
@@ -603,24 +603,26 @@ updateYP=function(data,prev,  nonNA, flip=T, ignore.na=F){
         }
         levs1 = 0:length(constk)
          ab= .calcYpred_ord(prev_kj,  data, ind_1, levs = levs1,
-                                                 kk=kk_1, constants = constk)  ## for multi-prediction
+                                                 kk=kk_1, const = constk, liab=liab)  ## for multi-prediction
        
         self$ypreds[[kk1]][ind_1,] =  ab
       }
     }else if(family=="binomial"){
-      constants = prev_kj$constants_proj[[kk1]]
-      for(kk_1 in 1:length(kk)){
-        ab =   .calcYpred_binomial(prev_kj,  data, ind_1, 
-                                                    kk=kk_1, constants = constants[kk_1])  ## for multi-prediction
-        self$ypreds[[kk1]][ind_1,kk_1] =ab
-      }
+      constants = unlist(prev_kj$constants_proj[[kk1]])
+     # for(kk_1 in 1:length(kk)){
+        ab =   .calcYpred_binomial(prev_kj,  data, ind_1, kk1 = kk1,
+                                                    kk=kk_1, constants = constants, liab=liab)  ## for multi-prediction
+        self$ypreds[[kk1]][ind_1,] =ab
+      #}
     }else{
      # self$ypreds[[kk]]= array(dim=c(length(ind_1),length(kk)))
-      constants = prev_kj$constants_proj[[kk1]]
-      for(kk_1 in 1:length(kk)){
-        ab = .calcYpred_1(prev_kj,  data, ind_1,kk=kk_1, constants=constants[kk_1]) 
-        self$ypreds[[kk1]][ind_1,kk_1] = ab[,1]
-      }
+      #constants = unlist(prev_kj$constants_proj)
+      constants = unlist(prev_kj$constants_proj[[kk1]])
+#      constants = prev_kj$constants_proj[[kk1]]
+ #     for(kk_1 in 1:length(kk)){
+        ab = .calcYpred_1(prev_kj,  data, ind_1,kk=kk_1, kk1 = kk1,constants=constants) 
+        self$ypreds[[kk1]][ind_1,] = ab
+  #    }
     }
     if(length(which(na_x))>0){
       self$ypreds[[kk1]][na_x,] = rep(NA, ncol(self$ypreds[[kk1]]))

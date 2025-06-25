@@ -112,6 +112,15 @@ UDVPObj<-R6Class("UVDPObj", public = list(
     
     }
   },
+getW=function(){
+  UDV=self
+  alias = UDV$alias
+  U = UDV$U
+  Dinv = UDV$Dinv
+  Vinv = UDV$Vinv
+  W = Vinv %*% Dinv %*% t(U)
+  W
+},
 P2_old=function(){
   P = self$P
   VDU = self$VDU

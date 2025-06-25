@@ -16,7 +16,6 @@ trainObj<-R6Class("trainObj",
                     #nonNA="list",
                     family="character",
                     looc_incl = "vector",
-                    prev="list",
                     products="list",
                     func_str="character",
                   #  funcs="closure",
@@ -30,7 +29,7 @@ trainObj<-R6Class("trainObj",
                    #   self$func_str = func_str
                    #   self$funcs =  eval(str2lang(paste("function(x)",func_str)))
                     
-                      self$prev=list()
+                      
                       self$means_y = list()
                       self$looc_incl=looc$incl
                       self$y1=y
@@ -40,6 +39,7 @@ trainObj<-R6Class("trainObj",
                             t(y11)
                           })
                       self$k=NA
+                      
                     },
                     transform=function(weights, k, func_str){
                       self$func_str = func_str
@@ -109,7 +109,7 @@ trainObj<-R6Class("trainObj",
                       names(self$products) = names(data$data)
                       phens = data$pheno()
                       phensi = data$phensi(phens)
-                      self$prev[[k]] = stateObj$new(phensi, data, self,k, self$mean_y,var=var, varnames=varnames, W_all = W_all)
+                   #   self$prev[[k]] = stateObj$new(phensi, data, self,k, self$mean_y,var=var, varnames=varnames, W_all = W_all)
                     },
                     
                     calcMean=function( looc_incl_k_ij, weights){
