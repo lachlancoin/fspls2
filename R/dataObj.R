@@ -993,20 +993,19 @@ makeModels=function(phens1, vars2, k,
     prev_var = prev_i$var
     b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_var, transform_func,convert=F, strict=T, all=T, useglm=T) 
     betas_new = b_new_proj$betas
-    if(ypred$family[[1]]=="multinomial"){
-      constants_proj = b_new_proj$constants[[1]]
-      refit=F
-    }else{
+    refit = FALSE;#ypred$family[[1]]!="multinomial"
+    if(refit){
       constants_proj= data$getConstantsProj(phensi)
-      refit=T
+    }else{
+      constants_proj =if(ypred$family[[1]]=="multinomial") b_new_proj$constants[[1]] else b_new_proj$constants
     }
     prev_i1=stateObj$new(phensi,data, betas_new,constants_proj, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, proj=F)
     #extractd = self$extractData(prev_i1$var)
     if(refit){
      ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=F)
-     prev_i1$updateConst(phensi,ypred, data,k, transform_func, useglm=T,verbose=F)
+     prev_i1$updateConst(phensi,ypred, data,k, transform_func, useglm=T,verbose=T)
     }else{
-     # ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=T)
+    #  ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=T)
     }
     prev_i = prev_i1
       models[[jk]] = prev_i$simplify()
@@ -1106,14 +1105,15 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
       if(!is.null(full_model)){
         #ypredObj$updateYP(self, phens, )#= self$train$looc_incl[,k2]
         nonNA =self$train$looc_incl[,self$nreps()]
-        ypred$updateYP(self, full_model[[nmes1]], nonNA, flip=FALSE)
+        ypred$updateYP(d, full_model[[nmes1]], nonNA, flip=FALSE)
         res1 = ypred$calcRMSV(self$y, nonNA,  inverse_func=transform_func,     flip=FALSE)%>% tibble::add_column(isfull=T)
         #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
       }
       if(length(nmesm)>0){
         for(j in 1:length(nmesm)){
           nonNA =self$train$looc_incl[,inds[[j]]]
-          ypred$updateYP(self, all_models1[[j]][[nmes1]], nonNA, flip=TRUE)
+          prev_i1 = all_models1[[j]][[nmes1]]
+          ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
 #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
         }
         nonNA=self$getNonNAInds(inds)

@@ -22,7 +22,7 @@
     eval
 }
 
-.calcEval1<-function(eval0, rename=T){ #c("trainedOn","measure","subpheno")
+.calcEval1<-function(eval0, rename=T, len = 3){ #c("trainedOn","measure","subpheno")
   if(rename)eval0=.renameModels(eval0, len=len)
   
    eval = eval0 %>% tibble::add_column(cohort_measure= apply(eval0[,names(eval0) %in% c("data","measure")],1,paste, collapse=" "),

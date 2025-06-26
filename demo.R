@@ -34,7 +34,7 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[2]; pthresh = 0.001 ; randomise=F; duplicate=T
+datasets =examples[4]; pthresh = 0.001 ; randomise=F; duplicate=T
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation","var","mad"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
 
@@ -58,7 +58,7 @@ runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
   
   ## FIND VARIABLES
   variables_all = datasAll$select(phens, flags,verbose=F)
-  print(variables_all)
+  #print(variables_all)
   ## FIT MODELS
   all_models = datasAll$makeAllModels(variables_all, phens, flags)
   eval = datasAll$evaluateAllModels(all_models, phens, flags)

@@ -608,6 +608,7 @@ updateYP=function(d,prev_i1,  nonNA, flip=T, ignore.na=F, liab=T){
         self$ypreds[[kk1]][ind_1,] =  ab
       }
     }else if(family=="binomial"){
+      kk_1 = 1
       constants = unlist(prev_kj$constants_proj[[kk1]])
      # for(kk_1 in 1:length(kk)){
         ab =   .calcYpred_binomial(prev_kj,  data, ind_1, kk1 = kk1,
@@ -615,6 +616,7 @@ updateYP=function(d,prev_i1,  nonNA, flip=T, ignore.na=F, liab=T){
         self$ypreds[[kk1]][ind_1,] =ab
       #}
     }else{
+      kk_1 = 1
      # self$ypreds[[kk]]= array(dim=c(length(ind_1),length(kk)))
       #constants = unlist(prev_kj$constants_proj)
       constants = unlist(prev_kj$constants_proj[[kk1]])

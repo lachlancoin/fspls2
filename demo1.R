@@ -82,15 +82,17 @@ flags = list(pthresh = 1e-5, max=100, nrep=1,batch=0, train=names(datasets)[1],t
 datas =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
 phens=datas$pheno()
 ## FIND VARIABLES
-variables = datas$select(phens, flags)
+vars_all = datas$select(phens, flags)
 
 ## FIT MODELS
-all_models = datas$makeAllModels(variables, phens, flags)
+all_models = datas$makeAllModels(vars_all, phens, flags)
 
 
 
 eval = datas$evaluateAllModels(all_models, phens, flags)
-subset(eval, numvars==100)
+aa=subset(eval, pheno=="Non.classical.monocytes.cd8_Tm"  )
+grep("Naive.B", unique(eval$pheno),v=T)
+eval1 = subset(eval, numvars==100)
 
 ## GET WEIGHTS FROM FULL MODEL
 final_models = .getFinalModel(all_models, target_size = "max")
@@ -101,8 +103,8 @@ write_xlsx(model_weights,outw)
 ##PLOT
 #ggps = .plotEval1(eval, rename=F, len=1)
 eval1 = .calcEval1(eval)
- ggps=.plotEval1(eval1, rename=F, len=1, grid="pheno")
-
+ ggps=.plotEval1(eval1, rename=F, len=1, grid="pheno", showranges=F)
+ggps
 #for multinomial or ordinal
 #ggps = .plotEval1(eval, rename=T,grid="cv~subpheno", sep="pheno", txtsize=1,len=0)
 out = paste0("plot",max(eval$numvars),".pdf");
