@@ -22,11 +22,12 @@
     eval
 }
 
-.calcEval1<-function(eval0){ #c("trainedOn","measure","subpheno")
- 
+.calcEval1<-function(eval0, rename=T){ #c("trainedOn","measure","subpheno")
+  if(rename)eval0=.renameModels(eval0, len=len)
+  
    eval = eval0 %>% tibble::add_column(cohort_measure= apply(eval0[,names(eval0) %in% c("data","measure")],1,paste, collapse=" "),
                                        pheno_subpheno= apply(eval0[,names(eval0) %in% c("pheno","subpheno")],1,paste, collapse=" "),
-                                       cohort_measure_pheno_trained= apply(eval0[,names(eval0) %in% c("data","subpheno","measure","pheno","trainedOn")],1,paste, collapse=" ")
+                                       cohort_measure_pheno_trained= apply(eval0[,names(eval0) %in% c("data","subpheno","measure","pheno","trainedOn","transform_y")],1,paste, collapse=" ")
    )
     #                                   sep_by = apply(eval0[,names(eval0) %in% sep_by],1,paste, collapse=" "))
   #fullmodels = eval$model[which(eval$numvars==max(eval$numvars))]
@@ -85,12 +86,15 @@
            txtsize=1,logy=F,legend=F,sep_by="",
            grid="cohort_measure~cv_full"){
   shape_color_nme = paste(shape_color, collapse="_");
+  linetype_nme = paste(linetype, collapse="_");
+  
   eval2 = eval2 %>% tibble::add_column( sep_by = apply(eval2[,names(eval2) %in% sep_by,drop=F],1,paste, collapse=" "),
-                                        shape_color_nme = apply(eval2[,names(eval2) %in% shape_color,drop=F],1,paste, collapse=" ")
+                                        shape_color_nme = apply(eval2[,names(eval2) %in% shape_color,drop=F],1,paste, collapse=" "),
+                                        linetype_nme = apply(eval2[,names(eval2) %in% linetype,drop=F],1,paste, collapse=" ")
                                         )
   names(eval2) = gsub("shape_color_nme", shape_color_nme, names(eval2))
+  names(eval2) = gsub("linetype_nme", linetype_nme, names(eval2))
   
-  if(rename)eval2=.renameModels(eval2, len=len)
   phenos = unique(eval2$sep_by)
   names(phenos)=phenos
   
@@ -103,7 +107,7 @@
   ggps=lapply(phenos, function(ph){ 
     eval5 = subset(eval2, sep_by==ph)
   ggp<-ggplot(eval5)+geom_point(aes_string(x="numvars", y="mid",  shape=shape_color_nme,size="nsamps", color=shape_color_nme))+
-    geom_line(aes_string(x="numvars", y="mid", linetype=linetype,  color=shape_color_nme)) +ggtitle(ph)
+    geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=shape_color_nme)) +ggtitle(ph)
   if(showranges){ ## geom_ribbon vs geom_errorbar
    ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype,color=shape_color_nme, fill = shape_color_nme ), alpha = 0.1)
   }

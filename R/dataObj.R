@@ -434,10 +434,10 @@ mult = grep("multinomial",names(phens))
   }
 },
 
-calcBetaProj1=function(subphens,k,b_i1,prev_var, convert=T, strict=F, all=F){
+calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T, strict=F, all=F, useglm=T){
   if(convert){
-    b_i1 = self$convert(b_i1)
-    if(length(b_i1)<2) {
+    b_i = self$convert(b_i)
+    if(length(b_i)<2) {
       pvs = unlist(lapply(phensi,function(xx) 999)) ## returning large positive value since its not in dataset
        return(list(pvs=pvs))
     }
@@ -454,9 +454,11 @@ calcBetaProj1=function(subphens,k,b_i1,prev_var, convert=T, strict=F, all=F){
   #  print(nme)
 #    family = strsplit(nme,"\\.")[[1]][1]
     if(all){
-      return( self$calcBetaProjAll(nme,phensi_,family,  k, b_i1, prev_var, strict=strict))
+      res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, prev_var, transform_func,strict=strict,useglm=useglm)
+    }else{
+      res1 = self$calcBetaProj(nme,phensi_,family,  k, b_i, prev_var, transform_func,strict=strict, useglm=useglm)
     }
-    self$calcBetaProj(nme,phensi_,family,  k, b_i1, prev_var, strict=strict)
+    res1
   })
   nme = names(res[[1]])
   
@@ -466,7 +468,7 @@ calcBetaProj1=function(subphens,k,b_i1,prev_var, convert=T, strict=F, all=F){
   })
   res1
 },
-calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, strict=F, useglm=T){
+calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, strict=F, useglm=T){
   b_i = b_i1
   data = self
   train = data$train
@@ -532,7 +534,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, strict=F, useglm=T){
   for(kk in 1:ncoly){
     nonNAk = nonNA & non_na_x
     x = x_[nonNAk ]
-    y = ys[,kk][nonNAk]
+    y = transform_func(ys[,kk][nonNAk])
     w = data$weights[nonNAk]
     beta_new1=0;
     
@@ -617,7 +619,9 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, strict=F, useglm=T){
           sm2<- tryCatch({
           ones = rep(1, length(x))
           x_mod = cbind(ones,x)
-          ridge=glmnet(x_mod,y,family=family, alpha = 0)
+          nonNA = !is.na(y)
+          ridge=glmnet(x_mod[nonNA,,drop=F],y[nonNA],family=family, alpha = 0)
+          
           rbeta <- coef(ridge,s=min(ridge$lambda))
           const_term = rbeta[1,1]
           beta_new1 = rbeta[3,1]
@@ -682,7 +686,9 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, strict=F, useglm=T){
           print("using glmnet 1")
           ones = rep(1, length(x))
           x_mod = cbind(ones,x)
-          ridge=glmnet(x_mod,y,family=family, alpha = 0)
+          nonNA = !is.na(y)
+          ridge=glmnet(x_mod[nonNA,,drop=F],y[nonNA],family=family, alpha = 0)
+          #ridge=glmnet(x_mod,y,family=family, alpha = 0)
           rbeta <- coef(ridge,s=min(ridge$lambda))
           const_term = rbeta[1,1]
           beta_new1 = rbeta[3,1]
@@ -727,8 +733,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, strict=F, useglm=T){
   }
   list(betas=betas, constants = constants,pvs = pvs,tbls=tbls)
 },
-calcBetaProjAll=function(nme,phensi_,family, k,b_i1,prev_var, strict=F, useglm=T){
-  b_i = b_i1
+calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict=F, useglm=T){
   data = self
   train = data$train
   d = train
@@ -754,7 +759,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i1,prev_var, strict=F, useglm=T
   for(kk in 1:ncoly){
     nonNAk = nonNA & non_na_x
     x = x_[nonNAk,,drop=F ]
-    y = ys[,kk][nonNAk]
+    y = transform_func(ys[,kk][nonNAk])
     w = data$weights[nonNAk]
     beta_new1=0;
     
@@ -833,7 +838,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i1,prev_var, strict=F, useglm=T
           sm2<- tryCatch({
             ones = rep(1, nrow(x))
             x_mod = cbind(ones,x)
-            ridge=glmnet(x_mod,y,family=family, alpha = 0)
+            nonNA = !is.na(y)
+            ridge=glmnet(x_mod[nonNA,,drop=F],y[nonNA],family=family, alpha = 0)
             rbeta <- coef(ridge,s=min(ridge$lambda))
             const_term = rbeta[1,1]
             beta_new1 = rbeta[-(1:2),1]
@@ -868,7 +874,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i1,prev_var, strict=F, useglm=T
               coeff = sm$coeff[2,]
               
               const_term = sm$coefficients[1,1]
-              beta_new1=coeff[1]
+              beta_new1=t(sm$coefficients[-1,1,drop=F])
             }
             
             list(const_term = const_term, beta_new1 = beta_new1)
@@ -876,7 +882,9 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i1,prev_var, strict=F, useglm=T
             print("using glmnet 1")
             ones = rep(1, length(x))
             x_mod = cbind(ones,x)
-            ridge=glmnet(x_mod,y,family=family, alpha = 0)
+            nonNA = !is.na(y)
+            ridge=glmnet(x_mod[nonNA,,drop=F],y[nonNA],family=family, alpha = 0)
+            #ridge=glmnet(x_mod,y,family=family, alpha = 0)
             rbeta <- coef(ridge,s=min(ridge$lambda))
             const_term = rbeta[1,1]
             beta_new1 = rbeta[-(1:2),1]
@@ -944,19 +952,24 @@ getConstantsProj=function(phensi){  ##default constants
 },
 extractData=function(var, adjust=T){
   Dall = Matrix( 0,nrow = self$nrow, ncol = length(var), dimnames = list(dimnames(self$data[[1]])[[1]], names(var)), sparse=T)
+  nme = rep("", length(var))
   for(jk in 1:length(var)){
     v1 = var[[jk]]
     Dall[,jk] = self$data[[v1[1]]][,v1[2]];
+    nme[[jk]] = paste(names(self$data)[[v1[1]]], dimnames(self$data[[v1[1]]])[[2]][v1[2]])
     if(adjust)Dall[,jk] = Dall[,jk]- self$mean_x[[v1[1]]][v1[2]]
   }
+  dimnames(Dall)[[2]] = nme
   Dall
 },
 
 makeModels=function(phens1, vars2, k, 
+                   func_str,
                    CHECK=F,
                     verbose=F){
   phen2 = phens1
   ypred=self$ypred(phen2)
+  transform_func = eval(str2lang(func_str))
   #if(length(phen2)>1) stop("just one group .. need to fix for multiple types")
   if(length(vars2)==0){
     return(list(prev_is$simplify()))
@@ -976,28 +989,23 @@ makeModels=function(phens1, vars2, k,
     b_i_name = vars2[[jk]]
     b_i = self$convert(vars2[[jk]])
     mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
-    b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_i$var, convert=F, strict=T, all=T) 
- #   W_all = self$UDVP$getW()
+    prev_var = prev_i$var
+    b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_var, transform_func,convert=F, strict=T, all=T, useglm=T) 
     betas_new = b_new_proj$betas
-    #betas_new[[1]][[1]] = t(betas_new[[1]][[1]])
-   # if(is.list(betas_new)){
-  #    if(length(betas_new)>1) stop("!!")
-  #    betas_new = betas_new[[1]]
-  #  }
-    #betas_new = as.matrix(data.frame(b_new_proj$betas[[1]]), nrow = 1)
-    #dimnames(betas_new)[[2]] = phen2[[1]]
- 
-    constants_proj= data$getConstantsProj(phensi)
     if(ypred$family[[1]]=="multinomial"){
       constants_proj = b_new_proj$constants[[1]]
+      refit=F
+    }else{
+      constants_proj= data$getConstantsProj(phensi)
+      refit=T
     }
     prev_i1=stateObj$new(phensi,data, betas_new,constants_proj, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, proj=F)
     #extractd = self$extractData(prev_i1$var)
-    if(ypred$family[[1]]!="multinomial"){
+    if(refit){
      ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=F)
-     prev_i1$updateConst(phensi,ypred, data,k, useglm=T)
+     prev_i1$updateConst(phensi,ypred, data,k, transform_func, useglm=T,verbose=F)
     }else{
-      ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=T)
+     # ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=T)
     }
     prev_i = prev_i1
       models[[jk]] = prev_i$simplify()
@@ -1068,13 +1076,15 @@ res_all[lapply(res_all,length)>0]
 },
 ypred=function(phens1){
   family = unlist(lapply(names(phens1), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1])))
-  ypr = ypredObj$new(self,self$phensi(phens1), family=family)
+  ypr = ypredObj$new(self,self$phensi(phens1),family=family)
   ypr
 },
-evaluateAllModels=function(all_models_y,phens, flags,
+evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
                            ypreds = lapply(phens, function(phens1) self$ypred(phens1))
                          ){
   d = self
+  transform_func = eval(str2lang(inverse_func_str))  ## should be inverse
+  
 #  ypred = self$ypred(phens)
   group_names= names(all_models_y); names(group_names)=group_names
   evals = .merge1_new(lapply(group_names, function(group_name){
@@ -1095,8 +1105,8 @@ evaluateAllModels=function(all_models_y,phens, flags,
       if(!is.null(full_model)){
         #ypredObj$updateYP(self, phens, )#= self$train$looc_incl[,k2]
         nonNA =self$train$looc_incl[,self$nreps()]
-        ypred$updateYP(self, full_model[[nmes1]], nonNA, flip=FALSE )
-        res1 = ypred$calcRMSV(self$y, nonNA,       flip=FALSE)%>% tibble::add_column(isfull=T)
+        ypred$updateYP(self, full_model[[nmes1]], nonNA, flip=FALSE)
+        res1 = ypred$calcRMSV(self$y, nonNA,  inverse_func=transform_func,     flip=FALSE)%>% tibble::add_column(isfull=T)
         #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
       }
       if(length(nmesm)>0){
@@ -1106,7 +1116,7 @@ evaluateAllModels=function(all_models_y,phens, flags,
 #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
         }
         nonNA=self$getNonNAInds(inds)
-        res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)%>% tibble::add_column(isfull=F)
+        res2 = ypred$calcRMSV(self$y,nonNA,inverse_func=transform_func, flip=TRUE)%>% tibble::add_column(isfull=F)
        
       }
      rbind(res1,res2)

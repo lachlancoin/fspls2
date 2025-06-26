@@ -1,9 +1,10 @@
 
-.getPvsAll<-function(subphens,datas, var_new,k){
+.getPvsAll<-function(subphens,datas, var_new,k, transform_y){
+  transform_func = eval(str2lang(transform_y))
   pvs_all= lapply(datas, function(d){
     b_i1 = var_new[[length(var_new)]]
     prev_var =  var_new[-length(var_new)]
-    sig_res = d$calcBetaProj1(subphens,k, b_i1, prev_var , convert=T)
+    sig_res = d$calcBetaProj1(subphens,k, b_i1, prev_var , transform_func,convert=T)
     unlist(sig_res$pvs)
     #d$train[[k]]$getPvs(prev)
   })
@@ -181,7 +182,12 @@ datasEnv<-R6Class("datasEnv", public = list(
   },
   makeAllModels=function(vars_all, phens, flags){
     verbose=.readFlag(flags,"verbose",F)
-    lapply(vars_all, function(vars){
+    nmes_vars_all = names(vars_all); names(nmes_vars_all) = nmes_vars_all
+    func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
+    
+    lapply(nmes_vars_all, function(nme_v_all){
+      vars = vars_all[[nme_v_all]]
+      func_str = func_strs[[nme_v_all]]
       all_models = list()
       variables = vars$variables
       var_inds = vars$inds
@@ -197,7 +203,7 @@ datasEnv<-R6Class("datasEnv", public = list(
        nme_ = paste(names(vars2),collapse=";")
        models1 = all_models[[nme_]]
        if(is.null(models1)){
-        models1 = self$makeModels( vars2, inds,phens,flags)
+        models1 = self$makeModels( vars2, inds,phens,func_str,flags)
         for(k in 1:length(models1)){
           mod1 =   all_models[[names(models1)[[k]]]]
           if(is.null(mod1)){
@@ -225,7 +231,7 @@ datasEnv<-R6Class("datasEnv", public = list(
           p_nme = names(inds)[p_i]
           models2 = all_models[[nme_]][[p_nme]]  
           if(is.null(models2)){
-            models2 = self$makeModels( vars2, inds[p_i],phens[which(names(phens) %in% p_nme)],flags)
+            models2 = self$makeModels( vars2, inds[p_i],phens[which(names(phens) %in% p_nme)],func_str,flags)
             for(k in 1:length(models2)){
               all_models[[names(models2)[[k]]]][[p_nme]] = models2[[k]][[p_nme]]
             }
@@ -235,7 +241,7 @@ datasEnv<-R6Class("datasEnv", public = list(
               models3 = all_models[[nme_]][[p_nme]][[r_nme]]  
               if(is.null(models3)){
                 inds2 = lapply(inds[p_i], function(indsk)indsk[r_i])
-                models3 = self$makeModels( vars2, inds2,phens[which(names(phens) %in% p_nme)],flags)
+                models3 = self$makeModels( vars2, inds2,phens[which(names(phens) %in% p_nme)],func_str, flags)
                 for(k in 1:length(models3)){
                   all_models[[names(models3)[[k]]]][[p_nme]][[r_nme]] = models3[[k]][[p_nme]][[r_nme]]
                 }
@@ -249,7 +255,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     all_models
     })
   },
-  makeModels=function(vars2, inds, phens,flags){
+  makeModels=function(vars2, inds, phens,func_str, flags){
     datas=self$datas
     train_nme = .readFlag(flags,'train', names(datas)[1])
     if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
@@ -262,7 +268,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       phens1 = phens[[nmes_inds1]]
         mods1 = lapply(inds1, function(k){
             lapply(datas[names(datas) %in% train_nme], function(d){
-              mods = d$makeModels(phens1, vars2,k,verbose)
+              mods = d$makeModels(phens1, vars2,k,func_str, verbose)
             })
           #})
         })
@@ -293,7 +299,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       d$getVariance();      
     })
   },
-  post_process=function(variables){
+  post_process=function(variables, flags_out = list()){
     full_index = length(variables)
     #lens = unlist(lapply(variables, function(x) length(x$var)))
     #if(max(lens)==0) return(list())
@@ -326,7 +332,7 @@ datasEnv<-R6Class("datasEnv", public = list(
         }
       }
     }
-    vars_combined = list(variables = vars_all1, inds = vars_all,cumpv=vars_all2) 
+    vars_combined = list(variables = vars_all1, inds = vars_all,cumpv=vars_all2, flags=flags_out) 
   
     vars_combined
   },
@@ -373,6 +379,10 @@ datasEnv<-R6Class("datasEnv", public = list(
     names(nreps) = nreps
     beam = .readFlag(flags,"beam",1)
     func_str = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
+    flags_out = list(train=train_nme,  max=maxsize, 
+                     nreps = nreps, beam=beam,func_str = func_str,
+                     topn = num_pvals, pthresh =exp(logpvthresh), data_types = incl)
+  
     vars_combined=lapply(func_str,function(funcst){
       print(funcst)
      variables=lapply(nreps, function(k){
@@ -396,7 +406,7 @@ datasEnv<-R6Class("datasEnv", public = list(
             nxt_vars = lapply(1:num_pvals1, function(ik){
            #   print(ik)
               var_new = c(vars$var,comb[ik])
-              pv =  .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], var_new,k)
+              pv =  .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], var_new,k, funcst)
               mStateObj$new(comb[ik],  .sumChisq(pv) , prev_i=vars)
             })
             names(nxt_vars) = names(comb)[1:length(nxt_vars)]  
@@ -425,13 +435,10 @@ datasEnv<-R6Class("datasEnv", public = list(
         })
          res2[unlist(lapply(res2,function(xx) length(xx$var)))>0]
     })
-    self$post_process(variables)
+    self$post_process(variables,flags_out)
   })
   
-  flags_out = list(train=train_nme,  max=maxsize, 
-                   nreps = nreps, beam=beam,func_str = func_str,
-                   topn = num_pvals, pthresh =exp(logpvthresh), data_types = incl)
-  attr(vars_combined,"flags_out")=toJSON(flags_out, simplifyVector=T, flatten=T)
+ 
    vars_combined
   },
   extractPredictions=function(all_models,phens, flags, CV = FALSE, liab=T, data_nme  = names(self$datas)){
@@ -457,14 +464,28 @@ datasEnv<-R6Class("datasEnv", public = list(
  },
   evaluateAllModels=function(all_models, phens,flags){ ## different folds with same variables
 ##                          inds = as.numeric(names(all_models))){
+    #self = all_models
     if(length(all_models)==0) return(NULL)
     nme_d = .readFlag(flags,"test",names(self$datas))
     names(nme_d) = nme_d
     print(nme_d)
-    eval1=.merge1_new( lapply(all_models, function(all_models_y){
+    func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
+    inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
+    for(k in 1:length(func_strs)){ #CHECK INVERSE CORRECT
+      func0 = eval(str2lang(func_strs[[k]]))  ## should be inverse
+     func1 = eval(str2lang(inverse_func_strs[[k]]))  ## should be inverse
+     xx = -10:10  
+     if(max(abs(apply(cbind(xx,func1(func0(xx))),1,diff)),na.rm=T)>1e-5) stop("please provide inverse function")
+    }
+    
+    mod_nmes = names(all_models); names(mod_nmes) = mod_nmes
+    eval1=.merge1_new( lapply(mod_nmes, function(mod_nme){
+      inverse_func_str = inverse_func_strs[[mod_nme]]
+      all_models_y = all_models[[mod_nme]]
+    
    .merge1_new(lapply(nme_d, function(nme1){
      d = self$datas[[nme1]]
-      resd = try(d$evaluateAllModels(all_models_y,phens,flags))
+      resd = try(d$evaluateAllModels(all_models_y,phens,inverse_func_str = inverse_func_str,flags))
       if(inherits(resd,"try-error")) {
         print(paste("problem", nme1))
         return(NULL)
@@ -478,15 +499,17 @@ datasEnv<-R6Class("datasEnv", public = list(
   #  eval2%>%tibble::add_column(isfull=isfull)
     eval2
   },
-  pvalues=function(vars,phens,flags){
+  pvalues=function(vars,phens,transform_y,flags){
     datas = self$datas
+    transform_func = eval(str2lang(transform_y))
+    
     k = .readFlag(flags, 'rep',length(datas[[1]]$train))
     lapply(vars,function(vars1) {
       lapply(datas, function(d){
         b_i1 = vars1[[length(vars1)]]
         prev_var =  vars1[-length(vars1)]
         
-        sig_res = d$calcBetaProj1(phens,k, b_i1, prev_var, convert=T )
+        sig_res = d$calcBetaProj1(phens,k, b_i1, prev_var, transform_func, convert=T )
         unlist(sig_res$pvs)
         #d$train[[k]]$getPvs(prev)
       }) 

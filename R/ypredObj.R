@@ -629,7 +629,7 @@ updateYP=function(d,prev_i1,  nonNA, flip=T, ignore.na=F, liab=T){
     }
     
   },
-calcRMSV=function(y, nonNA,       flip=F){
+calcRMSV=function(y, nonNA, inverse_func = function(y) y,      flip=F){
   phensi = self$phensi
   ypreds = self$ypreds
   types_ =self$types_
@@ -659,6 +659,7 @@ calcRMSV=function(y, nonNA,       flip=F){
       ycol = ycols[ycol_ind]
       y1 =  y2[,ycol]
       yp =if(fam=="ordinal") yp2 else yp2[,ycol_ind,drop=F] 
+      yp = inverse_func(yp)
       nonNA = !is.na(y1)
       nonNA = nonNA & !is.na(yp[,1]) 
       .merge1_new(

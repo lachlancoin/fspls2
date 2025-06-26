@@ -200,7 +200,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                          mean_x = self$mean_x,
                          var_names = self$var_names) #, pvs = self$pvs_proj)
                   },
-                  updateConst=function(phensi,ypred, data,  k, useglm=F){
+                  updateConst=function(phensi,ypred, data,  k, transform_func, useglm=F, verbose=F){
                     #if(length(phensi)>1) stop("!!")
                     family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
                     names(family)=names(phensi)
@@ -213,6 +213,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     kk = names(phensi)[[kk1]]
                     phensi1 = phensi[[kk1]]
                     y=  if(family[[kk]]=="multinomial")   attr(data$y[[kk]],"factor")[na_k] else data$y[[kk]][na_k,,drop=F]
+                    y = transform_func(y)
                     yp1 =ypred$ypreds[[kk1]][na_k,,drop=F]
                     if(family[[kk]]=="multinomial"){
                         levs = levels(y)# c(0,1:length(self$betas[[k]]))
@@ -264,14 +265,17 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                        }else{
                          if(useglm){
                            self$constants_proj[[kk1]][kk_1] = tryCatch({
-                           ridge=glmnet(cbind(ones,yp1[,kk_1]),y1c,family=family[[kk]], alpha = 0)
+                             nonNA = !is.na(y1c)
+                           ridge=glmnet(cbind(ones[nonNA],yp1[nonNA,kk_1]),y1c[nonNA],family=family[[kk]], alpha = 0)
                            rbeta <- coef(ridge,s=min(ridge$lambda))
                            if(abs(rbeta[3,1]-1)>0.1) stop("problem with weights")
-                        #   print(rbeta)
+                        if(verbose)   print(rbeta)
                           rbeta[1,1]
                            }, error=function(w) {
                              gl = glm(y1c~ yp1[,kk_1], family=family[[kk]])
+                             if(verbose)   print(gl$coefficients)
                              gl$coefficients[1]
+                           
                            })
                          }else{
                         self$constants_proj[[kk1]][kk_1]  <- tryCatch({
@@ -280,10 +284,13 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           gl$coefficients[1]
                         }, warning=function(w) {
                           print("using glmnet to regularise ")
-                          ones = rep(1, length(yp1[,1]))
-                          ridge=glmnet(cbind(ones,yp1[,kk_1]),y1c,family=family[[kk]], alpha = 0)
+                          #ones = rep(1, length(yp1[,1]))
+                          nonNA = !is.na(y1c)
+                          ridge=glmnet(cbind(ones[nonNA],yp1[nonNA,kk_1]),y1c[nonNA],family=family[[kk]], alpha = 0)
                           rbeta <- coef(ridge,s=min(ridge$lambda))
+                          if(verbose)   print(rbeta)
                           rbeta[1,1]
+                          
                         })
                          }
                        }
