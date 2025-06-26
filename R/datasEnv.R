@@ -111,7 +111,6 @@ datasEnv<-R6Class("datasEnv", public = list(
   #    missing_vals = self$updateY(y1, family=family, CHECK=T)
       
       datas[[ik]]$initTrain(varn=varn)
-      datas[[ik]]$initTrain1();
     #data[[ik]]$initY()
      return(NULL)
     }))

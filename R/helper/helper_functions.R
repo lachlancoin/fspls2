@@ -771,7 +771,10 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   #area_p$model
   print("now plotting")
   area_p1=if(rename) .renameModels(area_p, len=len) else area_p
-  if(!is.null(area_p1[['subpheno']])) area_p1$subpheno = factor(area_p1$subpheno)
+  #print(area_p1$subpheno)
+  if(!is.null(area_p1[['subpheno']])){
+    area_p1$subpheno = factor(area_p1$subpheno, levels = sort(as.numeric(unique(area_p1$subpheno))))
+  }
   lens = vapply(area_p1$model, function(x) length(strsplit(x,";")[[1]]), FUN.VALUE = c(1))
   area_p1 = area_p1%>% tibble::add_column(lens = factor(lens))
     area_p1 = area_p1[lens<=max_vars,,drop=F ]

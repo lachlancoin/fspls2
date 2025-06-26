@@ -1593,7 +1593,7 @@ getNA=function(var){
       c(ind1,ind2)
     })
   },
-  initTrain=function(varn=c()){
+  initTrain=function(varn=c(),var=list(),varnames = list(), W_all = matrix(nrow=0, ncol=0)){
    nrep = ncol(self$looc$incl)
    
       self$train = #lapply(1:nrep, function(k){
@@ -1601,16 +1601,15 @@ getNA=function(var){
      # t$update(self,k,var=var,varnames=varn, W_all = W_all)
         #t             
      #})
+      phens=self$pheno()
+      phensi = self$phensi(phens)
+      nrep = ncol(self$looc$incl)
+      self$prev = list()
+      for(k in 1:nrep){
+        #    phensi,data, betas_new, constants_proj,  k, #mean_y,
+        self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,k, var=var, varnames=varnames, W_all = W_all)
+      }
   },
-initTrain1=function(phens=self$pheno(), var=list(),varnames = list(), W_all = matrix(nrow=0, ncol=0)){
-  phensi = self$phensi(phens)
-  nrep = ncol(self$looc$incl)
-  self$prev = list()
-  for(k in 1:nrep){
-#    phensi,data, betas_new, constants_proj,  k, #mean_y,
-    self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,k, var=var, varnames=varnames, W_all = W_all)
-  }
-},
 update=function(k,func_str,varn = c()){
   var = self$extractVar(varn)
   W_all = if(length(var)==0) matrix(nrow=0, ncol=0) else  .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
