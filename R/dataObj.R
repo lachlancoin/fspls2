@@ -1078,7 +1078,7 @@ ypred=function(phens1){
   family = unlist(lapply(names(phens1), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1])))
   ypr = ypredObj$new(self,self$phensi(phens1),family=family)
   ypr
-},
+},# inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
 evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
                            ypreds = lapply(phens, function(phens1) self$ypred(phens1))
                          ){
@@ -1088,6 +1088,7 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
 #  ypred = self$ypred(phens)
   group_names= names(all_models_y); names(group_names)=group_names
   evals = .merge1_new(lapply(group_names, function(group_name){
+  #  print(group_names)
     all_models1_ = all_models_y[[group_name]]
     pheno_nmes = names(all_models1_); names(pheno_nmes)=pheno_nmes
    .merge1_new(lapply(pheno_nmes, function(pheno_nme){
@@ -1105,7 +1106,8 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
       if(!is.null(full_model)){
         #ypredObj$updateYP(self, phens, )#= self$train$looc_incl[,k2]
         nonNA =self$train$looc_incl[,self$nreps()]
-        ypred$updateYP(d, full_model[[nmes1]], nonNA, flip=FALSE)
+        prev_i1=full_model[[nmes1]]
+        ypred$updateYP(d, prev_i1, nonNA, flip=FALSE)
         res1 = ypred$calcRMSV(self$y, nonNA,  inverse_func=transform_func,     flip=FALSE)%>% tibble::add_column(isfull=T)
         #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
       }
@@ -1573,9 +1575,11 @@ reorder=function(o,k){
 },
 getNA=function(var){
   if(length(var)==0) return(c())
-  df1 = data.frame(lapply(var, function(vars1){
+li1 = lapply(var, function(vars1){
+   if(length(vars1)<2) return(NULL)
     if(is.null(self$dataNA[[vars1[1]]])) rep(F, self$nrow)  else  (self$dataNA[[vars1[1]]][, vars1[2]] )
-  }))
+  })
+df1 = data.frame(li1[unlist(lapply(li1, length))>0])
   apply(df1,1,max)==1
 },
  getNonNA=function(var){

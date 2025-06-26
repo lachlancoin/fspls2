@@ -87,7 +87,10 @@ liability<-function(xM){
     return (yp)
   }
   yp = .rep(constants, length(which(ind_1)))
-  df1 = as.matrix(data.frame(vars1))
+  beta1 = betas[[kk]]
+  incl1 = unlist(lapply(vars1, length))==2
+  df1 = as.matrix(data.frame(vars1[incl1]))
+  beta1 = beta1[incl1,,drop=F]
   
   
   if(nrow(df1)>0){
@@ -96,9 +99,8 @@ liability<-function(xM){
       if(length(inds_11)>0){
         ##CHECK IF CORRECT
         d2 =data[[ki]][ind_1,df1[2,inds_11], drop=F]
-        beta1=betas[[kk]][inds_11,,drop=F]
         #print(beta1)
-        extra=d2%*% beta1
+        extra=d2%*%  beta1[inds_11,,drop=F]
         yp = yp + extra
       }
     }
@@ -136,8 +138,9 @@ liability<-function(xM){
   # print(prev_kj$constants_proj)
   #if(!is.null(numvar))vars1 = vars1[1:numvar]
   #  const = prev_kj$const[[i]][[ycol]]
-  df1 = as.matrix(data.frame(vars1))
-  
+  incl1 = unlist(lapply(vars1, length))==2
+  df1 = as.matrix(data.frame(vars1[incl1]))
+  betas1 = betas1[incl1,,drop=F]
   
   if(nrow(df1)>0){
     for(ki in 1:length(data)){
@@ -176,7 +179,12 @@ liability<-function(xM){
   }
   
   betas =  prev_kj$betas
-  betas1 = betas[[kk1]]
+  betas1 = betas[[kk]]
+  
+  incl1 = unlist(lapply(vars1, length))==2
+  df1 = as.matrix(data.frame(vars1[incl1]))
+  betas1 = betas1[incl1,,drop=F]
+  
   #print(names(prev_))
   # print(prev_kj$constants_proj)
   #  const = prev_kj$const[[i]][[ycol]]
@@ -210,8 +218,12 @@ liability<-function(xM){
   vars1 = prev_i1$var
   if(length(vars1)==0) return(yp)
   betas1 = prev_i1$betas[[kk]]
-  df1 = as.matrix(data.frame(vars1))
-  if(nrow(df1)>0){
+  
+  incl1 = unlist(lapply(vars1, length))==2
+  df1 = as.matrix(data.frame(vars1[incl1]))
+  betas1 = betas1[incl1,,drop=F]
+
+    if(nrow(df1)>0){
     for(kj in 1:length(data1)){
       inds_11 = which(df1[1,]==kj)
       meanx = prev_i1$mean_x[inds_11]

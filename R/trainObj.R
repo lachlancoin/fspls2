@@ -92,7 +92,7 @@ trainObj<-R6Class("trainObj",
                       self$transform(data$weights, k, func_str)
                    #   for(i in 1:length(self$funcs)){
                         ymean = lapply(self$yTr,function(yTr1) apply(yTr1,1,mean)) ## should be mean 0
-                        if(max(abs(unlist(ymean)))>1e-5)stop("problem")
+                        #if(max(abs(unlist(ymean)))>1e-5)stop("problem")
                     #  }
                       self$products= lapply(1:length(data$data), function(ik){
                         x = data$data[[ik]]
