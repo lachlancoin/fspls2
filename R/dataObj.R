@@ -433,7 +433,7 @@ mult = grep("multinomial",names(phens))
     return(list(all=phens))
   }
 },
-
+####does regression just on orthogonal component
 calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T, strict=F, all=F, useglm=T){
   if(convert){
     b_i = self$convert(b_i)
@@ -468,6 +468,7 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T, strict
   })
   res1
 },
+
 calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, strict=F, useglm=T){
   b_i = b_i1
   data = self
@@ -619,8 +620,8 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, stric
           sm2<- tryCatch({
           ones = rep(1, length(x))
           x_mod = cbind(ones,x)
-          nonNA = !is.na(y)
-          ridge=glmnet(x_mod[nonNA,,drop=F],y[nonNA],family=family, alpha = 0)
+          nonNAy = !is.na(y)
+          ridge=glmnet(x_mod[nonNAy,,drop=F],y[nonNAy],family=family, alpha = 0)
           
           rbeta <- coef(ridge,s=min(ridge$lambda))
           const_term = rbeta[1,1]
@@ -686,8 +687,8 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, stric
           print("using glmnet 1")
           ones = rep(1, length(x))
           x_mod = cbind(ones,x)
-          nonNA = !is.na(y)
-          ridge=glmnet(x_mod[nonNA,,drop=F],y[nonNA],family=family, alpha = 0)
+          nonNAy = !is.na(y)
+          ridge=glmnet(x_mod[nonNAy,,drop=F],y[nonNAy],family=family, alpha = 0)
           #ridge=glmnet(x_mod,y,family=family, alpha = 0)
           rbeta <- coef(ridge,s=min(ridge$lambda))
           const_term = rbeta[1,1]
@@ -838,8 +839,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, str
           sm2<- tryCatch({
             ones = rep(1, nrow(x))
             x_mod = cbind(ones,x)
-            nonNA = !is.na(y)
-            ridge=glmnet(x_mod[nonNA,,drop=F],y[nonNA],family=family, alpha = 0)
+            nonNAy = !is.na(y)
+            ridge=glmnet(x_mod[nonNAy,,drop=F],y[nonNAy],family=family, alpha = 0)
             rbeta <- coef(ridge,s=min(ridge$lambda))
             const_term = rbeta[1,1]
             beta_new1 = rbeta[-(1:2),1]
@@ -882,8 +883,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, str
             print("using glmnet 1")
             ones = rep(1, length(x))
             x_mod = cbind(ones,x)
-            nonNA = !is.na(y)
-            ridge=glmnet(x_mod[nonNA,,drop=F],y[nonNA],family=family, alpha = 0)
+            nonNAy = !is.na(y)
+            ridge=glmnet(x_mod[nonNAy,,drop=F],y[nonNAy],family=family, alpha = 0)
             #ridge=glmnet(x_mod,y,family=family, alpha = 0)
             rbeta <- coef(ridge,s=min(ridge$lambda))
             const_term = rbeta[1,1]

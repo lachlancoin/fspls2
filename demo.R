@@ -79,8 +79,8 @@ if(TRUE) return(ggps)
 
 
 varnames = variables$variables[[length(variables$variables)]]
-projOut=datas$getProjectedData(varnames)
-variance_before = datas$getVariance()
+projOut=datasAll$getProjectedData(varnames)
+variance_before = datasAll$getVariance()
 variance_after =   lapply(projOut, function(p1){
   lapply(p1, function(p2){
     sparse_variance(p2)
@@ -88,9 +88,11 @@ variance_after =   lapply(projOut, function(p1){
 })
 
 ##PRINT VARIANCE BEFORE AND AFTER
-for(j in 1:length(datas$datas)){
-  for(k in 1:length(datas$datas[[j]]$data)){
-    inds = match(unlist(lapply(varnames, function(v)v[2])),colnames(datas$datas[[j]]$data[[k]]))
+varnames1 = unlist(lapply(varnames, function(v)match(v[[1]], names(datasAll$datas[[1]]$data))))
+for(j in 1:length(datasAll$datas)){
+  for(k in 1:length(datasAll$datas[[j]]$data)){
+   varnames2 = varnames[varnames1==k]
+    inds = match(unlist(lapply(varnames2, function(v)v[2])),colnames(datasAll$datas[[j]]$data[[k]]))
     print("before")
     df = data.frame(cbind(variance_before[[j]][[k]][inds],variance_after[[j]][[k]][inds]))
     names(df) = c("before","after")

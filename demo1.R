@@ -85,13 +85,12 @@ phens=datas$pheno()
 variables = datas$select(phens, flags)
 
 ## FIT MODELS
-all_models = list()
-all_models = 
-  datas$makeAllModels(variables, phens, flags, all_models)
+all_models = datas$makeAllModels(variables, phens, flags)
 
 
 
 eval = datas$evaluateAllModels(all_models, phens, flags)
+subset(eval, numvars==100)
 
 ## GET WEIGHTS FROM FULL MODEL
 final_models = .getFinalModel(all_models, target_size = "max")
