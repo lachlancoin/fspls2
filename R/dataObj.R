@@ -1080,7 +1080,7 @@ ypred=function(phens1){
   ypr
 },# inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
 evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
-                           ypreds = lapply(phens, function(phens1) self$ypred(phens1))
+                           ypreds = lapply(phens, function(phens1) self$ypred(phens1)),verbose=F
                          ){
   d = self
   transform_func = eval(str2lang(inverse_func_str))  ## should be inverse
@@ -1088,10 +1088,11 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
 #  ypred = self$ypred(phens)
   group_names= names(all_models_y); names(group_names)=group_names
   evals = .merge1_new(lapply(group_names, function(group_name){
-  #  print(group_names)
+   if(verbose)  print(group_name)
     all_models1_ = all_models_y[[group_name]]
     pheno_nmes = names(all_models1_); names(pheno_nmes)=pheno_nmes
    .merge1_new(lapply(pheno_nmes, function(pheno_nme){
+     if(verbose) print(pheno_nme)
      all_models1 = all_models1_[[pheno_nme]]
      ypred = ypreds[[pheno_nme]]
      if(is.null(ypred)) stop("ypred is null")
@@ -1102,6 +1103,7 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
     nmes_models = names(all_models1[[1]]);
     names(nmes_models) = nmes_models
     .merge1_new(lapply(nmes_models, function(nmes1){
+      if(verbose) print(nmes1)
       res1 = NULL; res2 = NULL
       if(!is.null(full_model)){
         #ypredObj$updateYP(self, phens, )#= self$train$looc_incl[,k2]
