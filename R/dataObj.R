@@ -1015,7 +1015,7 @@ makeModels=function(phens1, vars2, k,
     if(verbose)print(jk)
     b_i_name = vars2[[jk]]
     b_i = self$convert(vars2[[jk]])
-    #mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
+    mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
     prev_var = prev_i$var
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
     b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_var, transform_func,convert=F, strict=T, multi=T, useglm=getOption("glmnet",T)) 
