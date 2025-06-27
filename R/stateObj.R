@@ -270,7 +270,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                            rbeta <- coef(ridge,s=min(ridge$lambda))
                            if(abs(rbeta[3,1]-1)>0.1) stop("problem with weights")
                         if(verbose)   print(rbeta)
-                          rbeta[1,1]
+                          sum(rbeta[1:2,1])
                            }, error=function(w) {
                              gl = glm(y1c[nonNAy]~ yp1[nonNAy,kk_1], family=family[[kk]])
                              if(abs(gl$coefficients[2]-1)>0.1) stop("problem with weights")
@@ -290,7 +290,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           ridge=glmnet(cbind(ones[nonNAy],yp1[nonNAy,kk_1]),y1c[nonNAy],family=family[[kk]], alpha = 0)
                           rbeta <- coef(ridge,s=min(ridge$lambda))
                           if(verbose)   print(rbeta)
-                          rbeta[1,1]
+                          sum(rbeta[1:2,1])
                           
                         })
                          }
