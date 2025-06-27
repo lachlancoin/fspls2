@@ -179,12 +179,12 @@ datasEnv<-R6Class("datasEnv", public = list(
     })
     angles_all
   },
-  makeAllModels=function(vars_all, phens, flags){
-    verbose=.readFlag(flags,"verbose",F)
+  makeAllModels=function(vars_all, phens, flags, verbose=F){
     nmes_vars_all = names(vars_all); names(nmes_vars_all) = nmes_vars_all
     func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
     
     lapply(nmes_vars_all, function(nme_v_all){
+      if(verbose) print(nme_v_all)
       vars = vars_all[[nme_v_all]]
       func_str = func_strs[[nme_v_all]]
       all_models = list()
