@@ -434,7 +434,7 @@ mult = grep("multinomial",names(phens))
   }
 },
 ####does regression just on orthogonal component
-calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T, strict=F, all=F, useglm=T){
+calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T, strict=F, multi=F, useglm=getOption("glmnet",T)){
   if(convert){
     b_i = self$convert(b_i)
     if(length(b_i)<2) {
@@ -453,7 +453,7 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T, strict
     phensi_=subphens[[nme]]
   #  print(nme)
 #    family = strsplit(nme,"\\.")[[1]][1]
-    if(all){
+    if(multi){
       res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, prev_var, transform_func,strict=strict,useglm=useglm)
     }else{
       res1 = self$calcBetaProj(nme,phensi_,family,  k, b_i, prev_var, transform_func,strict=strict, useglm=useglm)
@@ -469,7 +469,7 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T, strict
   res1
 },
 
-calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, strict=F, useglm=T){
+calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, strict=F, useglm=getOption("glmnet",T)){
   b_i = b_i1
   data = self
   train = data$train
@@ -624,7 +624,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, stric
           ridge=glmnet(x_mod[nonNAy,,drop=F],y[nonNAy],family=family, alpha = 0)
           
           rbeta <- coef(ridge,s=min(ridge$lambda))
-          const_term = rbeta[1,1]
+          const_term = sum(rbeta[1:2,1])
           beta_new1 = rbeta[3,1]
           if(FALSE){
             ypred = predict(ridge,x_mod, s=min(ridge$lambda))
@@ -691,7 +691,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, stric
           ridge=glmnet(x_mod[nonNAy,,drop=F],y[nonNAy],family=family, alpha = 0)
           #ridge=glmnet(x_mod,y,family=family, alpha = 0)
           rbeta <- coef(ridge,s=min(ridge$lambda))
-          const_term = rbeta[1,1]
+          const_term = sum(rbeta[1:2,1])
           beta_new1 = rbeta[3,1]
           if(FALSE){
             ypred = predict(ridge,x_mod, s=min(ridge$lambda))
@@ -734,7 +734,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, stric
   }
   list(betas=betas, constants = constants,pvs = pvs,tbls=tbls)
 },
-calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict=F, useglm=T){
+calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict=F, useglm=getOption("glmnet",T)){
   data = self
   train = data$train
   d = train
@@ -756,6 +756,10 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, str
   j = length(vars1)
   non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(T,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
   x_ =self$extractData(vars1, adjust=F)
+  if(length(which(duplicated(colnames(x_)))>0)){
+    print(vars1);
+    stop("problem")
+  }
   non_na_x = apply(x_,1,function(v) length(which(is.na(v))))==0
   for(kk in 1:ncoly){
     nonNAk = nonNA & non_na_x
@@ -837,15 +841,19 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, str
       }else{
         if(useglm){
           sm2<- tryCatch({
+            #if(ncol(x)==1){
             ones = rep(1, nrow(x))
             x_mod = cbind(ones,x)
+            #}else{
+            #  x_mod = x
+            #}
             nonNAy = !is.na(y)
             ridge=glmnet(x_mod[nonNAy,,drop=F],y[nonNAy],family=family, alpha = 0)
             rbeta <- coef(ridge,s=min(ridge$lambda))
-            const_term = rbeta[1,1]
+            const_term = sum(rbeta[1:2,1])
             beta_new1 = rbeta[-(1:2),1]
             list(const_term = const_term,const_term, beta_new1 = beta_new1)
-          }, error=function(w) {
+          }, warning=function(w) {
             m1=glm(y~as.matrix(x), family=family) #, weights=w) ## including weights lead to non-convergence
             sm  = summary(m1)
             #print(var(x))
@@ -854,10 +862,15 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, str
               const_term=0
               beta_new1 = 0
             }else{
-              coeff = sm$coeff[2,]
+#              coeff = sm$coeff[2,]
               
               const_term = sm$coefficients[1,1]
               beta_new1=sm$coeff[-1,2]
+              if(length(beta_new1)!=ncol(x)){
+                print(beta_new1)
+                print(colnames(x))
+              }
+              names(beta_new1)=colnames(x)
            #   pv1 = coeff[4]
             }
             list(const_term = const_term,const_term, beta_new1 = beta_new1)    
@@ -875,21 +888,29 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, str
               coeff = sm$coeff[2,]
               
               const_term = sm$coefficients[1,1]
-              beta_new1=t(sm$coefficients[-1,1,drop=F])
+              beta_new1=sm$coeff[-1,2]
+              # print(beta_new1)
+              #  print(colnames(x))
+              if(length(beta_new1)!=ncol(x)){
+                print(beta_new1)
+                print(colnames(x))
+              }
+              names(beta_new1)=colnames(x)
             }
             
             list(const_term = const_term, beta_new1 = beta_new1)
           }, warning=function(w) {
             print("using glmnet 1")
-            ones = rep(1, length(x))
+            ones = rep(1, nrow(x))
             x_mod = cbind(ones,x)
             nonNAy = !is.na(y)
             ridge=glmnet(x_mod[nonNAy,,drop=F],y[nonNAy],family=family, alpha = 0)
             #ridge=glmnet(x_mod,y,family=family, alpha = 0)
             rbeta <- coef(ridge,s=min(ridge$lambda))
-            const_term = rbeta[1,1]
+            #const_term = rbeta[1,1]
+            const_term = sum(rbeta[1:2,1])
             beta_new1 = rbeta[-(1:2),1]
-            list(const_term = const_term,const_term, beta_new1 = beta_new1)
+            list(const_term = const_term,beta_new1 = beta_new1)
           })
         }
         const_term = sm2$const_term
@@ -976,7 +997,7 @@ makeModels=function(phens1, vars2, k,
     return(list(prev_is$simplify()))
   }
   phensi = self$phensi(phen2)
-  models = vector("list", length(vars2))
+ 
  # prev_is = lapply(fold_inds, function(k) stateObj$new(phensi,self,self$train[[k]], k))
  prev_i= self$prev[[k]]  #lapply(fold_inds, function(k) self$train$prev[[k]])
   #if(length(prev_i$var)>0) stop("problem")
@@ -985,13 +1006,19 @@ makeModels=function(phens1, vars2, k,
   nonNA=self$looc$incl[,k]
   data = self; train = data$train
   len = length(vars2)
-  for(jk in 1:len){
+  do_all=T
+  range = if(do_all) 1:len else len
+  models = vector("list", length(range))
+  for(jk1 in 1:length(range)){
+    jk = range[[jk1]]
+    #if(jk==8) stop("!!")
     if(verbose)print(jk)
     b_i_name = vars2[[jk]]
     b_i = self$convert(vars2[[jk]])
-    mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
+    #mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
     prev_var = prev_i$var
-    b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_var, transform_func,convert=F, strict=T, all=T, useglm=T) 
+    #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
+    b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_var, transform_func,convert=F, strict=T, multi=T, useglm=getOption("glmnet",T)) 
     betas_new = b_new_proj$betas
     refit = FALSE;#ypred$family[[1]]!="multinomial"
     if(refit){
@@ -1003,13 +1030,21 @@ makeModels=function(phens1, vars2, k,
     #extractd = self$extractData(prev_i1$var)
     if(refit){
      ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=F)
-     prev_i1$updateConst(phensi,ypred, data,k, transform_func, useglm=T,verbose=T)
+     prev_i1$updateConst(phensi,ypred, data,k, transform_func, useglm=getOption("glmnet",T),verbose=T)
     }else{
-    #  ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=T)
+     ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=T)
+      meansy1 = apply(ypred$ypreds[[1]], 2,mean,na.rm=T)
+      y1 = self$y[[names(phensi)[[1]]]]
+      meansy0=apply(y1[,match(phen2[[1]],dimnames(y1)[[2]]),drop=F],2,mean, na.rm=T)
+      diffs = abs(apply(cbind(meansy1, meansy0),1,diff))
+      if(max(diffs)>0.3){
+        warning("big difference in means")
+      print(diffs)
+      }
     }
     prev_i = prev_i1
-      models[[jk]] = prev_i$simplify()
-      nmes[[jk]] = paste(names(vars2)[1:jk],collapse=";")
+      models[[jk1]] = prev_i$simplify()
+      nmes[[jk1]] = paste(names(vars2)[1:jk],collapse=";")
   }
   names(models) = nmes
   models
@@ -1049,7 +1084,10 @@ extractPredictions=function(all_models_,phens1, nme_p,flags, CV = FALSE,liab=T,
         nmesp = names(phens1)
         names(nmesp)= nmesp
         return(lapply(nmesp, function(nmesp1){
-          list(y=d$y[[nmesp1]], ypred= ypred$ypreds[[nmesp1]])
+          phens1[[nmesp1]]
+          yy2 = d$y[[nmesp1]]
+          mi  = match(phens1[[nmesp1]],dimnames(yy2)[[2]])
+          list(y=d$y[[nmesp1]][,mi,drop=F], ypred= ypred$ypreds[[nmesp1]])
         } )    )   
 #        d$updateYpredsInds(phens,full_model[[nmes1]], d$nreps(), ypred )
       }
@@ -1083,6 +1121,7 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
                            ypreds = lapply(phens, function(phens1) self$ypred(phens1)),verbose=F
                          ){
   d = self
+  liab = .readFlag(flags,"liab",T)  ## whether to evaluate with liability , default is true
   transform_func = eval(str2lang(inverse_func_str))  ## should be inverse
   
 #  ypred = self$ypred(phens)
@@ -1109,7 +1148,7 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
         #ypredObj$updateYP(self, phens, )#= self$train$looc_incl[,k2]
         nonNA =self$train$looc_incl[,self$nreps()]
         prev_i1=full_model[[nmes1]]
-        ypred$updateYP(d, prev_i1, nonNA, flip=FALSE)
+        ypred$updateYP(d, prev_i1, nonNA, flip=FALSE, liab=liab)
         res1 = ypred$calcRMSV(self$y, nonNA,  inverse_func=transform_func,     flip=FALSE)%>% tibble::add_column(isfull=T)
         #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
       }

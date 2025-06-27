@@ -727,18 +727,23 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
 }
 
 .plotArea1<-function(predictions,family="binomial",rename=T, len = 1,grid="model~pheno", p_incl="",max_vars = 100){
-  lapply(predictions, function(pred1){
-    lapply(pred1, function(pred2){
+  nmesp1 = names(predictions); names(nmesp1) = nmesp1
+  lapply(nmesp1, function(nme1){
+    pred1 = predictions[[nme1]]
+    nmesp2 = names(pred1); names(nmesp2) = nmesp2
+    lapply(nmesp2, function(nme2){
+      pred2 = pred1[[nme2]]
       inds = 1:length(pred2);
       names(inds) = names(pred2)
       lapply(inds, function(i){
-        .plotArea(pred2[i],family=family, rename=rename, len=len, grid=grid, p_incl="", max_vars = max_vars)
+        title = paste(nme1,nme2, names(inds)[i[]])
+        .plotArea(pred2[i],family=family, rename=rename, len=len, grid=grid, p_incl="", max_vars = max_vars,title=title)
       })
     })
   })
 }
 
-.plotArea<-function(predictions, family="binomial",rename=T, len = 1,grid="model~pheno", p_incl="", max_vars = 100){
+.plotArea<-function(predictions, family="binomial",rename=T, len = 1,grid="model~pheno", p_incl="", max_vars = 100,title=""){
   area_p=.merge1_new(lapply(predictions, function(train){  
     .merge1_new(lapply(train, function(model){
       .merge1_new(lapply(model, function(test){
@@ -796,7 +801,7 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
     ggp<-ggp+facet_wrap(grid)
   }
   if(max(area_p1$counts)>5) ggp=ggp+geom_point(aes(size=counts, shape=lens), alpha = 0.5) else ggp=ggp+geom_point(aes(shape=lens), size=2,alpha = 0.5)
-  ggp
+  ggp+ggtitle(title)
 }
 
 .cntNA<-function(vec) length(which(is.na(vec)))
