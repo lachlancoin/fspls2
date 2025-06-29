@@ -446,13 +446,12 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T,betas =
   }
   nmesi = names(subphens)
   names(nmesi) = nmesi
+  #nme=nmesi[[1]]
   res = lapply(nmesi, function(nme){
   #  print(nme)
     phensi1 =  match(nme, names(self$y))
     family=getOption("fspls.family",self$family[phensi1])
     phensi_=subphens[[nme]]
-  #  print(nme)
-#    family = strsplit(nme,"\\.")[[1]][1]
     betas1 = betas[[nme]]
     if(!is.null(betas1)){
       res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, prev_var, transform_func,betas1,strict=strict,useglm=useglm)
@@ -769,8 +768,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
     y = transform_func(ys[,kk][nonNAk])
     w = data$weights[nonNAk]
     beta_new1=0;
-    if(ncol(x)>1){
-      yp1 = x[,-ncol(x)] %*%  betas1 
+    if(ncol(x_)>1){
+      yp1 = x[,-ncol(x_)] %*%  betas1 [,kk,drop=F]
       x = cbind(yp1, x[,ncol(x)])
       dimnames(x)[[2]] = c("predicted","x")
     }
@@ -1021,10 +1020,11 @@ makeModels=function(phens1, vars2, k,
     b_i = self$convert(vars2[[jk]])
     mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
     prev_var = prev_i$var
-    W_all =  data$calcWall(b_i, prev_i$var, prev_i$W_all)
+    W_all =  NULL;#data$calcWall(b_i, prev_i$var, prev_i$W_all) ## WALL not important, we can get rid of it later
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
     self$updateUDVP(prev_var)
-    b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_var, transform_func,betas = prev_i$betas, convert=F, 
+    betas = prev_i$betas
+    b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_var, transform_func,betas = betas, convert=F, 
                                     strict=T, useglm=getOption("glmnet",T)) 
     betas_new = b_new_proj$betas
     refit = T ##ypred$family[[1]]!="multinomial"
@@ -1046,7 +1046,7 @@ makeModels=function(phens1, vars2, k,
       print(prev_i1$betas)
       #glmnet(extractd, self$y$binomial.multiway[,5,drop=F])
     }
-    if(FALSE && CHECK && length(prev_i1$var)>1){ ## shows the projection working
+    if(FALSE && CHECK && length(prev_i1$var)>1){ ## shows the projection working .. no longer holds
         extractd = self$extractData(prev_i1$var, adjust=F)
         mean =prev_i1$mean_x
         #apply(extractd,2,mean)
@@ -1077,15 +1077,9 @@ makeModels=function(phens1, vars2, k,
     }
     if(refit){ ## refits the constant offset
      ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=F)
-      prev_i1$updateConst(phensi,ypred, data,k, transform_func, useglm=getOption("glmnet",T),verbose=F)
+      prev_i1$updateConst(phensi,ypred, data,k, transform_func, useglm=getOption("glmnet",T),verbose=verbose)
     }
-    if(FALSE){
-     # .calcAUCW(ypred$ypreds[[1]], self$y$binomial.multiway[,5])
-     cor1 =  cor(ypred$ypreds[[1]][,1], self$y$binomial.multiway[,5],use="pairwise.complete.obs")
-     roc1 =  roc( self$y$binomial.multiway[,5],ypred$ypreds[[1]][,1])
-     
-     print(paste("cor",cor1, roc1$auc))
-    }
+  
     prev_i = prev_i1
       models[[jk]] = prev_i$simplify()
       nmes[[jk]] = paste(names(vars2)[1:jk],collapse=";")

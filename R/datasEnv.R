@@ -261,11 +261,13 @@ datasEnv<-R6Class("datasEnv", public = list(
     verbose=.readFlag(flags,"verbose",FALSE)
     #k = .readFlag(flags, 'rep',length(datas[[1]]$train))
     nmes_inds = names(inds);names(nmes_inds)=nmes_inds
-    
+    #nmes_inds1 = nmes_inds[[1]]
     models = lapply(nmes_inds, function(nmes_inds1){
       inds1 = inds[[nmes_inds1]]
       phens1 = phens[[nmes_inds1]]
+      #k=inds1[[1]]
         mods1 = lapply(inds1, function(k){
+          #d =datas[[1]]
             lapply(datas[names(datas) %in% train_nme], function(d){
               mods = d$makeModels(phens1, vars2,k,func_str, verbose)
             })
