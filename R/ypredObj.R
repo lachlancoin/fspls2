@@ -171,7 +171,7 @@ liability<-function(xM){
   #  }
   vars1 = prev_kj$var
   #  yp = .rep(zeros, length(which(ind_1)))
-  yp = .rep(constants, length(which(ind_1)))
+#  yp = .rep(constants, length(which(ind_1)))
   
   if(length(vars1)==0 ){
     #print(dim(yp)); print(constants)
@@ -180,6 +180,17 @@ liability<-function(xM){
   
   betas =  prev_kj$betas
   betas1 = betas[[kk]]
+  
+ # mean_x = prev_kj$mean_x
+  #print(mean_x)
+  #print(betas1)
+  #y1_off = mean_x %*% betas1
+  #print(y1_off)
+  
+#  yp = .rep(constants+y1_off[1,1], length(which(ind_1)))
+  
+  yp = .rep(constants, length(which(ind_1)))
+  
   
   incl1 = unlist(lapply(vars1, length))==2
   df1 = as.matrix(data.frame(vars1[incl1]))
@@ -196,7 +207,10 @@ liability<-function(xM){
       inds_11 = which(df1[1,]==ki)
       if(length(inds_11)>0){
         ##CHECK IF CORRECT
-        yp = yp + data[[ki]][ind_1,df1[2,inds_11], drop=F]%*% betas1[inds_11,,drop=F]
+        d2 =data[[ki]][ind_1,df1[2,inds_11], drop=F]
+        
+        #d2 =t( t(data[[ki]][ind_1,df1[2,inds_11], drop=F]) - prev_kj$mean_x[inds_11])
+        yp = yp + d2%*% betas1[inds_11,,drop=F]
       }
     }
     yp=as.matrix(yp)
@@ -213,11 +227,19 @@ liability<-function(xM){
                        #constants= unlist(prev_kj$constants_proj)
 ){
  
-  yp = .rep(constants, length(which(ind_1)))
+ 
   betas =  prev_i1$betas[[kk1]]
   vars1 = prev_i1$var
   if(length(vars1)==0) return(yp)
   betas1 = prev_i1$betas[[kk]]
+#  mean_x = prev_i1$mean_x
+  
+#  y1_off = mean_x %*% betas1
+  
+ #print(y1_off)
+ 
+#  yp = .rep(constants+y1_off[1,1], length(which(ind_1)))
+  yp = .rep(constants, length(which(ind_1)))
   
   incl1 = unlist(lapply(vars1, length))==2
   df1 = as.matrix(data.frame(vars1[incl1]))
@@ -230,10 +252,11 @@ liability<-function(xM){
     #  yp =  betas1[inds_11,,drop=F]*meanx%*%
       #print(meanx)
       if(length(inds_11)>0){
-        d1 = data1[[kj]][ind_1,df1[2,inds_11], drop=F]
-      #  d2 = t(t(d1) - meanx)
+        d2 = data1[[kj]][ind_1,df1[2,inds_11], drop=F]
+        #d2 = t(t(d1) - meanx[inds_11])
+        #d2=d1
       #  print(apply(d2,2,mean))
-        prod=d1%*% betas1[inds_11,,drop=F]
+        prod=d2%*% betas1[inds_11,,drop=F]
         yp = yp + prod
       }
     }

@@ -182,7 +182,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   makeAllModels=function(vars_all, phens, flags, verbose=F){
     nmes_vars_all = names(vars_all); names(nmes_vars_all) = nmes_vars_all
     func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
-    
+    #nme_v_all = nmes_vars_all[[1]]
     lapply(nmes_vars_all, function(nme_v_all){
       if(verbose) print(nme_v_all)
       vars = vars_all[[nme_v_all]]
@@ -194,7 +194,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       ord = order(unlist(lapply(variables, length)),decreasing=T)
       variables = variables[ord]
       var_inds = var_inds[ord]
-    
+    #v_nme = names(variables)[[1]]
      for(v_nme in names(variables)){
        if(verbose)print(v_nme)
        vars2 = variables[[v_nme]]

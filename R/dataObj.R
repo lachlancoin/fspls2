@@ -434,7 +434,7 @@ mult = grep("multinomial",names(phens))
   }
 },
 ####does regression just on orthogonal component
-calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T, strict=F, multi=F, useglm=getOption("glmnet",T)){
+calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T,betas = list(), strict=F,  useglm=getOption("glmnet",T)){
   if(convert){
     b_i = self$convert(b_i)
     if(length(b_i)<2) {
@@ -453,8 +453,9 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T, strict
     phensi_=subphens[[nme]]
   #  print(nme)
 #    family = strsplit(nme,"\\.")[[1]][1]
-    if(multi){
-      res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, prev_var, transform_func,strict=strict,useglm=useglm)
+    betas1 = betas[[nme]]
+    if(!is.null(betas1)){
+      res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, prev_var, transform_func,betas1,strict=strict,useglm=useglm)
     }else{
       res1 = self$calcBetaProj(nme,phensi_,family,  k, b_i, prev_var, transform_func,strict=strict, useglm=useglm)
     }
@@ -474,7 +475,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, stric
   data = self
   train = data$train
   d = train
-  # print(family)
+  # print(family)fcalz
   nonNA = self$looc$incl[,k]
   vars1 = c(prev_var,list(b_i))
   data$updateUDVP(prev_var)
@@ -734,7 +735,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, stric
   }
   list(betas=betas, constants = constants,pvs = pvs,tbls=tbls)
 },
-calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict=F, useglm=getOption("glmnet",T)){
+calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,betas1, strict=F, useglm=getOption("glmnet",T)){
   data = self
   train = data$train
   d = train
@@ -755,7 +756,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, str
   pvs =  apply(ys,2, function(v1) list())
   j = length(vars1)
   non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(T,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
-  x_ =self$extractData(vars1, adjust=F)
+  x_ =self$extractData(vars1, adjust=T)
+  #mean_x = apply(x_,2,mean, na.rm=T)
   if(length(which(duplicated(colnames(x_)))>0)){
     print(vars1);
     stop("problem")
@@ -767,7 +769,11 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, str
     y = transform_func(ys[,kk][nonNAk])
     w = data$weights[nonNAk]
     beta_new1=0;
-    
+    if(ncol(x)>1){
+      yp1 = x[,-ncol(x)] %*%  betas1 
+      x = cbind(yp1, x[,ncol(x)])
+      dimnames(x)[[2]] = c("predicted","x")
+    }
     if(family=="multinomial"){
       ty=table(y)
       tbls[[kk]] = ty[ty>0]
@@ -853,7 +859,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, str
             const_term = sum(rbeta[1:2,1])
             beta_new1 = rbeta[-(1:2),1]
             list(const_term = const_term,const_term, beta_new1 = beta_new1)
-          }, warning=function(w) {
+          }, error=function(w) {
             m1=glm(y~as.matrix(x), family=family) #, weights=w) ## including weights lead to non-convergence
             sm  = summary(m1)
             #print(var(x))
@@ -874,7 +880,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func, str
            #   pv1 = coeff[4]
             }
             list(const_term = const_term,const_term, beta_new1 = beta_new1)    
-          })
+          }
+)
         }else{
           sm2 <- tryCatch({
             m1=glm(y~as.matrix(x), family=family) #, weights=w) ## including weights lead to non-convergence
@@ -987,7 +994,7 @@ extractData=function(var, adjust=T){
 
 makeModels=function(phens1, vars2, k, 
                    func_str,
-                   CHECK=F,
+                   CHECK=getOption("fspls.check",F),
                     verbose=F){
   phen2 = phens1
   ypred=self$ypred(phen2)
@@ -1004,47 +1011,84 @@ makeModels=function(phens1, vars2, k,
   nmes = c()
   #mean_y = self$train$means_y[[k]]
   nonNA=self$looc$incl[,k]
-  data = self; train = data$train
+  data = self;
   len = length(vars2)
-  do_all=T
-  range = if(do_all) 1:len else len
-  models = vector("list", length(range))
-  for(jk1 in 1:length(range)){
-    jk = range[[jk1]]
-    #if(jk==8) stop("!!")
+  models = vector("list", len)
+ 
+  for(jk in 1:len){
     if(verbose)print(jk)
     b_i_name = vars2[[jk]]
     b_i = self$convert(vars2[[jk]])
-    #mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
+    mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
     prev_var = prev_i$var
+    W_all =  data$calcWall(b_i, prev_i$var, prev_i$W_all)
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
-    b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_var, transform_func,convert=F, strict=T, multi=T, useglm=getOption("glmnet",T)) 
+    self$updateUDVP(prev_var)
+    b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_var, transform_func,betas = prev_i$betas, convert=F, 
+                                    strict=T, useglm=getOption("glmnet",T)) 
     betas_new = b_new_proj$betas
-    refit = FALSE;#ypred$family[[1]]!="multinomial"
+    refit = T ##ypred$family[[1]]!="multinomial"
     if(refit){
       constants_proj= data$getConstantsProj(phensi)
     }else{
       constants_proj =if(ypred$family[[1]]=="multinomial") b_new_proj$constants[[1]] else b_new_proj$constants
     }
-    prev_i1=stateObj$new(phensi,data, betas_new,constants_proj, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, proj=F)
-    #extractd = self$extractData(prev_i1$var)
-    if(refit){
+    
+    prev_i1=stateObj$new(phensi,data, betas_new,constants_proj, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = W_all)
+    #prev_i1$updateBetas(); 
+    if(FALSE){ ##JUST TO CHECK WHAT GLM VARIABLES  WOULD BE
+      extractd = self$extractData(c(prev_i$var, list(b_i)), adjust=T)
+      nonNA = !is.na(self$y[[1]][,5])
+      ridge=glmnet(extractd[nonNA,],self$y[[1]][nonNA,5,drop=F] ,family=family, alpha = 0)
+      
+      rbeta <- coef(ridge,s=min(ridge$lambda))
+      print(rbeta)
+      print(prev_i1$betas)
+      #glmnet(extractd, self$y$binomial.multiway[,5,drop=F])
+    }
+    if(FALSE && CHECK && length(prev_i1$var)>1){ ## shows the projection working
+        extractd = self$extractData(prev_i1$var, adjust=F)
+        mean =prev_i1$mean_x
+        #apply(extractd,2,mean)
+        
+        extractd1 = t(t(extractd)-mean)
+        y1 = extractd1 %*% prev_i1$betas[[1]] 
+        #y1_off = mean %*% prev_i1$betas[[1]]
+        y2 = extractd1[,1] %*% prev_i1$betas_proj[[1]][1,,drop=F] 
+        #y2_off = mean[1] %*%prev_i1$betas_proj[[1]][1,,drop=F]
+        #y4 = extractd %*% prev_i1$betas
+          for(kk in 2:length(prev_i1$var)){
+            prev_var1 = prev_i1$var[1:(kk-1)]
+            self$updateUDVP(prev_var1)
+            UDV=self$UDVP
+            D_all = self$extractData(prev_i1$var[1:kk], adjust=T)
+            a= UDV$P %*% UDV$VDU # %*% D_all
+            d2=D_all[,ncol(D_all)] - a%*% D_all[,ncol(D_all)]
+            # d2 = self$getProjectedData1(prev_i$var, b_i)
+            y3 = d2 %*% prev_i1$betas_proj[[1]][kk,,drop=F]
+         #   y3_off = mean[kk] %*% prev_i1$betas_proj[[1]][kk,,drop=F]
+        #    y2_off = y2_off + y3_off
+            y2 = y3+y2
+          }
+        if(max(abs(y2-y1))>1e-10) stop("problem")
+        #y2_off
+        #y1_off
+        #mean(.logistic(y2+y2_off[1,1]))
+    }
+    if(refit){ ## refits the constant offset
      ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=F)
-     prev_i1$updateConst(phensi,ypred, data,k, transform_func, useglm=getOption("glmnet",T),verbose=T)
-    }else{
-     ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=T)
-      meansy1 = apply(ypred$ypreds[[1]], 2,mean,na.rm=T)
-      y1 = self$y[[names(phensi)[[1]]]]
-      meansy0=apply(y1[,match(phen2[[1]],dimnames(y1)[[2]]),drop=F],2,mean, na.rm=T)
-      diffs = abs(apply(cbind(meansy1, meansy0),1,diff))
-      if(max(diffs)>0.3){
-        warning("big difference in means")
-      print(diffs)
-      }
+      prev_i1$updateConst(phensi,ypred, data,k, transform_func, useglm=getOption("glmnet",T),verbose=F)
+    }
+    if(FALSE){
+     # .calcAUCW(ypred$ypreds[[1]], self$y$binomial.multiway[,5])
+     cor1 =  cor(ypred$ypreds[[1]][,1], self$y$binomial.multiway[,5],use="pairwise.complete.obs")
+     roc1 =  roc( self$y$binomial.multiway[,5],ypred$ypreds[[1]][,1])
+     
+     print(paste("cor",cor1, roc1$auc))
     }
     prev_i = prev_i1
-      models[[jk1]] = prev_i$simplify()
-      nmes[[jk1]] = paste(names(vars2)[1:jk],collapse=";")
+      models[[jk]] = prev_i$simplify()
+      nmes[[jk]] = paste(names(vars2)[1:jk],collapse=";")
   }
   names(models) = nmes
   models
@@ -1283,7 +1327,15 @@ getVariance=function(){
     }
   })
 },
-projOut=function(ik){
+getProjectedData1=function(prev_var, b_i){
+  self$updateUDVP(prev_var)
+  UDV=self$UDVP
+  D_all = self$extractData(c(prev_var,list(b_i)), adjust=T)
+  a= UDV$P %*% UDV$VDU # %*% D_all
+  d2=D_all[,ncol(D_all)] - a%*% D_all[,ncol(D_all)]
+  d2
+},
+projOut=function(ik){ 
   UDV=self$UDVP
   x = self$data[[ik]] #[d$nonNA,,drop=F]
   mean_x=self$mean_x[[ik]]

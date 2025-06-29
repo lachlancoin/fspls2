@@ -27,73 +27,6 @@
   m
 }
 
-
-mStateObj<-R6Class("mStateObj",
-                   public = list(
-                     var="list",
-                     logpvs="vector",
-                     logpv="double",
-                     cumpv="double",
-                     nme="character",
-                     initialize = function(var1, logpv1, prev_i = NULL   ){
-                       if(!is.null(prev_i)){
-                         self$var = c(prev_i$var, var1)
-                         self$logpvs = c(prev_i$logpvs, logpv1)
-                       }else{
-                         self$var = var1
-                         self$logpvs = logpv1
-                       }
-                       self$logpv = logpv1
-                       self$cumpv = .sumChisq(self$logpvs)
-                       self$nme = paste(sort(names(self$var)))
-                     }
-                  
-                   )
-)
-
-
-stateObj1<-R6Class("stateObj1", ## cut down stateObj
-                   public = list(
-                     var="list",
-                     name="character",
-                     name_prev="character",
-#                     varnames="list",
-                     initialize = function(
-                                           prev_i = NULL,
-                                           b_i = NULL,
-                                           var = list()
-                     ){
-                       #  names(data_nmes) = data_nmes
-                       if(is.null(prev_i)){
-                         self$var = var
-                            self$name=paste(unlist(lapply(self$var, paste, collapse=".")),collapse="-")
-
-                         self$name_prev=""
-                       }else{
-                         self$name_prev = prev_i$name
-                         var = prev_i$var
-                         var_st = unlist(lapply(var, paste, collapse="."))
-                         if(paste(b_i,collapse=".") %in% var_st) {
-                           print(paste("selected same variable twice"))#,names(todoInds[[b_i[1]]])[b_i[2]]))
-                           warning(paste(" duplicated variable")) #,names(todoInds[[b_i[1]]])[b_i[2]]))
-                           return(NULL)
-                         }
-                         vars = c(var,list(b_i))
-                         self$name=paste(unlist(lapply(vars, paste, collapse=".")),collapse="-")
-                         vars0=vars
-#                         varnames=lapply(vars0, function(vv) c(names(data$data)[vv[1]],dimnames(data$data[[vv[1]]])[[2]][vv[2]]))
-                         self$var = vars
-#                         self$varnames=varnames
-                       }
-                     },
-                      to_json=function(){
-                       names(self$var) =1:length(self$var) 
-                      json= toJSON(list(var = self$var,name = self$name, name_prev=self$name_prev))
-                      json
-                      }
-                   )
-                   )
-
 stateObj<-R6Class("stateObj",##represents a state of the model
                   public = list(
                     var="list", var_names="list",
@@ -103,7 +36,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     betas_proj="vector", #list of vector
                     W_all="matrix",  ##list of matrix,
                     constants_proj="list",
-                    betas="list",
+                   betas="list",
                     nonNA="logical",
                     mean_x="numeric",
                     initialize = function(phensi,data,
@@ -114,13 +47,12 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                                           b_i = NULL,b_i_name=NULL,
                                           var = list(), varnames = list(),
                                           W_all = matrix(nrow=0, ncol=0),
-                                         mean_x = NULL,
-                                         proj=F
+                                         mean_x = NULL
                                          ){
                       self$constants_proj=constants_proj
                       self$nonNA = data$looc$incl[,k];
                       train = data$train
-                      
+                      self$W_all = W_all
                       #if(length(phensi)>1) stop("!!")
                       family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
                       names(family)=names(phensi)
@@ -134,7 +66,6 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         self$betas_proj= if(length(var)==0) c() else lapply(data$y, function(yy)(matrix(0,nrow=1, ncol= length(var)))) #lapply(datas, function(x) return(c()))
                         self$betas = if(length(var)==0) NULL else lapply(data$y, function(yy)(matrix(0,ncol=1, nrow= length(var)))) 
                         self$name=if(length(var)==0) "" else paste(unlist(lapply(var, paste, collapse=".")),collapse="-")
-                        self$W_all = W_all
                       }else{
                         self$name_prev=prev_i$name
                         var = prev_i$var
@@ -151,11 +82,6 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         self$name=paste(unlist(lapply(vars, paste, collapse=".")),collapse="-")
                         vars0=vars
                         varnames=paste(b_i_name, collapse=".")
-                        W_all_new = NULL
-                        if(proj){
-                          W_all = prev_i$W_all
-                          W_all_new =  data$calcWall(b_i, prev_i$var, prev_i$W_all)
-                        }
                         self$var = vars
                         self$var_names = c(prev_i$var_names, list(b_i_name))
                         self$varnames=c(prev_i$varnames, varnames)
@@ -169,32 +95,27 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           }else{
                             b_n1 = as.matrix(data.frame(b_n1), nrow = 1)
                           }
-                          if(proj){
-                          rbind(prev_i$betas_proj[[b_n]],b_n1)
-                          }else{
-                            b_n1
+                          rescale = 1
+                          if(nrow(b_n1)>1){ ## need to recheck for multinomial
+                            rescale =   b_n1[1,1]
+                            b_n1 = b_n1[-1,,drop=F]
                           }
+                          #rbind(prev_i$betas_proj[[b_n]],b_n1)
+                          rbind(prev_i$betas_proj[[b_n]]* rescale, b_n1)
+                         
                         })
-                        if(proj){
-                        self$betas=lapply(nme_betas_new, function(b_n) {
-                          bp = self$betas_proj[[b_n]]
-                          W_all_new %*% bp
-                        })
-                        self$W_all = W_all_new
-                        }else{
-                          self$betas = self$betas_proj
-                          self$W_all = NULL
-                        }
-                        #if(family=="multinomial"){
-                        #  self$betas = list(self$betas)
-                        #  names(self$betas) = beta_nme
-                        #}else{
-                        #  self$betas = lapply(data.frame(self$betas), as.matrix, nrow = nrow(self$betas), ncol=1)
-                        #}
-                       
+                        self$betas=self$betas_proj  ## now these are the same
+#                          self$betas=lapply(self$betas_proj, function(bp){
+ #                           b2 = self$W_all %*% bp
+  #                        } )
                       }
                     },
+                   # self$betas=lapply(nme_betas_new, function(b_n) {
+                   #    bp = self$betas_proj[[b_n]]
+                   #    W_all_new %*% bp
+                   #  })
                   simplify=function(){
+                  
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj,
                          mean_x = self$mean_x,
@@ -233,7 +154,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           if(abs(m1$coefficients[[1]]-1)>0.5){
                             print(m1$coefficients)
                             print(self$var)
-                            stop(" something gone wrong")
+                            warning(" something gone wrong")
                           }
                           if(inherits(m1,"try-error")){
                             stop("polr error in updating constant in stateObj")
@@ -268,7 +189,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                              nonNAy = !is.na(y1c)
                            ridge=glmnet(cbind(ones[nonNAy],yp1[nonNAy,kk_1]),y1c[nonNAy],family=family[[kk]], alpha = 0)
                            rbeta <- coef(ridge,s=min(ridge$lambda))
-                           if(abs(rbeta[3,1]-1)>0.1) stop("problem with weights")
+                       #    if(abs(rbeta[3,1]-1)>0.1) stop("problem with weights")
                         if(verbose)   print(rbeta)
                           sum(rbeta[1:2,1])
                            }, error=function(w) {
@@ -281,7 +202,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                          }else{
                         self$constants_proj[[kk1]][kk_1]  <- tryCatch({
                           gl = glm(y1c~ yp1[,kk_1], family=family[[kk]])
-                         # print(gl$coefficients)
+                         if(verbose) print(gl$coefficients)
                           gl$coefficients[1]
                         }, warning=function(w) {
                           print("using glmnet to regularise ")
