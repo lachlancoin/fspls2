@@ -994,7 +994,7 @@ extractData=function(var, adjust=T){
 makeModels=function(phens1, vars2, k, 
                    func_str,
                    CHECK=getOption("fspls.check",F),
-                    verbose=F){
+                    verbose=getOption("fspls.verbose1",F)){
   phen2 = phens1
   ypred=self$ypred(phen2)
   transform_func = eval(str2lang(func_str))
@@ -1003,7 +1003,7 @@ makeModels=function(phens1, vars2, k,
     return(list(prev_is$simplify()))
   }
   phensi = self$phensi(phen2)
- 
+  subphens = phensi
  # prev_is = lapply(fold_inds, function(k) stateObj$new(phensi,self,self$train[[k]], k))
  prev_i= self$prev[[k]]  #lapply(fold_inds, function(k) self$train$prev[[k]])
   #if(length(prev_i$var)>0) stop("problem")
@@ -1015,7 +1015,7 @@ makeModels=function(phens1, vars2, k,
   models = vector("list", len)
  
   for(jk in 1:len){
-    if(verbose)print(jk)
+    #if(verbose)print(jk)
     b_i_name = vars2[[jk]]
     b_i = self$convert(vars2[[jk]])
     mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
@@ -1024,10 +1024,11 @@ makeModels=function(phens1, vars2, k,
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
     self$updateUDVP(prev_var)
     betas = prev_i$betas
-    b_new_proj = self$calcBetaProj1(phensi,k,b_i,prev_var, transform_func,betas = betas, convert=F, 
+ 
+    b_new_proj = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func,betas = betas, convert=F, 
                                     strict=T, useglm=getOption("glmnet",T)) 
     betas_new = b_new_proj$betas
-    refit = T ##ypred$family[[1]]!="multinomial"
+    refit = T # ypred$family[[1]]!="multinomial"
     if(refit){
       constants_proj= data$getConstantsProj(phensi)
     }else{
@@ -1038,8 +1039,9 @@ makeModels=function(phens1, vars2, k,
     #prev_i1$updateBetas(); 
     if(FALSE){ ##JUST TO CHECK WHAT GLM VARIABLES  WOULD BE
       extractd = self$extractData(c(prev_i$var, list(b_i)), adjust=T)
-      nonNA = !is.na(self$y[[1]][,5])
-      ridge=glmnet(extractd[nonNA,],self$y[[1]][nonNA,5,drop=F] ,family=family, alpha = 0)
+      nonNA = !is.na(self$y[[1]][,1])
+      family = self$family
+      ridge=glmnet(extractd[nonNA,],self$y[[1]][nonNA,1,drop=F] ,family=family, alpha = 0)
       
       rbeta <- coef(ridge,s=min(ridge$lambda))
       print(rbeta)
@@ -1078,6 +1080,10 @@ makeModels=function(phens1, vars2, k,
     if(refit){ ## refits the constant offset
      ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=F)
       prev_i1$updateConst(phensi,ypred, data,k, transform_func, useglm=getOption("glmnet",T),verbose=verbose)
+    }
+    if(verbose){
+      ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=T)
+      print(ypred$calcRMSV(self$y, nonNA,     flip=FALSE))
     }
   
     prev_i = prev_i1

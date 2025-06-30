@@ -27,6 +27,29 @@
   m
 }
 
+mStateObj<-R6Class("mStateObj",
+                   public = list(
+                     var="list",
+                     logpvs="vector",
+                     logpv="double",
+                     cumpv="double",
+                     nme="character",
+                     initialize = function(var1, logpv1, prev_i = NULL   ){
+                       if(!is.null(prev_i)){
+                         self$var = c(prev_i$var, var1)
+                         self$logpvs = c(prev_i$logpvs, logpv1)
+                       }else{
+                         self$var = var1
+                         self$logpvs = logpv1
+                       }
+                       self$logpv = logpv1
+                       self$cumpv = .sumChisq(self$logpvs)
+                       self$nme = paste(sort(names(self$var)))
+                     }
+                  
+                   )
+)
+
 stateObj<-R6Class("stateObj",##represents a state of the model
                   public = list(
                     var="list", var_names="list",
@@ -91,16 +114,19 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         self$betas_proj=lapply(nme_betas_new, function(b_n){
                           b_n1 = betas_new[[b_n]]
                           if(family[[b_n]]=="multinomial"){
-                            b_n1 =b_n1[[1]]
+                            b_n1 = b_n1[[1]]
+                            if(!is.matrix(b_n1)){
+                              b_n1 =t(as.matrix(b_n1))
+                            }
+                            #print(b_n1)
                           }else{
-                            b_n1 = as.matrix(data.frame(b_n1), nrow = 1)
+                            b_n1 = as.matrix(data.frame(b_n1)) #, nrow = 1)
                           }
-                          rescale = 1
-                          if(nrow(b_n1)>1){ ## need to recheck for multinomial
-                            rescale =   b_n1[1,1]
-                            b_n1 = b_n1[-1,,drop=F]
+                          if(nrow(b_n1)==1){ 
+                            return( rbind(prev_i$betas_proj[[b_n]], b_n1))
                           }
-                          #rbind(prev_i$betas_proj[[b_n]],b_n1)
+                          rescale =   b_n1[1,]
+                          b_n1 = b_n1[-1,,drop=F]
                           rbind(prev_i$betas_proj[[b_n]]* rescale, b_n1)
                          
                         })
@@ -138,8 +164,11 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     yp1 =ypred$ypreds[[kk1]][na_k,,drop=F]
                     if(family[[kk]]=="multinomial"){
                         levs = levels(y)# c(0,1:length(self$betas[[k]]))
-                        m1 = try(multinom(y~as.matrix(yp1),trace=F))
+                        m1 = try(multinom(y~as.matrix(yp1[,-1]),trace=F))
                         sm  = summary(m1, digits=3)
+                        if(verbose){
+                          print(sm$coefficients)
+                        }
                         const_term = sm$coefficients[,1]
                         self$constants_proj[[kk1]] = const_term
                     }else if(family[[kk]]=="ordinal"){

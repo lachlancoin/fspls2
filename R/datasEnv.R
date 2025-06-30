@@ -190,6 +190,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       all_models = list()
       variables = vars$variables
       var_inds = vars$inds
+    #  print(var_inds);stop("!!")
       if(length(variables)==0) return(list())
       ord = order(unlist(lapply(variables, length)),decreasing=T)
       variables = variables[ord]
@@ -256,6 +257,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   },
   makeModels=function(vars2, inds, phens,func_str, flags){
     datas=self$datas
+#    print(inds)
     train_nme = .readFlag(flags,'train', names(datas)[1])
     if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
     verbose=.readFlag(flags,"verbose",FALSE)

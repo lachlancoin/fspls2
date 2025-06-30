@@ -34,9 +34,9 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[4]; pthresh = 0.001 ; randomise=F; duplicate=T
+datasets =examples[2]; pthresh = 0.001 ; randomise=F; duplicate=F
 options("fspls.types"=
-          fromJSON('{"gaussian": ["correlation","var","mad"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
+          fromJSON('{"gaussian": ["correlation"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
 
 func_y = list(y="function(y) y")  #'{"y":"function(y) y","y1":"function(y) y^2"} '
 
@@ -57,15 +57,21 @@ runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
   phens=datasAll$pheno()
   
   ## FIND VARIABLES
-  variables_all = datasAll$select(phens, flags,verbose=F)
+  vars_all = datasAll$select(phens, flags,verbose=F)
   #print(variables_all)
   ## FIT MODELS
-  all_models = datasAll$makeAllModels(variables_all, phens, flags)
+  options("fspls.verbose1"=F)
+  all_models = datasAll$makeAllModels(vars_all, phens, flags)
   eval = datasAll$evaluateAllModels(all_models, phens, flags)
 ##PLOT
+  if(FALSE){ ## show cum plots
+      predictions0 =datasAll$extractPredictions(all_models,phens, flags, CV = F, liab=F, data_nme = names(datasAll$datas)[[1]]);
+      ggp_pred0=.plotArea1(predictions0, rename=T,max_vars=44)
+      ggp_pred0
+  }
   if(is.null(eval)) return (NULL)
   eval2 = .calcEval1(eval)
-  ggps = .plotEval1(eval2, rename=F,len=1, legend=T)
+  ggps = .plotEval1(eval2,  legend=T)
 #for multinomial or ordinal
 #ggps = .plotEval1(eval, rename=F,grid="subpheno~cv")
 ggps
@@ -103,10 +109,12 @@ for(j in 1:length(datasAll$datas)){
 }
 
 ggp_all =list()
+#examples = examples[grep("multinomial", names(examples), inv=T)] # broken for multinomail
 for(i in 1:length(examples)){  
   print(i)
   ggp_all[[i]] = runAll(examples[i], randomise=F, pthresh = 0.0001)
 }
+
 names(ggp_all) = names(examples)
 #runAll(datasets[1])
 
