@@ -1213,6 +1213,7 @@ ypred=function(phens1){
   ypr = ypredObj$new(self,self$phensi(phens1),family=family)
   ypr
 },# inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
+#all_models_y = all_models$y; inverse_func_str = fromJSON(flags1$transform_y_inverse)[[1]]; self = datasAll$datas[[1]]
 evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
                            ypreds = lapply(phens, function(phens1) self$ypred(phens1)),verbose=F
                          ){
@@ -1270,7 +1271,19 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
   numvars = unlist(lapply(evals$model, function(x) length(strsplit(x,";")[[1]])))
   evals1 = unite(evals,"phenomodel","pheno","model")
   evals$isfull[evals1$phenomodel %in% evals1$phenomodel[evals1$isfull]] = T
-  evals%>% tibble::add_column(numvars=numvars)
+  evals2 = evals%>% tibble::add_column(numvars=numvars)
+  evals3 = subset(evals2, cv==T)
+  evals4 = unite(evals3,"comb","submeasure","measure","cv","subpheno","family","trainedOn","pheno_group","numvars","pheno",remove=F)
+  combs = unique(evals4$comb)
+  avgs = .merge1_new(lapply(combs, function(comb1){
+    s1 = subset(evals4, comb==comb1)
+    s2 = s1[1,,drop=F]
+    s2$value = mean(s1$value,na.rm=T)
+    s2$nsamps = mean(s1$nsamps,na.rm=T)
+    s2$model = "avg"
+    s2
+  }))
+  rbind(evals2,avgs[,-1])
 },
 
 
