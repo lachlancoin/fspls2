@@ -593,6 +593,7 @@ updateYP=function(d,prev_i1,  nonNA, flip=T, ignore.na=F, liab=T){
   phensi=self$phensi
   prev_kj$var = lapply(prev_kj$var_names, d$convert)  ## this would not be threadsafe
   na_x = if(ignore.na) rep(F, self$nrow) else d$getNA(prev_kj$var)
+  #kk1 = names(phensi)[[1]]
   for(kk1 in names(phensi)){ #} 1:length( ypred$ypreds)){
     kk = phensi[[kk1]]
     if(is.null(nonNA)){

@@ -127,15 +127,29 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           }
                           rescale =   b_n1[1,]
                           b_n1 = b_n1[-1,,drop=F]
-                          rbind(prev_i$betas_proj[[b_n]]* rescale, b_n1)
+                          bet_n = prev_i$betas_proj[[b_n]]
+                          for(jj in 1:nrow(bet_n)){
+                            bet_n[jj,] = bet_n[jj,]*rescale
+                          }
+                          rbind(bet_n, b_n1)
                          
                         })
                         self$betas=self$betas_proj  ## now these are the same
+                        
 #                          self$betas=lapply(self$betas_proj, function(bp){
  #                           b2 = self$W_all %*% bp
   #                        } )
                       }
                     },
+                  setOffset=function(){
+                    nme_betas_new = names(self$betas)
+                    #b_n= nme_betas_new[[1]]
+                    for(b_n in nme_betas_new){
+                      offset =self$mean_x%*%  self$betas[[b_n]]
+                      vv = unlist(self$constants_proj[[b_n]])-offset[1,]
+                      self$constants_proj[[b_n]] = vv
+                    }
+                  },
                    # self$betas=lapply(nme_betas_new, function(b_n) {
                    #    bp = self$betas_proj[[b_n]]
                    #    W_all_new %*% bp
@@ -147,13 +161,15 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                          mean_x = self$mean_x,
                          var_names = self$var_names) #, pvs = self$pvs_proj)
                   },
-                  updateConst=function(phensi,ypred, data,  k, transform_func, useglm=F, verbose=F){
+                  updateConst=function(phensi,ypred, data,  k, transform_func, useglm=F, verbose=F,update=F,
+                                       diff_thresh = getOption("diff_thresh",0.1)
+                                       ){
                     #if(length(phensi)>1) stop("!!")
                     family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
                     names(family)=names(phensi)
                     non_na_x = data$getNonNA(self$var) 
-                    self$constants_proj = vector("list", length(phensi))
-                    names(self$constants_proj) = names(phensi)
+                    constants_proj = vector("list", length(phensi))
+                    names(constants_proj) = names(phensi)
                     na_k=non_na_x & self$nonNA
                   for(kk1 in 1:length(phensi)){
                     #kk1 = 1;  
@@ -170,7 +186,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           print(sm$coefficients)
                         }
                         const_term = sm$coefficients[,1]
-                        self$constants_proj[[kk1]] = const_term
+                        constants_proj[[kk1]] = const_term
                     }else if(family[[kk]]=="ordinal"){
                         for(kk_1 in 1:length(phensi1)){
                           kk_ = phensi1[kk_1]
@@ -191,7 +207,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                            # gl = glm(data$y[non_na_x & nonNA,kk]~ yp1[,1], family="gaussian")
                             #self$constants_proj[[kk]][[kk_1]] = consts_prev[[kk]] #rep(NA, length(levs1)-1) #gl$coefficients[1]
                           }else{
-                            self$constants_proj[[kk]][[kk_1]]= m1$zeta
+                            constants_proj[[kk]][[kk_1]]= m1$zeta
                           }
                         }
                      }else {
@@ -210,26 +226,26 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                          sm = summary(ab)
                          x_ind = match(c("x","(Intercept)"),dimnames(sm$coefficients)[[1]])
                          coeff = sm$coefficients[x_ind[1],c(1,2,3,5)]
-                         self$constants_proj[[kk1]][kk_1]= sm$coefficients[x_ind[2],1]
+                         constants_proj[[kk1]][kk_1]= sm$coefficients[x_ind[2],1]
                          #const_term 
                        }else{
                          if(useglm){
-                           self$constants_proj[[kk1]][kk_1] = tryCatch({
+                           constants_proj[[kk1]][kk_1] = tryCatch({
                              nonNAy = !is.na(y1c)
                            ridge=glmnet(cbind(ones[nonNAy],yp1[nonNAy,kk_1]),y1c[nonNAy],family=family[[kk]], alpha = 0)
                            rbeta <- coef(ridge,s=min(ridge$lambda))
-                       #    if(abs(rbeta[3,1]-1)>0.1) stop("problem with weights")
+                           if(abs(rbeta[3,1]-1)>diff_thresh) stop("problem with weights")
                         if(verbose)   print(rbeta)
                           sum(rbeta[1:2,1])
                            }, error=function(w) {
                              gl = glm(y1c[nonNAy]~ yp1[nonNAy,kk_1], family=family[[kk]])
-                             if(abs(gl$coefficients[2]-1)>0.1) stop("problem with weights")
+                             if(abs(gl$coefficients[2]-1)>diff_thresh) stop("problem with weights")
                              if(verbose)   print(gl$coefficients)
                              gl$coefficients[1]
                            
                            })
                          }else{
-                        self$constants_proj[[kk1]][kk_1]  <- tryCatch({
+                        constants_proj[[kk1]][kk_1]  <- tryCatch({
                           gl = glm(y1c~ yp1[,kk_1], family=family[[kk]])
                          if(verbose) print(gl$coefficients)
                           gl$coefficients[1]
@@ -249,8 +265,10 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                      }
                   
                    
-          names(  self$constants_proj) = names(phensi)
+          names(  constants_proj) = names(phensi)
                   }
+                    if(update)self$constants_proj = constants_proj
+                    constants_proj
                   }   
                   )
 )

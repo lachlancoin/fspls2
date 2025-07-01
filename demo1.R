@@ -78,16 +78,35 @@ meta = .expandAllvAll(meta,"predicted_labels_fine")
 ys=list(pbmc=meta)
 datasets = list(pbmc=list(counts=counts1))
 mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1, hasNA=F)))
-flags = list(pthresh = 1e-5, max=100, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T)
+flags = list(pthresh = 1e-5, max=100, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T,all_v_all=F)
 datas =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
 phens=datas$pheno()
+#phens$all[[1]] = phens$all[[1]]
+#phens$all = phens$all[2]
 ## FIND VARIABLES
 vars_all = datas$select(phens, flags)
 
 ## FIT MODELS
+options("fspls.verbose1"=T)
+phens_ = phens
+#phens_[[1]][[1]] = phens[[1]][[1]][10]
+#all_models_ = datas$makeAllModels(vars_all, phens_, flags)
 all_models = datas$makeAllModels(vars_all, phens, flags)
 
+#betas_save = all_models_[[1]]$`counts.CD74;counts.FTH1;counts.CCL5;counts.HLA-DRB1;counts.RPS12;counts.LYZ;counts.GNLY;counts.NIBAN1;counts.IGHM;counts.BANK1`$all$full$pbmc$betas$binomial
+#print(betas_save)
+#compare=lapply(1:length(all_models[[1]]), function(i){
+#  cbind(   all_models_[[1]][[i]]$all$full$pbmc$betas$binomial[,1],   all_models[[1]][[i]]$all$full$pbmc$betas$binomial[,10])
+#})
+#compare1=lapply(1:length(all_models[[1]]), function(i){
+#  cbind(   all_models_[[1]][[i]]$all$full$pbmc$constants_proj$binomial[1],   all_models[[1]][[i]]$all$full$pbmc$constants_proj$binomial[10])
+#})
 
+#betas_save1 = all_models[[1]]$`counts.CD74;counts.FTH1;counts.CCL5;counts.HLA-DRB1;counts.RPS12;counts.LYZ;counts.GNLY;counts.NIBAN1;counts.IGHM;counts.BANK1`$all$full$pbmc$betas$binomial[,10,drop=F]
+#print(betas_save1)
+#cbind(betas_save, betas_save1)
+
+options("diff_thresh"=0.1)
 
 eval = datas$evaluateAllModels(all_models, phens, flags)
 aa=subset(eval, pheno=="Non.classical.monocytes.cd8_Tm"  )
@@ -98,6 +117,7 @@ eval1 = subset(eval, numvars==100)
 final_models = .getFinalModel(all_models, target_size = "max")
 model_weights = .extractWeights(final_models)
 outw = paste0("weights",max(eval$numvars),".xlsx");
+weights_old=read_xlsx("weights100.xlsx")
 write_xlsx(model_weights,outw)
 
 ##PLOT

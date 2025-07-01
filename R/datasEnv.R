@@ -474,6 +474,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     print(nme_d)
     func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
     inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
+    #k=1
     for(k in 1:length(func_strs)){ #CHECK INVERSE CORRECT
       func0 = eval(str2lang(func_strs[[k]]))  ## should be inverse
      func1 = eval(str2lang(inverse_func_strs[[k]]))  ## should be inverse
@@ -482,10 +483,11 @@ datasEnv<-R6Class("datasEnv", public = list(
     }
     
     mod_nmes = names(all_models); names(mod_nmes) = mod_nmes
+    #mod_nme = mod_nmes[[1]]
     eval1=.merge1_new( lapply(mod_nmes, function(mod_nme){
       inverse_func_str = inverse_func_strs[[mod_nme]]
       all_models_y = all_models[[mod_nme]]
-    
+   #nme1 = nme_d[[1]] 
    .merge1_new(lapply(nme_d, function(nme1){
      d = self$datas[[nme1]]
       resd = try(d$evaluateAllModels(all_models_y,phens,inverse_func_str = inverse_func_str,flags))
