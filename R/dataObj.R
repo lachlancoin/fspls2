@@ -1224,65 +1224,72 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
 #  ypred = self$ypred(phens)
   group_names= names(all_models_y); names(group_names)=group_names
   #group_name = group_names[[1]]
-  evals = .merge1_new(lapply(group_names, function(group_name){
-   if(verbose)  print(group_name)
-    all_models1_ = all_models_y[[group_name]]
-    pheno_nmes = names(all_models1_); names(pheno_nmes)=pheno_nmes
-   # pheno_nme = pheno_nmes[[1]]
-   .merge1_new(lapply(pheno_nmes, function(pheno_nme){
-     if(verbose) print(pheno_nme)
-     all_models1 = all_models1_[[pheno_nme]]
-     ypred = ypreds[[pheno_nme]]
-     if(is.null(ypred)) stop("ypred is null")
-    full_ind = names(all_models1)=="full"
-    full_model = all_models1[["full"]]
-    nmesm = names(all_models1)[!full_ind];
-    inds=as.numeric(nmesm)
-    nmes_models = names(all_models1[[1]]);
-    names(nmes_models) = nmes_models
-    #nmes1 = nmes_models[[1]]
-    .merge1_new(lapply(nmes_models, function(nmes1){
-      if(verbose) print(nmes1)
-      res1 = NULL; res2 = NULL
-      if(!is.null(full_model)){
-        #ypredObj$updateYP(self, phens, )#= self$train$looc_incl[,k2]
-        nonNA =self$train$looc_incl[,self$nreps()]
-        prev_i1=full_model[[nmes1]]
-        ypred$updateYP(d, prev_i1, nonNA, flip=FALSE, liab=liab)
-        res1 = ypred$calcRMSV(self$y, nonNA,  inverse_func=transform_func,     flip=FALSE)%>% tibble::add_column(isfull=T)
-        #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
-      }
-      if(length(nmesm)>0){
-        for(j in 1:length(nmesm)){
-          nonNA =self$train$looc_incl[,inds[[j]]]
-          prev_i1 = all_models1[[j]][[nmes1]]
-          ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
-#          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
-        }
-        nonNA=self$getNonNAInds(inds)
-        res2 = ypred$calcRMSV(self$y,nonNA,inverse_func=transform_func, flip=TRUE)%>% tibble::add_column(isfull=F)
-       
-      }
-     rbind(res1,res2)
-      #    }),addName="variable")
-    }),addName="trainedOn")
+  numvars = unlist(lapply(group_names, function(x) length(strsplit(x,";")[[1]])))
+  names(numvars) = numvars
+  pheno_nmes = names(all_models_y[[1]]); names(pheno_nmes)=pheno_nmes
+  nmes_models = names(all_models_y[[1]][[1]][[1]]);
+  names(nmes_models) = nmes_models
+  #pheno_nme = pheno_nmes[[1]]; numvar = numvars[[1]]; nmes1 = nmes_models[[1]]
+  evals_all = .merge1_new(lapply(numvars, function(numvar){
+    if(verbose)print(paste("numvar",numvar))
+    .merge1_new(lapply(pheno_nmes, function(pheno_nme){
+      ypred = ypreds[[pheno_nme]]; if(is.null(ypred)) stop("ypred is null")
+      .merge1_new(lapply(nmes_models, function(nmes1){
+        group_names2 = group_names[numvars==numvar]
+        evals = .merge1_new(lapply(group_names2, function(group_name){
+          if(verbose) print(paste(numvar,group_name))
+          all_models1 = all_models_y[[group_name]][[pheno_nme]]   
+              full_ind = names(all_models1)=="full"
+              full_model = all_models1[["full"]]
+              nmesm = names(all_models1)[!full_ind];
+              inds=as.numeric(nmesm)
+              res1 = NULL; res2 = NULL
+              if(!is.null(full_model)){
+                #ypredObj$updateYP(self, phens, )#= self$train$looc_incl[,k2]
+                nonNA =self$train$looc_incl[,self$nreps()]
+                prev_i1=full_model[[nmes1]]
+                ypred$updateYP(d, prev_i1, nonNA, flip=FALSE, liab=liab)
+                res1 = ypred$calcRMSV(self$y, nonNA,  inverse_func=transform_func,     flip=FALSE)%>% tibble::add_column(isfull=T)
+                #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
+              }
+              if(length(nmesm)>0){
+                for(j in 1:length(nmesm)){
+                  nonNA =self$train$looc_incl[,inds[[j]]]
+                  prev_i1 = all_models1[[j]][[nmes1]]
+                  ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
+                  #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
+                }
+                nonNA=self$getNonNAInds(inds)
+                res2 = ypred$calcRMSV(self$y,nonNA,inverse_func=transform_func, flip=TRUE)%>% tibble::add_column(isfull=F)
+                
+              }
+              rbind(res1,res2)
+        }),addName="model")
+        ## this calculates average scores across cv
+        evals3 = subset(evals, cv==T)%>% pivot_wider(names_from="pheno", names_prefix="pivoted_")
+        evals4 = unite(evals3,"comb","submeasure","measure","subpheno","family", remove=F)
+        combs = unique(evals4$comb)
+        mi = match(c("comb","submeasure","measure","subpheno","family","cv","isfull","model"),names(evals4))
+        avg_inds =( 1:ncol(evals4))[-mi]
+        avgs = .merge1_new(lapply(combs, function(comb1){
+          s1 = subset(evals4, comb==comb1)
+          s2 = s1[1,,drop=F]
+          avg_v = apply(s1[,avg_inds,drop=F],2,mean,na.rm=T)
+          s2[avg_inds] = as.list(avg_v)
+          s2$model = "avg"
+          s2
+        }))
+        avgs1 = avgs[,-1]%>%pivot_longer(cols=starts_with("pivoted_"),names_prefix="pivoted_",names_to="pheno")
+        mi2 = match(names(evals),names(avgs1))
+        rbind(evals, avgs1[,mi2])
+      }),addName="trainedOn")
     }),addName="pheno_group")
-  }),addName="model")
+  }),addName="numvars")
+  
   numvars = unlist(lapply(evals$model, function(x) length(strsplit(x,";")[[1]])))
   evals1 = unite(evals,"phenomodel","pheno","model")
   evals$isfull[evals1$phenomodel %in% evals1$phenomodel[evals1$isfull]] = T
-  evals2 = evals%>% tibble::add_column(numvars=numvars)
-  evals3 = subset(evals2, cv==T)
-  evals4 = unite(evals3,"comb","submeasure","measure","cv","subpheno","family","trainedOn","pheno_group","numvars","pheno",remove=F)
-  combs = unique(evals4$comb)
-  avgs = .merge1_new(lapply(combs, function(comb1){
-    s1 = subset(evals4, comb==comb1)
-    s2 = s1[1,,drop=F]
-    s2$value = mean(s1$value,na.rm=T)
-    s2$nsamps = mean(s1$nsamps,na.rm=T)
-    s2$model = "avg"
-    s2
-  }))
+  
   rbind(evals2,avgs[,-1])
 },
 
