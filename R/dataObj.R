@@ -472,8 +472,8 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T,betas =
   res1
 },
 
-calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, strict=F, useglm=getOption("glmnet",T)){
-  b_i = b_i1
+calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict=F, useglm=getOption("glmnet",T)){
+  #b_i = b_i1
   data = self
   train = data$train
   d = train
@@ -543,7 +543,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, stric
     beta_new1=0;
     
     if(family=="multinomial"){
-      ty=table(y)
+      ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
       m1 = try(multinom(y~x,weights=w, trace=F))
       if(inherits(m1,"try-error")){
@@ -554,6 +554,8 @@ calcBetaProj=function(nme,phensi_,family, k,b_i1,prev_var, transform_func, stric
       beta_new1=sm$coefficients[,2]
       const_term = sm$coefficients[,1]
     }else if(family=="ordinal" ){
+      ty=as.list(table(y))
+      tbls[[kk]] = ty[ty>0]
       use_bin = length(unique(y))<=2
       if(!use_bin){
         df = data.frame(cbind(y,x ))
@@ -778,7 +780,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
       dimnames(x)[[2]] = c("predicted","x")
  #   }
     if(family=="multinomial"){
-      ty=table(y)
+       ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
       m1 = try(multinom(y~as.matrix(x),weights=w, trace=F))
       if(inherits(m1,"try-error")){
@@ -792,6 +794,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
       const_term = sm$coefficients[,1]
     }else if(family=="ordinal" ){
       use_bin = length(unique(y))<=2
+       ty=as.list(table(y))
+      tbls[[kk]] = ty[ty>0]
       if(!use_bin){
         colnames(x)=paste("x", 1:ncol(x), sep="")
         df = data.frame(cbind(y,as.matrix(x) ))
@@ -938,7 +942,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
     betas[[kk]] =beta_new1
     constants[[kk]] = const_term  #-mean_adj*beta_new1
   }
-  list(betas=betas, constants = constants)
+  list(betas=betas, constants = constants,tbls = tbls)
 },
 ##var and W_all1 are from one smaller model
 calcWall=function(b_i, var, W_all1){
@@ -999,7 +1003,7 @@ extractData=function(var, adjust=T){
   Dall
 },
 
-#vars2 = vars_all[[1]]$variables[[1]];phens1 = phens[[1]]; k=1
+#vars2 = vars_all[[1]]$variables[[5]];phens1 = phens[[1]]; k=1
 makeModels=function(phens1, vars2, k, 
                    func_str="function(y) y",
                    CHECK=getOption("fspls.check",F),
@@ -1056,8 +1060,8 @@ makeModels=function(phens1, vars2, k,
   #  }else{
       constants_proj =if(ypred$family[[1]]=="multinomial") b_new_proj$constants[[1]] else b_new_proj$constants
    # }
-    
-    prev_i1=stateObj$new(phensi,data, betas_new,constants_proj, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = W_all)
+    tbls = if(ypred$family[[1]]=="multinomial") b_new_proj$tbls[[1]]  else b_new_proj$tbls
+    prev_i1=stateObj$new(phensi,data, betas_new,constants_proj, tbls, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = W_all)
   #  prev_i1$setOffset() 
     prev_i1$setOffset()
     if(FALSE){ ##JUST TO CHECK WHAT GLM VARIABLES  WOULD BE
@@ -1218,7 +1222,8 @@ ypred=function(phens1){
 },# inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
 #all_models_y = all_models$y; inverse_func_str = fromJSON(flags1$transform_y_inverse)[[1]]; self = datasAll$datas[[1]]
 evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
-                           ypreds = lapply(phens, function(phens1) self$ypred(phens1)),verbose=F
+                           ypreds = lapply(phens, function(phens1) self$ypred(phens1)),
+                           verbose=F
                          ){
   d = self
   liab = .readFlag(flags,"liab",T)  ## whether to evaluate with liability , default is true
@@ -1226,14 +1231,14 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
   
 #  ypred = self$ypred(phens)
   group_names= names(all_models_y); names(group_names)=group_names
-  #group_name = group_names[[1]]
   numvars = unlist(lapply(group_names, function(x) length(strsplit(x,";")[[1]])))
-  names(numvars) = numvars
+  numvars1 = sort(unique(numvars))
+  names(numvars1) = numvars1
   pheno_nmes = names(all_models_y[[1]]); names(pheno_nmes)=pheno_nmes
   nmes_models = names(all_models_y[[1]][[1]][[1]]);
   names(nmes_models) = nmes_models
-  #pheno_nme = pheno_nmes[[1]]; numvar = numvars[[1]]; nmes1 = nmes_models[[1]]
-  evals_all = .merge1_new(lapply(numvars, function(numvar){
+  #pheno_nme = pheno_nmes[[1]]; numvar = numvars[[1]]; nmes1 = nmes_models[[1]];group_name = group_names[[1]]
+  evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     .merge1_new(lapply(pheno_nmes, function(pheno_nme){
       ypred = ypreds[[pheno_nme]]; if(is.null(ypred)) stop("ypred is null")
@@ -1264,11 +1269,12 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
                 }
                 nonNA=self$getNonNAInds(inds)
                 res2 = ypred$calcRMSV(self$y,nonNA,inverse_func=transform_func, flip=TRUE)%>% tibble::add_column(isfull=F)
-                
               }
               rbind(res1,res2)
         }),addName="model")
         ## this calculates average scores across cv
+        evals1 = unite(evals,"phenomodel","pheno","model")
+        evals$isfull[evals1$phenomodel %in% evals1$phenomodel[evals1$isfull]] = T
         evals3 = subset(evals, cv==T)%>% pivot_wider(names_from="pheno", names_prefix="pivoted_")
         evals4 = unite(evals3,"comb","submeasure","measure","subpheno","family", remove=F)
         combs = unique(evals4$comb)
@@ -1284,16 +1290,12 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
         }))
         avgs1 = avgs[,-1]%>%pivot_longer(cols=starts_with("pivoted_"),names_prefix="pivoted_",names_to="pheno")
         mi2 = match(names(evals),names(avgs1))
+      
         rbind(evals, avgs1[,mi2])
       }),addName="trainedOn")
     }),addName="pheno_group")
   }),addName="numvars")
-  
-  numvars = unlist(lapply(evals$model, function(x) length(strsplit(x,";")[[1]])))
-  evals1 = unite(evals,"phenomodel","pheno","model")
-  evals$isfull[evals1$phenomodel %in% evals1$phenomodel[evals1$isfull]] = T
-  
-  rbind(evals2,avgs[,-1])
+  evals_all
 },
 
 
@@ -1789,7 +1791,7 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
       self$prev = list()
       for(k in 1:nrep){
         #    phensi,data, betas_new, constants_proj,  k, #mean_y,
-        self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,k, var=var, varnames=varnames, W_all = W_all)
+        self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,NULL,k, var=var, varnames=varnames, W_all = W_all)
       }
   },
 update=function(k,func_str,varn = c()){

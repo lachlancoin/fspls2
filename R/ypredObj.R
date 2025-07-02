@@ -107,6 +107,7 @@ liability<-function(xM){
     #  yp = yp+ unlist(prev_kj$constants_proj)
   }
   # print(yp)
+  levs = names(prev_kj$tbls[[kk]])
   attr(yp, "levs") =levs
   #print(yp)
   if(!liab) return(yp)

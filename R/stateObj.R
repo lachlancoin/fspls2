@@ -62,9 +62,11 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                    betas="list",
                     nonNA="logical",
                     mean_x="numeric",
+                   tbls="list",
                     initialize = function(phensi,data,
                                           betas_new, 
                                           constants_proj,
+                                          tbls,
                                          k, #mean_y,
                                           prev_i = NULL,
                                           b_i = NULL,b_i_name=NULL,
@@ -75,6 +77,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                       self$constants_proj=constants_proj
                       self$nonNA = data$looc$incl[,k];
                       train = data$train
+                      self$tbls = tbls
                       self$W_all = W_all
                       #if(length(phensi)>1) stop("!!")
                       family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
@@ -158,7 +161,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                   
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj,
-                         mean_x = self$mean_x,
+                         mean_x = self$mean_x,tbls = self$tbls,
                          var_names = self$var_names) #, pvs = self$pvs_proj)
                   },
                   updateConst=function(phensi,ypred, data,  k, transform_func, useglm=F, verbose=F,update=F,
