@@ -50,6 +50,7 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
   comb_all = lapply(incl,function(inc1){
     comb1 = lapply(1:length(angles), function(i){
       ang1 = angles[[i]][[inc1]]
+      if(is.null(ang1)) return(NULL)
       col_incl = cols_incl[[i]][[inc1]]
       #ang1=angle1[[inc1]]
       ang2=ang1[[1]]
@@ -61,6 +62,8 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
       }
       cs[col_incl]
     })
+    comb1[unlist(lapply(comb1, length))>0]
+    if(length(comb1)==0) return(NULL)
     .sumMatrices(comb1)
   })
   top_angles=whichpart1(comb_all, n=topn, return_scores=T)
@@ -1640,15 +1643,22 @@ getAngles1=function(phens,vars,incl=names(self$data), k=1,type="slow1"){
     angles_d= vector('list', length(self$data)) ## need angle object
     names(angles_d) = names(self$data)
     for(ik in 1:length(self$norm)){
+    #  print(ik)
       if(names(self$norm)[[ik]] %in% incl){
         if(type=="fast"){
           stop("not working")
           angles_d[[ik]] = self$getAngleInner(phensi,ik,k,var)
         }else{
-          angles_d[[ik]] = self$getAngleInnerOld(phensi,ik, k,var,type)
+          angles_d[[ik]] =  tryCatch({
+            self$getAngleInnerOld(phensi,ik, k,var,type)
+          },error=function(w){
+            print(w)
+            NULL
+          })
+            
         }
       }
-    }     
+    }    
     # angle[which(dnorm==0)]=999
     #  if(FALSE){
     ##SO LONG AS YMOD IS MEAN ZERO, COLUNS OF X DONT HAVE TO BE

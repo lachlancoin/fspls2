@@ -84,7 +84,7 @@
   #head(eval4)#pivot_wider(eval2, names_from = c("cv", "fullmodel", "numvars"), values_from ="value")
 .plotEval1<-function(eval2, rename=F, len=1,
            shape_color="pheno_subpheno",linetype="fullmodel",showranges=T,
-           txtsize=1,logy=F,legend=F,sep_by="",
+           txtsize=1,logy=F,legend=F,sep_by="",scales="free",
            grid="cohort_measure~cv_full"){
   shape_color_nme = paste(shape_color, collapse="_");
   linetype_nme = paste(linetype, collapse="_");
@@ -114,9 +114,9 @@
   }
   if(!is.null(grid)){
     if(length(grep("~",grid))>0){
-    ggp<-ggp+facet_grid(grid,scales="free")
+    ggp<-ggp+facet_grid(grid,scales=scales)
     }else{
-      ggp<-ggp+facet_wrap(grid, scales="free")
+      ggp<-ggp+facet_wrap(grid, scales=scales)
     }
   }
   legend_position=if(legend) "bottom" else "none";
