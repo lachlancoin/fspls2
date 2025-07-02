@@ -22,10 +22,21 @@
     eval
 }
 
+.avg<-function(eval0){
+  nme_cols1 = c("data","subpheno","measure","pheno","trainedOn","transform_y","pheno_group","numvars","cv","family")
+  rem_cols = names(eval0)[!(names(eval0) %in% nme_cols1)]
+  nme_cols2 = c(nme_cols1, rem_cols)
+  mi = match(nme_cols2, names(eval0))
+eval1 = eval0[,mi] 
+##not working
+
+eval2 = unite(head(eval1),"data:subpheno", remove=F)
+length(unique(eval1$`data:family`))
+}
 
 .calcEval1<-function(eval0, rename=T, len = 3){ #c("trainedOn","measure","subpheno")
   if(rename)eval0=.renameModels(eval0, len=len)
-  
+
    eval = eval0 %>% tibble::add_column(cohort_measure= apply(eval0[,names(eval0) %in% c("data","measure")],1,paste, collapse=" "),
                                        pheno_subpheno= apply(eval0[,names(eval0) %in% c("pheno","subpheno")],1,paste, collapse=" "),
                                        cohort_measure_pheno_trained= apply(eval0[,names(eval0) %in% c("data","subpheno","measure","pheno","trainedOn","transform_y")],1,paste, collapse=" ")
