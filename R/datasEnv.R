@@ -432,25 +432,26 @@ datasEnv<-R6Class("datasEnv", public = list(
     flags_out = list(train=train_nme,  max=maxsize, 
                      nreps = nreps, beam=beam,func_str = func_str,
                      topn = num_pvals, pthresh =exp(logpvthresh), data_types = incl)
-   #funcst = func_str[[1]]
+    phens_index = 1:length(phens)
+    names(phens_index) = names(phens)
+   #funcst = func_str[[1]]; k=1;p_index = phens_index[[1]]
     vars_combined=lapply(func_str,function(funcst){
       print(funcst)
      variables=lapply(nreps, function(k){
       print(paste("cv",k,"of",length(nreps)))
       jj1=0
       invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst))); ### update training object
-      phens_index = 1:length(phens)
-      names(phens_index) = names(phens)
-      #p_index = phens_index[[1]]
       res2=  lapply(phens_index, function(p_index){
-      subphens = phens[[p_index]]
+        subphens = phens[[p_index]]
         if(FALSE) cat(p_index); cat("\t");
       #  vars_l = list(mStateObj$new(c(),c(), NULL))  ## initialise vars_l
         vars_l =list(lapply(train_nme,function(xx) stateObj$new(subphens, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all = NULL)))
         while(logpv<logpvthresh && length(vars_l[[1]][[1]]$var)<maxsize){
-          angles_all = lapply(vars_l, function(vars){
+          #vars = vars_l[[1]]
+          angles_all = lapply(vars_l, function(vars_l1){
             nxt_vars1 =  tryCatch({
-            angles=lapply(train_nme, function(data_nme) datas1[[data_nme]]$getAngles1(subphens,vars[[1]]$var_names,incl=incl,k=k, type=self$type))
+              varnames = vars_l1[[1]]$var_names; type = self$type
+            angles=lapply(train_nme, function(data_nme) datas1[[data_nme]]$getAngles1(subphens,varnames,incl=incl,k=k, type=type))
             names(angles) = train_nme
             cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl)
              comb1=.combineAngles(angles,cols_incl,topn=topn)
@@ -460,7 +461,7 @@ datasEnv<-R6Class("datasEnv", public = list(
            #   print(ik)
              b_i_name = comb[[ik]]
                
-               nv = .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], vars, b_i_name,k, funcst)
+               nv = .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], vars_l1, b_i_name,k, funcst)
               attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){
                  unlist(nv1$pvs)
                })))

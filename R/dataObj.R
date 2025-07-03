@@ -806,7 +806,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
     beta_new1=0;
     const_term=0
 #    if(ncol(x_)>1){
-      yp1 =  x_[nonNAk,-ncol(x_),drop=F ] %*%  betas1 [,kk,drop=F]
+      yp1 =  x_[,-ncol(x_),drop=F ] %*%  betas1 [,kk,drop=F]
       if(project){ 
         UDVP1=UDVPObj$new(self, NULL,yp1) #,check=F, centralise=F)
         Wall1 = UDVP1$getWall(x_[,ncol(x_)], matrix(1))
@@ -815,7 +815,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
         Wall1 = diag(2)
       }
       #x = cbind(yp1, x[,ncol(x)])
-      x = cbind(yp1, x1_[nonNAk,1])
+      x = cbind(yp1[nonNAk], x1_[nonNAk,1])
       dimnames(x)[[2]] = c("predicted","x")
  #   }
     if(family=="multinomial"){
@@ -1641,10 +1641,10 @@ phensi=function(phens){
   phensi
 },
 ##incl is which of the layers to include
-getAngles1=function(phens,vars,incl=names(self$data), k=1,type="slow1"){
-  var=lapply(vars, self$convert)
- phensi = self$phensi(phens)
- names(phensi)=names(phens)
+getAngles1=function(subphens,varnames,incl=names(self$data), k=1,type="slow1"){
+  var=lapply(varnames, self$convert)
+ phensi = self$phensi(subphens)
+ names(phensi)=names(subphens)
   self$getAngles(phensi,var ,incl=incl, k=k, type=type)
 },
   getAngles=function(phensi, var,incl=names(self$data), k=1,type="slow1"){  ## type can be fast, slow, assoc, slow1 .. fast gives wrong results
