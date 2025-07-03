@@ -978,18 +978,37 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
       }
       
     }
-      if(TRUE){  ##this consistent for pvs??
         yp_new = x %*% beta_new1 
-        m1=lm(y~x[,1])
-        m2=lm(y~yp_new[,1])
-        ll1 = logLik(m2)
-        ll2 =  logLik(m1)
-        pv1 = .lrt(ll1,ll2,2,1, log.p=T)
+        if(family=="multinomial"){
+          m1 = try(multinom(y~x[,1],weights=w, trace=F))
+          m2 = try(multinom(y~yp_new,weights=w, trace=F))
+          sm1  = summary(m1, digits=3)
+          sm2  = summary(m2, digits=3)
+          pv1 = pchisq(sm1$deviance,df=1,low=F)
+          pv2 = pchisq(sm2$deviance,df=1,low=F)
+          ll2 = -0.5 * sm2$deviance  
+          ll1 = -0.5 *sm1$deviance        
+          pv1 = .lrt(ll2,ll1,2,1, log.p=T)
+        }else if(family=="ordinal"){
+          x1 = x[,1]
+          df1 = data.frame(cbind(y,x1 ));df1$y=factor(df1$y, levels = sort(unique(df1$y)))  
+          m1=polr(y~x1,  data=df1,weights=w,Hess=T, method="logistic")
+          df1$x1 =  yp_new[,1]
+          m2=polr(y~x1,  data=df1,weights=w,Hess=T, method="logistic")
+          ll1 = logLik(m1)
+          ll2 =  logLik(m2)
+          pv1=.lrt(ll2,ll1,2,1,log.p=T)          
+        }else{
+          m1=lm(y~x[,1])
+          m2=glm(y~yp_new[,1], family=family)
+          ll2 = logLik(m2)
+          ll1 =  logLik(m1)
+          pv1 = .lrt(ll2,ll1,2,1, log.p=T)
+        }
         
-      }
       
       pvs[[kk]] = pv1
-       betas[[kk]] = (Wall1 %*% beta_new1)[,1]
+       betas[[kk]] = if(family=="multinomial") Wall1 %*% beta_new1 else   (Wall1 %*% beta_new1)[,1]
       constants[[kk]] = const_term  #-mean_adj*beta_new1
   }
   list(betas=betas, constants = constants,tbls = tbls, pvs = pvs)
@@ -1043,7 +1062,6 @@ makeModels=function(phens1, vars2, k,
                    func_str="function(y) y"
                   ){
   phen2 = phens1
- 
   ypred=self$ypred(phen2)
   transform_func = eval(str2lang(func_str))
   #if(length(phen2)>1) stop("just one group .. need to fix for multiple types")
@@ -1091,7 +1109,7 @@ makeModels=function(phens1, vars2, k,
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
     betas = prev_i$betas
     b_new_proj = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=project,convert=F,    strict=T, useglm=useglm) 
-  #  b_new_proj1 = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=T,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
+    #b_new_proj1 = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=F,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
     
     betas_new = b_new_proj$betas
       constants_proj =if(family=="multinomial") b_new_proj$constants[[1]] else b_new_proj$constants

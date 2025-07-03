@@ -1,17 +1,17 @@
 
-.getPvsAll<-function(subphens,datas, vars, b_i_name,k, funcst){
+.getPvsAll<-function(subphens,datas1, vars_l1, b_i_name,k, funcst, project=T){
   transform_func = eval(str2lang(funcst))
   #var_new = c(prev_i$var,b_i)
-  nmesd = names(datas); names(nmesd)=nmesd
+  nmesd = names(datas1); names(nmesd)=nmesd
   #nmed = nmesd[[1]]
   pvs_all= lapply(nmesd, function(nmed){
-    d = datas[[nmed]]
-    prev_i = vars[[nmed]]
+    d = datas1[[nmed]]
+    prev_i = vars_l1[[nmed]]
     #b_i1 = var_new[[length(var_new)]]
     #prev_var =  var_new[-length(var_new)]
     #prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,ypred, project=project, useglm=useglm, logpthresh =logpthresh,)
     family = strsplit(names(subphens)[[1]],"\\.")[[1]][1]
-    prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=NULL, project=T, useglm=T, logpthresh =0)
+    prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=NULL, project=project, useglm=T, logpthresh =0)
     prev_i1
   })
   pvs_all
@@ -413,6 +413,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   select=function(phens,flags,verbose=F ){
     nreps1 =ncol(self$datas[[1]]$looc$incl)
     datas1 = self$datas
+    project=.readFlag(flags,"project",T)
     topn = .readFlag(flags,'topn', 20)
     train_nme = .readFlag(flags,'train', names(datas1))
     train_nme = train_nme[train_nme %in% names(datas1)]
@@ -458,10 +459,8 @@ datasEnv<-R6Class("datasEnv", public = list(
             comb=.summariseAngles(comb1,topn)
             num_pvals1 = min(num_pvals, length(comb))
             nxt_vars = lapply(1:num_pvals1, function(ik){
-           #   print(ik)
-             b_i_name = comb[[ik]]
-               
-               nv = .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], vars_l1, b_i_name,k, funcst)
+               b_i_name = comb[[ik]]
+               nv = .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], vars_l1, b_i_name,k, funcst, project = project)
               attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){
                  unlist(nv1$pvs)
                })))
