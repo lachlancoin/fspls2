@@ -53,7 +53,7 @@ liability1<-function(yp,const, liab=T){
   ac = t(apply(ab,1,function(x)diff(c(0, x, 1))))
   ac
 }
-liability<-function(xM){
+liability_old<-function(xM){
   levs = attr(xM,"levs")
   alias = apply(xM,1,.cntNA)==0
   M = xM[alias,,drop=F]
@@ -63,12 +63,18 @@ liability<-function(xM){
   su = apply(M1,1,sum)
   pr = t(apply(M1,1,.prob))
   pr
-  # res = rep(NA,length(alias))
-  #  res[alias] = apply(pr,1,.samp,levs)
-  #  attr(xM,"levs") = levs
-  #  res
 }
-
+liability<-function(xM){ ## use with glmnet output
+  levs =dimnames(xM)[[2]]
+  alias = apply(xM,1,.cntNA)==0
+  M = xM[alias,,drop=F]
+  len =dim(M)[1]
+  M1 = exp(M)
+  dimnames(M1)[[2]] = levs
+  su = apply(M1,1,sum)
+  pr = t(apply(M1,1,.prob))
+  pr
+}
 
 
 .calcYpred_multinom<-function(prev_kj, data, ind_1,levs,

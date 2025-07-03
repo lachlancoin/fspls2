@@ -302,6 +302,7 @@ datasEnv<-R6Class("datasEnv", public = list(
 #    print(inds)
     logpthresh= log(.readFlag(flags,"pthresh",1e-3))
     project=.readFlag(flags,"project",TRUE)
+    useoffset=.readFlag(flags,"useoffset",TRUE)
     train_nme = .readFlag(flags,'train', names(datas)[1])
     if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
     verbose=.readFlag(flags,"verbose",FALSE)
@@ -315,7 +316,7 @@ datasEnv<-R6Class("datasEnv", public = list(
         mods1 = lapply(inds1, function(k){
           #d =datas[[1]]
             lapply(datas[names(datas) %in% train_nme], function(d){
-              mods = d$makeModels(phens1, vars2,k,logpthresh = logpthresh,project=project, func_str=func_str)
+              mods = d$makeModels(phens1, vars2,k,logpthresh = logpthresh,project=project, func_str=func_str, useoffset=useoffset)
             })
           #})
         })

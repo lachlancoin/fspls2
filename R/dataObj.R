@@ -1,5 +1,23 @@
 default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC"}')
 
+multinom_ridge<-function(x,y,w,lambda=NULL){
+  if(is.null(dim(x))){
+    one_inds = 1:2
+    x = cbind(1,x)
+  }else{
+    one_inds = 1
+  }
+#  m1=(multinom(y~x,weights=w, trace=F))
+#  sm1  = summary(m1)
+  
+  ridge=glmnet(x,y, family="multinomial", alpha=0, weights=w, lambda=lambda)
+  rbeta <- coef(ridge,s=min(ridge$lambda))
+  rdf = as.matrix(data.frame(lapply(rbeta, as.matrix)))
+  dimnames(rdf)[[2]]= names(rbeta)
+  devs = deviance(ridge)
+  list(const = apply(rdf[one_inds,,drop=F],2,sum), beta = rdf[-one_inds,],dev= devs[length(devs)])
+}
+
 ## gets matrices without NAs
 .oneVRest<-function(y){
   res = data.frame(lapply(1:ncol(y), function(i){
@@ -473,6 +491,7 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, transform_func,convert=T, betas 
     family=getOption("fspls.family",self$family[phensi1])
     phensi_=subphens[[nme]]
     betas1 = betas[[nme]]
+    if(family=="multinomial") useoffset=F
     if(!is.null(betas1) && length(prev_var)>0 ){
       res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, prev_var, transform_func,betas1,project=project, strict=strict,useglm=useglm, useoffset=useoffset)
     }else{
@@ -563,14 +582,10 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
     if(family=="multinomial"){
       ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
-      m1 = try(multinom(y~x,weights=w, trace=F))
-      if(inherits(m1,"try-error")){
-        stop("multinom error")
-      }
-      sm  = summary(m1, digits=3)
-      pv1 = pchisq(sm$deviance,df=1,low=F)
-      beta_new1=sm$coefficients[,2]
-      const_term = sm$coefficients[,1]
+      rdf = multinom_ridge(x,y,w)
+      #logpv1 = pchisq(rdf$dev/2,df=1,low=F,log=T)
+      beta_new1=rdf$beta
+      const_term = rdf$const
     }else if(family=="ordinal" ){
       ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
@@ -592,7 +607,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
           m1=glm(yn~x, family="binomial", weights=w)
           #warning("polr error .. using gaussian!!")
           #m1=glm(y~x, family="gaussian", weights=w)
-          sm  = summary(m1, digits=3)
+          sm  = summary(m1)
           coeff = sm$coeff[2,]
           pv1 = coeff[4];
           pv1 = 1.0;
@@ -611,7 +626,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
       }else{
         stop("here")
         m1=glm(y~x, family="binomial", weights=w)
-        sm  = summary(m1, digits=3)
+        sm  = summary(m1)
         coeff = sm$coeff[2,]
         pv1 = coeff[4]
         beta_new1=coeff[1]
@@ -760,6 +775,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
 ##project variable controls whether the projection of the variable is fitted, or the variable itself
 calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,betas1, project=F, strict=F, useoffset = F,useglm=getOption("glmnet",T)){
   data = self
+  if(!useoffset) project=F
   nonNA = self$looc$incl[,k]
   vars1 = c(prev_var,list(b_i)) 
   data$updateUDVP(prev_var)
@@ -783,7 +799,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
   
   UDV = data$UDVP ## should check it corresponds to prev_i
   x1_ = x_[,ncol(x_), drop=F]
-  if(project){
+  if(useoffset && project){
         x1_ = x1_ - UDV$P %*% (UDV$VDU %*% x1_)
         if(FALSE){ ##THIS DEMONSTRATE ORTHOGONALITY
               unlist(lapply( 1:length(UDV$var), function(jk){
@@ -805,32 +821,43 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
     w = data$weights[nonNAk]
     beta_new1=0;
     const_term=0
-#    if(ncol(x_)>1){
-      yp1 =  x_[,-ncol(x_),drop=F ] %*%  betas1 [,kk,drop=F]
+    Wall1 = NULL
+    yp1 =  if(family=="multinomial")  x_[,-ncol(x_),drop=F ] %*%  betas1  else x_[,-ncol(x_),drop=F ] %*%  betas1 [,kk,drop=F]
+    
+    if(useoffset){
       if(project){ 
         UDVP1=UDVPObj$new(self, NULL,yp1) #,check=F, centralise=F)
-        Wall1 = UDVP1$getWall(x_[,ncol(x_)], matrix(1))
+        Wall1 = UDVP1$getWall(x_[,ncol(x_)], diag(1))
      # Walls[[kk]] = Wall1
       }else{
-        Wall1 = diag(2)
+        Wall1 = diag(ncol(yp1))
       }
       #x = cbind(yp1, x[,ncol(x)])
-      x = cbind(yp1[nonNAk], x1_[nonNAk,1])
-      dimnames(x)[[2]] = c("predicted","x")
- #   }
+      x = cbind(yp1[nonNAk,], x1_[nonNAk,1])
+      dimnames(x)[[2]] = c(paste0("A",1:(ncol(x)-1)),"x")
+    }else{
+      x = x_
+    }
+    yp1 = yp1[nonNAk,,drop=F]  
     if(family=="multinomial"){
        ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
-      m1 = try(multinom(y~as.matrix(x),weights=w, trace=F))
-      if(inherits(m1,"try-error")){
-        stop("multinom error")
-      }
-      sm  = summary(m1, digits=3)
-      beta_new1=t(sm$coefficients[,-1,drop=F])
+      
+      rdf=multinom_ridge(x,y,w)
+      const_term = rdf$const
+      beta_new1 =  rdf$beta
+      #xM = x %*% beta_new1
+      
+      #m1 = try(multinom(y~as.matrix(x),weights=w, trace=F))
+    #  if(inherits(m1,"try-error")){
+    #    stop("multinom error")
+    #  }
+    #  sm  = summary(m1)
+    #  beta_new1=t(sm$coefficients[,-1,drop=F])
     #  if(ncol(beta_new1)!=ncol(x) && ncol(x)==1){
      #   beta_new1 = t(beta_new1)
     #  }
-      const_term = sm$coefficients[,1]
+     # const_term = sm$coefficients[,1]
     }else if(family=="ordinal" ){
       use_bin = length(unique(y))<=2
        ty=as.list(table(y))
@@ -854,7 +881,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
           m1=glm(yn~as.matrix(x), family="binomial", weights=w)
           #warning("polr error .. using gaussian!!")
           #m1=glm(y~x, family="gaussian", weights=w)
-          sm  = summary(m1, digits=3)
+          sm  = summary(m1)
           beta_new1=sm$coefficients[-1,1]
           const_term = -1*sm$coefficients[1,1]
         }else{
@@ -866,7 +893,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
       }else{
         stop("here")
         m1=glm(y~as.matrix(x), family="binomial", weights=w)
-        sm  = summary(m1, digits=3)
+        sm  = summary(m1)
         beta_new1=sm$coefficients[-1,1]
         const_term = -1*sm$coefficients[1,1]
       }
@@ -978,28 +1005,23 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
       }
       
     }
-        yp_new = x %*% beta_new1 
+        yp_new = x %*% beta_new1
         if(family=="multinomial"){
-          m1 = try(multinom(y~x[,1],weights=w, trace=F))
-          m2 = try(multinom(y~yp_new,weights=w, trace=F))
-          sm1  = summary(m1, digits=3)
-          sm2  = summary(m2, digits=3)
-          pv1 = pchisq(sm1$deviance,df=1,low=F)
-          pv2 = pchisq(sm2$deviance,df=1,low=F)
-          ll2 = -0.5 * sm2$deviance  
-          ll1 = -0.5 *sm1$deviance        
+          m1 = multinom_ridge(yp1,y,w)
+          m2 = multinom_ridge(yp_new,y,w)
+          ll2 = -0.5 * m2$dev  
+          ll1 = -0.5 *m1$dev        
           pv1 = .lrt(ll2,ll1,2,1, log.p=T)
         }else if(family=="ordinal"){
-          x1 = x[,1]
-          df1 = data.frame(cbind(y,x1 ));df1$y=factor(df1$y, levels = sort(unique(df1$y)))  
-          m1=polr(y~x1,  data=df1,weights=w,Hess=T, method="logistic")
-          df1$x1 =  yp_new[,1]
-          m2=polr(y~x1,  data=df1,weights=w,Hess=T, method="logistic")
+          df1 = data.frame(cbind(y,yp1 ));df1$y=factor(df1$y, levels = sort(unique(df1$y)))  
+          m1=polr(y~yp1,  data=df1,weights=w,Hess=T, method="logistic")
+          df1$yp1 =  yp_new[,1]
+          m2=polr(y~yp1,  data=df1,weights=w,Hess=T, method="logistic")
           ll1 = logLik(m1)
           ll2 =  logLik(m2)
           pv1=.lrt(ll2,ll1,2,1,log.p=T)          
         }else{
-          m1=lm(y~x[,1])
+          m1=glm(y~yp1[,1],family=family)
           m2=glm(y~yp_new[,1], family=family)
           ll2 = logLik(m2)
           ll1 =  logLik(m1)
@@ -1008,7 +1030,11 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
         
       
       pvs[[kk]] = pv1
+      if(project){
        betas[[kk]] = if(family=="multinomial") Wall1 %*% beta_new1 else   (Wall1 %*% beta_new1)[,1]
+      }else{
+        betas[[kk]] = beta_new1
+      }
       constants[[kk]] = const_term  #-mean_adj*beta_new1
   }
   list(betas=betas, constants = constants,tbls = tbls, pvs = pvs)
@@ -1056,9 +1082,9 @@ extractData=function(var, adjust=T){
   Dall
 },
 
-#vars2 = vars_all[[1]]$variables[[1]];phens1 = phens[[1]]; k=1
+#vars2 = vars_all[[1]]$variables[[1]];phens1 = phens[[1]]; k=1; useoffset=T
 makeModels=function(phens1, vars2, k, 
-                    project=T,logpthresh = -5,useglm=T,
+                    project=T,logpthresh = -5,useglm=T,useoffset=F,
                    func_str="function(y) y"
                   ){
   phen2 = phens1
@@ -1081,10 +1107,11 @@ makeModels=function(phens1, vars2, k,
   models = vector("list", len)
   useglm=getOption("glmnet",T)
   family = getOption("fspls.family",self$family[[1]]) #ypred$family[[1]]
+  if(family=="multinomial") useoffset=F
   nme1 = ""
   for(jk in 1:len){
     b_i_name = vars2[[jk]]
-    prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=ypred, project=project, useglm=useglm, logpthresh =logpthresh,)
+    prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=ypred, project=project, useglm=useglm, logpthresh =logpthresh,useoffset=useoffset)
     if(is.null(prev_i1)) break;
     nme2 = paste(vars2[[jk]], collapse=".")
     nme1 = if(jk==1)  nme2 else paste(nme1, nme2,sep=";")
@@ -1097,6 +1124,7 @@ makeModels=function(phens1, vars2, k,
   models
 },
  makeNextModel=function(prev_i, b_i_name, subphens, k, transform_func, family, ypred=NULL, project=T, useglm=T,    logpthresh = -5,
+                        useoffset=F,
                         CHECK=getOption("fspls.check",F),
                         verbose=getOption("fspls.verbose1",F)) {
    data =self
@@ -1108,8 +1136,8 @@ makeModels=function(phens1, vars2, k,
     #W_all = data$calcWall(b_i, prev_i$var, prev_i$W_all) ## WALL not important, we can get rid of it later
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
     betas = prev_i$betas
-    b_new_proj = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=project,convert=F,    strict=T, useglm=useglm) 
-    #b_new_proj1 = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=F,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
+    b_new_proj = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=project,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
+   # b_new_proj1 = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=!project,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
     
     betas_new = b_new_proj$betas
       constants_proj =if(family=="multinomial") b_new_proj$constants[[1]] else b_new_proj$constants
@@ -1120,7 +1148,7 @@ makeModels=function(phens1, vars2, k,
       return(NULL)
       }
     tbls = if(family=="multinomial") b_new_proj$tbls[[1]]  else b_new_proj$tbls
-    prev_i1=stateObj$new(subphens,data, betas_new,constants_proj, tbls, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = NULL,pvs =pvs)
+    prev_i1=stateObj$new(subphens,data, betas_new,constants_proj, tbls, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = NULL,pvs =pvs, useoffset=useoffset)
   #  prev_i1$setOffset() 
     prev_i1$setOffset()
     if(FALSE){ ##JUST TO CHECK WHAT GLM VARIABLES  WOULD BE IF WE JUST FIT ALL
@@ -1128,14 +1156,32 @@ makeModels=function(phens1, vars2, k,
       means_x = apply(extractd0,2,mean)
       extractd = self$extractData(c(prev_i$var, list(b_i)), adjust=T)
       df2 = data.frame(lapply(subphens[[1]], function(colind){
-        nonNAy = !is.na(self$y[[1]][,colind])
+       
         family = getOption("fspls.family",self$family)
+        if(family=="multinomial"){
+          y_m = attr(self$y[[1]],"factor")
+          m1 = try(multinom(y~as.matrix(extractd0),weights=w, trace=F))
+          if(inherits(m1,"try-error")){
+            stop("multinom error")
+          }
+          sm  = summary(m1)
+          betas_n1 = t(sm$coefficients[,-1])
+          xM = t(t(extractd0 %*% betas_n1)+ sm$coefficients[,1])
+          attr(xM, "levs") = levels(y_m)
+          x_p = liability(xM)
+          roc(self$y[[1]][,1],x_p[,1])
+          roc(self$y[[1]][,2],x_p[,2])
+          roc(self$y[[1]][,3],x_p[,3])
+          list(betas_n1, prev_i1$betas[[1]])
+        }else{
+          nonNAy = !is.na(self$y[[1]][,colind])
         ridge=glmnet(cbind(1,extractd0[nonNAy,]),self$y[[1]][nonNAy,colind,drop=F] ,family=family, alpha = 0)
         rbeta <- coef(ridge,s=min(ridge$lambda))
         ridge1 = glmnet(cbind(1, extractd0[nonNAy,] %*%  rbeta[-(1:2),,drop=F]), self$y[[1]][nonNAy,colind,drop=F], family = family, alpha=0)
         rbeta1 <- coef(ridge1,s=min(ridge1$lambda))
         print(rbeta1)
-        cbind(rbeta[-(1:2),],prev_i1$betas[[1]])
+        return(cbind(rbeta[-(1:2),],prev_i1$betas[[1]]))
+        }
 #        (rbeta[-(1:2),] - prev_i1$betas[[1]][,colind,drop=F])
       }))
       print(df2)
