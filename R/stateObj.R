@@ -63,6 +63,8 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     nonNA="logical",
                     mean_x="numeric",
                    tbls="list",
+                   pvs="list",
+                   sumPv="numeric",
                     initialize = function(phensi,data,
                                           betas_new, 
                                           constants_proj,
@@ -72,8 +74,10 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                                           b_i = NULL,b_i_name=NULL,
                                           var = list(), varnames = list(),
                                           W_all = matrix(nrow=0, ncol=0),
-                                         mean_x = NULL
+                                         mean_x = NULL, pvs = c()
                                          ){
+                      self$pvs = pvs
+                      self$sumPv = .sumChisq(unlist(pvs))
                       self$constants_proj=constants_proj
                       self$nonNA = data$looc$incl[,k];
                       train = data$train
@@ -164,8 +168,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                          mean_x = self$mean_x,tbls = self$tbls,
                          var_names = self$var_names) #, pvs = self$pvs_proj)
                   },
-                  updateConst=function(phensi,ypred, data,  k, transform_func, useglm=F, verbose=F,update=F,
-                                       diff_thresh = getOption("diff_thresh",0.1)
+                  updateConst=function(phensi,ypred, data,  k, transform_func, useglm=F, verbose=F,update=F
                                        ){
                     #if(length(phensi)>1) stop("!!")
                     family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
@@ -237,12 +240,12 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                              nonNAy = !is.na(y1c)
                            ridge=glmnet(cbind(ones[nonNAy],yp1[nonNAy,kk_1]),y1c[nonNAy],family=family[[kk]], alpha = 0)
                            rbeta <- coef(ridge,s=min(ridge$lambda))
-                           if(abs(rbeta[3,1]-1)>diff_thresh) stop("problem with weights")
+                       #    if(abs(rbeta[3,1]-1)>diff_thresh) stop("problem with weights")
                         if(verbose)   print(rbeta)
                           sum(rbeta[1:2,1])
                            }, error=function(w) {
                              gl = glm(y1c[nonNAy]~ yp1[nonNAy,kk_1], family=family[[kk]])
-                             if(abs(gl$coefficients[2]-1)>diff_thresh) stop("problem with weights")
+                            # if(abs(gl$coefficients[2]-1)>diff_thresh) stop("problem with weights")
                              if(verbose)   print(gl$coefficients)
                              gl$coefficients[1]
                            

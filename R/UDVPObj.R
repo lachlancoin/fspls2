@@ -19,39 +19,35 @@ UDVPObj<-R6Class("UVDPObj", public = list(
   I="matrix",
   P2="matrix",
   var="vector",
-  initialize=function(data,var1, check=F,centralise=F
+  initialize=function(data,var1,
+                      P= data$extractData(var1, adjust=T),
+                      check=F,centralise=F
                       ){  ## d = train[[i]] ## already centralised
     #d = data$train
     nonNA = rep(T, data$nrow) # use all  data$train$nonNA
-    var_df = data.frame(var1)
+   # var_df = data.frame(var1)
     self$var = var1
     #var=var1
-    x_all = lapply( 1:length(data$data), function(k){
-      var1_inds = which(var_df[1,]==k)
-      var1_ = as.numeric(var_df[2,var1_inds])
-      x = if(length(var1_)==0) data$data[[k]][, 1,drop=F][,c()] else as.matrix(data$data[[k]][, var1_,drop=F])
-      if(length(var1_)>0){
-        for(j in 1:ncol(x)){
-          x[,j] = x[,j]- data$mean_x[[k]][var1_[j]]  ## changed this so that projection is based on full matrix
-        }
-      }
-      x
-    })
-    x_all = x_all[unlist(lapply(x_all, function(ab) !is.null(dim(ab))))]
-    x11 = as.matrix(data.frame(x_all))
-    if(ncol(x11) <length(var1)) {
-      print(var1)
-      print(length(x_all))
-      print(unlist(lapply(x_all, length)))
-      print(dim(x11))
-      stop("error")
-    }
+  #  x_all = lapply( 1:length(data$data), function(k){
+  #    var1_inds = which(var_df[1,]==k)
+  ##    var1_ = as.numeric(var_df[2,var1_inds])
+  #    x = if(length(var1_)==0) data$data[[k]][, 1,drop=F][,c()] else as.matrix(data$data[[k]][, var1_,drop=F])
+  #    if(length(var1_)>0){
+  #      for(j in 1:ncol(x)){
+  #        x[,j] = x[,j]- data$mean_x[[k]][var1_[j]]  ## changed this so that projection is based on full matrix
+  #      }
+  #    }
+  #    x
+  #  })
+  #  x_all = x_all[unlist(lapply(x_all, function(ab) !is.null(dim(ab))))]
+  #  x11 = as.matrix(data.frame(x_all))
+    
     inds = which(nonNA)
     
     if(length(inds)==0) stop(" should not be zero")
     #  P = data[,colinds,drop=F]
-    P = x11
-    lengthvars =length(var1) #ncol(P)
+    #P = x11
+    lengthvars =ncol(P) #ncol(P)
     if(centralise) P= apply(P, 2, .centralise, inds)  ##NEED TO REVISIT CENTRALISATION ON FLY
     
     if(lengthvars==0){
@@ -120,6 +116,19 @@ getW=function(){
   Vinv = UDV$Vinv
   W = Vinv %*% Dinv %*% t(U)
   W
+},
+getWall=function(x, W_all1){
+  UDV=self
+  W = W_all1
+  if(nrow(W)==0){
+    Wall=matrix(1)
+  }else{
+    
+    W_h_best_i= UDV$VDU %*%  x    ##UDV$VDU[,nonNA,drop=F] %*%  x  #d$x[,b_i]
+    Wall3 = cbind(W,-W_h_best_i[,1])
+    Wall=rbind(Wall3,c(rep(0,ncol(Wall3)-1),1))
+  }
+  Wall
 },
 P2_old=function(){
   P = self$P

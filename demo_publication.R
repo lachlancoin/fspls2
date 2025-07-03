@@ -38,36 +38,60 @@ invisible(try(lapply(paste("./R",src1,sep="/"), function(x) {print(x);source(x)}
 #rawl = .readRawlinsonData('coin_multiclass_data');
 path="~/github/FSPLS-publication-repo/input"
 print(dir(path,full=T,rec=T))
+
+
+flags = list(pthresh = 1e-2, nrep=1,batch=0, max=50,topn=100,beam=1,all_v_all=F, one_v_rest=T)
+flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)", "x3":"function(x) x^3","1x":"function(x) 1/x"}'
+flags[['transform']] = '{"x" :"function(x) x","log" :"function(x) log1p(x)"}'
+
+flags[['transform']] = '{"x" :"function(x) x"}'
+
 rawl = .readRawlinsonData(filenames=list(golub = 'coin_data/coin_multiclass_data.prepd.Rds'), path= path)
 rawl = .readRawlinsonData(filenames=list(golub = 'ng_data/ng_counts.prepd.Rds'), path= path)
+rawl = .readRawlinsonData(filenames=list(golub = 'golub_data/golub.prepd.Rds'), path= path)
+rawl = .readRawlinsonData(filenames=list(golub = 'alvez_data/alvez_data.prepd.Rds'), path= path)
+dir("/home/unimelb.edu.au/lcoin/github/FSPLS-publication-repo/output/")
+rds = readRDS("/home/unimelb.edu.au/lcoin/github/FSPLS-publication-repo/output/alvez_kfold_results_unweighted.Rds")
 
-
-flags = list(pthresh = 1e-5, nrep=10,batch=0, train=names(rawl$datasets)[1],topn=100,beam=1)
 
 ## MAKE THE FSPLS DATA OBJECT
-datas =datasEnv$new(rawl,flags=flags) 
+datasAll =datasEnv$new(rawl,flags=flags) 
+datasAll$update(flags)
 
-
-phens=datas$pheno()[1]
+phens=datasAll$pheno(sep=T)
+phens = phens[1]
+#phens$all$binomial.multiway = phens$all$binomial.multiway[2]
 ## FIND VARIABLES
-variables = datas$select(phens, flags)
-print(variables)
+vars_all = datasAll$select(phens, flags,verbose=T)
 ## FIT MODELS
-all_models = datas$makeAllModels(variables, phens, flags)
-eval = datas$evaluateAllModels(all_models, phens, flags)
-
+options("fspls.verbose1"=F)
+all_models = datasAll$makeAllModels(vars_all, phens, flags)
+xv = unlist(lapply(1:length(all_models[[1]]), function(i){
+      (.sumChisq((unlist(all_models[[1]][[i]][[1]]$full$golub$pvs))))
+}))
+plot(exp(xv))
+eval = datasAll$evaluateAllModels(all_models, phens, flags)
 ##PLOT
-ggps = .plotEval1(eval, rename=F, len=1)
+eval1 = .calcEval1(eval, rename=F)
+ggps = .plotEval1(eval1, legend=T, showrange=F)
 #for multinomial or ordinal
-#ggps = .plotEval1(eval, rename=F,grid="subpheno~cv", sep="pheno")
+#ggps = .plotEval1(eval, rename=F,grid="subpheno~cv", sep="pheno",sep=)
 ggps
 
+ggps=.plotEval1(eval1,grid0="pheno", showranges=T, scales="free",sep="cv_full")
 
+ggps=.plotEval1(eval1,  grid0="pheno",grid1="", showranges=T, scales="free", sep="cv_full")
+
+
+ggps
 ##VISUALISE PREDICTIONS
-predictions =datas$extractPredictions(all_models,phens, flags, CV = F);
-#aa=roc(predictions[[2]]$y, predictions[[2]]$X0)
-.plotArea(predictions, rename=F)
+predictions0 =datasAll$extractPredictions(all_models,phens, flags, CV = F, liab=F);
 
+predictions1 =datasAll$extractPredictions(all_models,phens, flags, CV = T, liab=F);
+
+#aa=roc(predictions[[2]]$y, predictions[[2]]$X0)
+ggps = .plotArea1(predictions1, rename=F, max=10)
+ggps
 
 ### get projection
 varnames = variables[[length(variables)]]$var

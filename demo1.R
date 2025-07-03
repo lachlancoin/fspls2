@@ -78,20 +78,20 @@ meta = .expandAllvAll(meta,"predicted_labels_fine")
 ys=list(pbmc=meta)
 datasets = list(pbmc=list(counts=counts1))
 mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1, hasNA=F)))
-flags = list(pthresh = 1e-5, max=100, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T,all_v_all=F)
-datas =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
-phens=datas$pheno()
-#phens$all[[1]] = phens$all[[1]]
+flags = list(pthresh = 1e-10, max=50, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T,all_v_all=F)
+datasAll =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
+phens=datasAll$pheno()
+phens$all$binomial = phens$all$binomial[1]
 #phens$all = phens$all[2]
 ## FIND VARIABLES
-vars_all = datas$select(phens, flags)
+vars_all = datasAll$select(phens, flags, verbose=T)
 
 ## FIT MODELS
 options("fspls.verbose1"=T)
 phens_ = phens
 #phens_[[1]][[1]] = phens[[1]][[1]][10]
 #all_models_ = datas$makeAllModels(vars_all, phens_, flags)
-all_models = datas$makeAllModels(vars_all, phens, flags)
+all_models = datasAll$makeAllModels(vars_all, phens, flags)
 
 #betas_save = all_models_[[1]]$`counts.CD74;counts.FTH1;counts.CCL5;counts.HLA-DRB1;counts.RPS12;counts.LYZ;counts.GNLY;counts.NIBAN1;counts.IGHM;counts.BANK1`$all$full$pbmc$betas$binomial
 #print(betas_save)
@@ -108,7 +108,7 @@ all_models = datas$makeAllModels(vars_all, phens, flags)
 
 options("diff_thresh"=0.1)
 
-eval = datas$evaluateAllModels(all_models, phens, flags)
+eval = datasAll$evaluateAllModels(all_models, phens, flags)
 aa=subset(eval, pheno=="Non.classical.monocytes.cd8_Tm"  )
 grep("Naive.B", unique(eval$pheno),v=T)
 eval1 = subset(eval, numvars==100)
@@ -123,8 +123,8 @@ write_xlsx(model_weights,outw)
 ##PLOT
 #ggps = .plotEval1(eval, rename=F, len=1)
 eval1 = .calcEval1(eval)
- ggps=.plotEval1(eval1, rename=F, len=1, grid="pheno", showranges=F)
-ggps
+ ggps2=.plotEval1(eval1,  grid0="pheno", showranges=T, scales="fixed", sep="cv_full", grid1="")
+ggps$`CV= avg`
 #for multinomial or ordinal
 #ggps = .plotEval1(eval, rename=T,grid="cv~subpheno", sep="pheno", txtsize=1,len=0)
 out = paste0("plot",max(eval$numvars),".pdf");
@@ -139,7 +139,7 @@ predictions =datas$extractPredictions(all_models[c(10,20,30,40,50)],phens, flags
 
 
 ### get projection
-varnames = variables[[length(variables)]]$var
+varnames = variables[[length(variables)]]$var[[1]]
 projOut=datas$getProjectedData(varnames)
 
 

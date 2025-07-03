@@ -34,7 +34,7 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[4]; pthresh = 0.001 ; randomise=F; duplicate=F
+datasets =examples[3]; pthresh = 0.01 ; randomise=F; duplicate=F
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
 
@@ -43,7 +43,7 @@ func_y = list(y="function(y) y")  #'{"y":"function(y) y","y1":"function(y) y^2"}
 runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
                  func_y = list(y="function(y) y")){
   y = datasets[[1]]$y
-  flags = list(pthresh = pthresh, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  
+  flags = list(pthresh = pthresh, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  
                transform_y =toJSON(func_y) )
   ## MAKE THE FSPLS DATA OBJECT
   if(duplicate){
@@ -62,16 +62,17 @@ runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
   ## FIT MODELS
   options("fspls.verbose1"=T)
   all_models = datasAll$makeAllModels(vars_all, phens, flags)
-  eval = datasAll$evaluateAllModels(all_models, phens, flags)
-##PLOT
+  eval0 = datasAll$evaluateAllModels(all_models, phens, flags)
+  #eval = subset(eval, model!="avg")
+  
   if(FALSE){ ## show cum plots
       predictions0 =datasAll$extractPredictions(all_models,phens, flags, CV = F, liab=F, data_nme = names(datasAll$datas)[[1]]);
       ggp_pred0=.plotArea1(predictions0, rename=T,max_vars=44)
       ggp_pred0
   }
   if(is.null(eval)) return (NULL)
-  eval2 = .calcEval1(eval)
-  ggps = .plotEval1(eval2,  legend=T)
+  eval3 = .calcEval1(eval0)
+  ggps = .plotEval1(eval3,  legend=T)
 #for multinomial or ordinal
 #ggps = .plotEval1(eval, rename=F,grid="subpheno~cv")
 ggps

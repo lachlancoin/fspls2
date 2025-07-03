@@ -14,7 +14,7 @@
       names(m2) = 1:length(m2)
       m2
     }),rec=T)
-    eval$model1 = eval$model
+    #eval$model1 = eval$model
     eval$model= (unlist(lapply(models, function(m){
       paste(names(models2)[match(m, models2)],collapse=";")
     })))
@@ -35,15 +35,10 @@ length(unique(eval1$`data:family`))
 }
 
 .calcEval1<-function(eval0, rename=T, len = 3){ #c("trainedOn","measure","subpheno")
-  if(rename)eval0=.renameModels(eval0, len=len)
-
-   eval = eval0 %>% tibble::add_column(cohort_measure= apply(eval0[,names(eval0) %in% c("data","measure")],1,paste, collapse=" "),
-                                       pheno_subpheno= apply(eval0[,names(eval0) %in% c("pheno","subpheno")],1,paste, collapse=" "),
-                                       cohort_measure_pheno_trained= apply(eval0[,names(eval0) %in% c("data","subpheno","measure","pheno","trainedOn","transform_y")],1,paste, collapse=" ")
-   )
-    #                                   sep_by = apply(eval0[,names(eval0) %in% sep_by],1,paste, collapse=" "))
-  #fullmodels = eval$model[which(eval$numvars==max(eval$numvars))]
-
+  eval0_1 = unite(eval0, "cohort_measure_pheno_trained", "data","subpheno","measure","pheno","trainedOn","transform_y",remove=F)
+  eval0_avg = subset(eval0_1, model=="avg") %>% tibble::add_column("fullmodel"="avg")
+  eval =  subset(eval0_1, model!="avg")
+  if(rename)eval=.renameModels(eval, len=len)
   cvs = unique(eval$cv)
   cohorts = unique(eval$cohort_measure_pheno_trained)
   eval2 = .merge1_new(lapply(cvs, function(cv1){
@@ -57,55 +52,42 @@ length(unique(eval1$`data:family`))
     }))
     }))
   }))
-  #
-  e3 = subset(eval2, cv==TRUE)
-  numvars = unique(e3$numvars)
-  cohort_measure = unique(e3$cohort_measure_pheno_trained)
-  #subpheno = unique(e3$subpheno)
-  if(nrow(e3)>0){
-  eval3 =# .merge1_new(lapply(subpheno, function(sp){
-    .merge1_new(lapply(cohort_measure, function(cm){
-      .merge1_new(lapply(numvars, function(nv){
-        e4=subset(e3,numvars==nv  & cohort_measure_pheno_trained==cm) #subpheno==sp)
-        e5=e4[!duplicated(e4$model),names(e4) %in% c("nsamps","low","mid","high")]
-        if(nrow(e4)==0) return(NULL)
-        e6 = e4[1,]
-        
-        e6$low=sum(apply(e5,1,function(x) x[2]*x[1]))/sum(e5$nsamps)
-        e6$mid=sum(apply(e5,1,function(x) x[3]*x[1]))/sum(e5$nsamps)
-        e6$high=sum(apply(e5,1,function(x) x[4]*x[1]))/sum(e5$nsamps)
-        e6$nsamps = mean(e5$nsamps); e6$model="avg"; e6$fullmodel="avg";
-        e6$cv="avg"
-       
-        e6
-      }))
-    }))
-  #}))
-  eval2 = rbind(eval2,eval3)
+  eval0_avg$cv="CV=avg"
+  eval2$cv = paste("CV=",eval2$cv)
+  eval21 = rbind(eval2,eval0_avg)
+  eval21$isfull = paste("FULL=",eval21$isfull);
+  eval3 = unite(eval21,"cv_full", "cv","isfull",remove=F,sep=" ")
+  eval3$cv_full[eval3$cv=="CV=avg"]=eval3$cv[eval3$cv=="CV=avg"]
+  eval3
+}
+
+.modify<-function(eval3, shape_color,
+                  shape_color_nme ){
+  if(!(shape_color_nme %in% names(eval3))){
+      eval3 = eval3 %>% tibble::add_column(shape_color_nme = apply(eval3[,names(eval3) %in% shape_color,drop=F],1,paste, collapse=" "))
+        names(eval3) = gsub("shape_color_nme", shape_color_nme, names(eval3))
   }
-      eval2$cv = paste("CV=",eval2$cv)
-      eval2$isfull = paste("FULL=",eval2$isfull);
-    
- eval3=eval2%>% tibble::add_column(cv_full= apply(eval2[,names(eval) %in% c("cv","isfull")],1,paste, collapse=" "))
-      eval3$cv_full[eval3$cv=="CV= avg"]=eval3$cv[eval3$cv=="CV= avg"]
-     
-      eval3
+  eval3
 }
 #      maxn = max(eval2$nsamps)
   #head(eval4)#pivot_wider(eval2, names_from = c("cv", "fullmodel", "numvars"), values_from ="value")
-.plotEval1<-function(eval2, rename=F, len=1,
-           shape_color="pheno_subpheno",linetype="fullmodel",showranges=T,
+.plotEval1<-function(eval3,
+           shape_color=c("pheno","subpheno"),linetype="fullmodel",showranges=T,
            txtsize=1,logy=F,legend=F,sep_by="",scales="free",
-           grid="cohort_measure~cv_full"){
-  shape_color_nme = paste(shape_color, collapse="_");
+           grid0 = c("cohort","measure"),grid1 = "cv_full"
+          ){
+ 
   linetype_nme = paste(linetype, collapse="_");
-  
-  eval2 = eval2 %>% tibble::add_column( sep_by = apply(eval2[,names(eval2) %in% sep_by,drop=F],1,paste, collapse=" "),
-                                        shape_color_nme = apply(eval2[,names(eval2) %in% shape_color,drop=F],1,paste, collapse=" "),
-                                        linetype_nme = apply(eval2[,names(eval2) %in% linetype,drop=F],1,paste, collapse=" ")
-                                        )
-  names(eval2) = gsub("shape_color_nme", shape_color_nme, names(eval2))
-  names(eval2) = gsub("linetype_nme", linetype_nme, names(eval2))
+  grid0_nme = paste(grid0, collapse="_")
+  grid1_nme = paste(grid1,collapse="_");
+  shape_color_nme = paste(shape_color,collapse="_")
+  sep_by_nme = "sep_by"
+  eval3 = .modify(eval3, shape_color, shape_color_nme)
+  eval3 = .modify(eval3, linetype, linetype_nme)
+  eval3 = .modify(eval3, sep_by, sep_by_nme)
+  eval3 = .modify(eval3,grid0, grid0_nme)
+  eval3 = .modify(eval3,grid1, grid1_nme)
+  eval2 = eval3
   
   phenos = unique(eval2$sep_by)
   names(phenos)=phenos
@@ -114,7 +96,7 @@ length(unique(eval1$`data:family`))
   subphens = table(eval2$subpheno)
   subphens = subphens[order(as.numeric(unlist(lapply(names(subphens), function(str)strsplit(str,"\\|")[[1]][1]))))]
   eval2$subpheno = factor(eval2$subpheno, levels = names(subphens))
-  
+  eval2$numvars = as.numeric(eval2$numvars)
 # eval2$isfull = (eval2$isfull+1)/2.0
   ggps=lapply(phenos, function(ph){ 
     eval5 = subset(eval2, sep_by==ph)
@@ -123,11 +105,11 @@ length(unique(eval1$`data:family`))
   if(showranges){ ## geom_ribbon vs geom_errorbar
    ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype,color=shape_color_nme, fill = shape_color_nme ), alpha = 0.1)
   }
-  if(!is.null(grid)){
-    if(length(grep("~",grid))>0){
-    ggp<-ggp+facet_grid(grid,scales=scales)
+  if(nchar(grid0_nme)>0){
+    if(nchar(grid1_nme)>0){
+       ggp<-ggp+facet_grid(paste(grid0_nme, grid1_nme,sep="~"),scales=scales)
     }else{
-      ggp<-ggp+facet_wrap(grid, scales=scales)
+      ggp<-ggp+facet_wrap(grid0_nme, scales=scales)
     }
   }
   legend_position=if(legend) "bottom" else "none";
@@ -689,6 +671,7 @@ getModels=function(models, index="full"){
 
 getAreaPlot<-function(yp, y1,title = "", input = list()){
   levs = sort( unique(y1[!is.na(y1)]))
+  if(length(levs)<=1) return(NULL)
   names(levs)=levs
   knots=sort(unique(unlist(lapply(levs, function(t){
     inds = y1==t
@@ -739,9 +722,11 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
 
 .plotArea1<-function(predictions,family="binomial",rename=T, len = 1,grid="model~pheno", p_incl="",max_vars = 100){
   nmesp1 = names(predictions); names(nmesp1) = nmesp1
+  #nme1 = nmesp1[[1]]
   lapply(nmesp1, function(nme1){
     pred1 = predictions[[nme1]]
     nmesp2 = names(pred1); names(nmesp2) = nmesp2
+    #nme2 = nmesp2[[1]]
     lapply(nmesp2, function(nme2){
       pred2 = pred1[[nme2]]
       inds = 1:length(pred2);
@@ -1361,7 +1346,8 @@ fromJSONM<-function(json){
   
   #files = grep(".Rds",dir(path,f=T,rec=T),v=T)
   datas=lapply(filenames, function(file){
-    .convert(data=readRDS(paste(path,file,sep="/")), mode="rna", expand=F)
+    data_in = readRDS(paste(path,file,sep="/"))
+    .convert(data=data_in, mode="rna", expand=F)
   })
   datasets = lapply(datas, function(d) list(dataset=d$dataset, y = d$y))
   datasets

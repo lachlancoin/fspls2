@@ -1,12 +1,18 @@
 
-.getPvsAll<-function(subphens,datas, var_new,k, transform_y){
-  transform_func = eval(str2lang(transform_y))
-  pvs_all= lapply(datas, function(d){
-    b_i1 = var_new[[length(var_new)]]
-    prev_var =  var_new[-length(var_new)]
-    sig_res = d$calcBetaProj1(subphens,k, b_i1, prev_var , transform_func,convert=T)
-    unlist(sig_res$pvs)
-    #d$train[[k]]$getPvs(prev)
+.getPvsAll<-function(subphens,datas, vars, b_i_name,k, funcst){
+  transform_func = eval(str2lang(funcst))
+  #var_new = c(prev_i$var,b_i)
+  nmesd = names(datas); names(nmesd)=nmesd
+  #nmed = nmesd[[1]]
+  pvs_all= lapply(nmesd, function(nmed){
+    d = datas[[nmed]]
+    prev_i = vars[[nmed]]
+    #b_i1 = var_new[[length(var_new)]]
+    #prev_var =  var_new[-length(var_new)]
+    #prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,ypred, project=project, useglm=useglm, logpthresh =logpthresh,)
+    family = strsplit(names(subphens)[[1]],"\\.")[[1]][1]
+    prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=NULL, project=T, useglm=T, logpthresh =0)
+    prev_i1
   })
   pvs_all
 }
@@ -85,7 +91,6 @@ datasEnv<-R6Class("datasEnv", public = list(
               flags = list(),
               mats = lapply(datasets, function(d) lapply(d$data, function(d1).getSparseMatrices(d1))),
               families=lapply(ys, function(d) .getFamily(d)),
-              
                       memDir=NULL){
     
     if(!is.null(flags$transform) & typeof(mats[[1]][[1]][[1]])=="S4"){
@@ -130,6 +135,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     genes_incls=.readFlag(flags,"genes_incls",NULL) #,getOption("genes_incls",NULL)
     batch=.readFlag(flags, "batch",0)
     all_v_all = .readFlag(flags,"all_v_all",F)
+    one_v_rest = .readFlag(flags,"one_v_rest",F)
     nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
     invisible(lapply(datas, function(data) data$init1(var_threshs, nrep=nrep,  batch = batch,genes_incls=genes_incls)))
     varn = getOption("varn",c())
@@ -137,7 +143,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     invisible(lapply(1:length(datas), function(ik) {
       y1 = ys[[ik]] #dists[[ik]]$updateYdb(cats[['cats']])
       family = families[[ik]]
-      datas[[ik]]$updateY(y1, family=family, CHECK=T, all_v_all=all_v_all)
+      datas[[ik]]$updateY(y1, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
   #    datas[[ik]]$updateYdb(dists[[ik]]$mydb, cats[['cats']])
   #    missing_vals = self$updateY(y1, family=family, CHECK=T)
       
@@ -213,6 +219,10 @@ datasEnv<-R6Class("datasEnv", public = list(
   makeAllModels=function(vars_all, phens, flags, verbose=F, max = 1e6){
     nmes_vars_all = names(vars_all); names(nmes_vars_all) = nmes_vars_all
     func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
+    #nme_v_all = nmes_vars_all[[1]]
+    
+    logpthresh= log(.readFlag(flags,"pthresh",1e-3))
+    project=.readFlag(flags,"project",TRUE)
     #nme_v_all = nmes_vars_all[[1]]
     lapply(nmes_vars_all, function(nme_v_all){
       if(verbose) print(nme_v_all)
@@ -290,6 +300,8 @@ datasEnv<-R6Class("datasEnv", public = list(
   makeModels=function(vars2, inds, phens,func_str, flags){
     datas=self$datas
 #    print(inds)
+    logpthresh= log(.readFlag(flags,"pthresh",1e-3))
+    project=.readFlag(flags,"project",TRUE)
     train_nme = .readFlag(flags,'train', names(datas)[1])
     if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
     verbose=.readFlag(flags,"verbose",FALSE)
@@ -303,7 +315,7 @@ datasEnv<-R6Class("datasEnv", public = list(
         mods1 = lapply(inds1, function(k){
           #d =datas[[1]]
             lapply(datas[names(datas) %in% train_nme], function(d){
-              mods = d$makeModels(phens1, vars2,k,func_str, verbose)
+              mods = d$makeModels(phens1, vars2,k,logpthresh = logpthresh,project=project, func_str=func_str)
             })
           #})
         })
@@ -346,9 +358,10 @@ datasEnv<-R6Class("datasEnv", public = list(
       full = repn==full_index
       var1 = variables[[repn]]
       for(phenn in names(var1)){
-        var2 = var1[[phenn]]$var
-        cumpv = var1[[phenn]]$cumpv
-        varn = paste(names(var2), collapse=";")
+        var2 = var1[[phenn]][[1]]$var_names
+        names(var2) = var1[[phenn]][[1]]$varnames
+        cumpv = lapply(var1, function(vv) attr(vv,"cumpv"))
+        varn = paste(names(var2),collapse=";") #paste(names(var2), collapse=";")
         if(is.null(vars_all[[varn]])){
           vars_all[[varn]] = list()
           vars_all1[[varn]] = var2
@@ -403,7 +416,9 @@ datasEnv<-R6Class("datasEnv", public = list(
     topn = .readFlag(flags,'topn', 20)
     train_nme = .readFlag(flags,'train', names(datas1))
     train_nme = train_nme[train_nme %in% names(datas1)]
+  
     if(length(train_nme)==0) train_nme = names(datas1)[[1]]
+    names(train_nme) = train_nme
     maxsize=.readFlag(flags,'max',50)
     num_pvals = min(topn, 10)
     incl = .readFlag(flags,'data_types',names(datas1[[1]]$data))
@@ -430,11 +445,12 @@ datasEnv<-R6Class("datasEnv", public = list(
       res2=  lapply(phens_index, function(p_index){
       subphens = phens[[p_index]]
         if(FALSE) cat(p_index); cat("\t");
-        vars_l = list(mStateObj$new(c(),c(), NULL))  ## initialise vars_l
-        while(logpv<logpvthresh && length(vars_l[[1]]$var)<maxsize){
+      #  vars_l = list(mStateObj$new(c(),c(), NULL))  ## initialise vars_l
+        vars_l =list(lapply(train_nme,function(xx) stateObj$new(subphens, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all = NULL)))
+        while(logpv<logpvthresh && length(vars_l[[1]][[1]]$var)<maxsize){
           angles_all = lapply(vars_l, function(vars){
             nxt_vars1 =  tryCatch({
-            angles=lapply(train_nme, function(data_nme) datas1[[data_nme]]$getAngles1(subphens,vars$var,incl=incl,k=k, type=self$type))
+            angles=lapply(train_nme, function(data_nme) datas1[[data_nme]]$getAngles1(subphens,vars[[1]]$var_names,incl=incl,k=k, type=self$type))
             names(angles) = train_nme
             cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl)
              comb1=.combineAngles(angles,cols_incl,topn=topn)
@@ -442,12 +458,19 @@ datasEnv<-R6Class("datasEnv", public = list(
             num_pvals1 = min(num_pvals, length(comb))
             nxt_vars = lapply(1:num_pvals1, function(ik){
            #   print(ik)
-              var_new = c(vars$var,comb[ik])
-              pv =  .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], var_new,k, funcst)
-              mStateObj$new(comb[ik],  .sumChisq(pv) , prev_i=vars)
+             b_i_name = comb[[ik]]
+               
+               nv = .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], vars, b_i_name,k, funcst)
+              attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){
+                 unlist(nv1$pvs)
+               })))
+              nv
+              #mStateObj$new(comb[ik],  .sumChisq(pv) , prev_i=prev_i)
             })
+            pvs_list = unlist(lapply(nxt_vars, function(nv) attr(nv,"cumpv")))
+             
             names(nxt_vars) = names(comb)[1:length(nxt_vars)]  
-            nxt_vars[order(unlist(lapply(nxt_vars, function(nv)nv$cumpv)))] 
+            nxt_vars[order(pvs_list)] 
             },error=function(w){
               print(w)
               print("error")
@@ -458,15 +481,13 @@ datasEnv<-R6Class("datasEnv", public = list(
           })
           angles_all = angles_all[unlist(lapply(angles_all,length))>0]
           angles_all1 = unlist(angles_all, rec=F)
-          ord = order(unlist(lapply(angles_all1, function(nv)nv$cumpv)))
-          logpv = angles_all1[[ord[1]]]$logpv
+          ord = order(unlist(lapply(angles_all1, function(nv)attr(nv,"cumpv"))))
+          logpv = attr(angles_all1[[ord[1]]],"cumpv")
           #print(logpv)
           if(logpv<=logpvthresh){
             vars_l = angles_all1[ord][1:beam]
           }
           if(verbose){
-            nmes=names(vars_l[[1]]$var)
-           print(nmes[length(nmes)])
              print(paste("logpv",logpv,jj1))
              jj1 = jj1+1
           }
@@ -478,7 +499,7 @@ datasEnv<-R6Class("datasEnv", public = list(
        # if(length(vars_l[[1]]$var)>0) print(vars_l)
         vars_l[[1]]#$var
         })
-         res2[unlist(lapply(res2,function(xx) length(xx$var)))>0]
+         res2[unlist(lapply(res2,function(xx) length(xx[[1]]$var)))>0]
     })
     self$post_process(variables,flags_out)
   })
@@ -489,8 +510,9 @@ datasEnv<-R6Class("datasEnv", public = list(
   extractPredictions=function(all_models,phens, flags, CV = FALSE, liab=T, data_nme  = names(self$datas)){
     #datas = self$datas
     names(data_nme) = data_nme
+    nmes_p = names(phens); names(nmes_p) = nmes_p
+    #all_models_ = all_models[[1]]; nme_p = nmes_p[[1]]; d_nme = data_nme[[1]];phens1 = phens[[nme_p]]
     res3 = lapply(all_models, function(all_models_){
-      nmes_p = names(phens); names(nmes_p) = nmes_p
       res2 = lapply(nmes_p, function(nme_p){
         phens1 = phens[[nme_p]]
         res2=lapply(data_nme, function(d_nme){
