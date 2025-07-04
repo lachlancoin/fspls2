@@ -1082,7 +1082,7 @@ extractData=function(var, adjust=T){
 
 #vars2 = vars_all[[1]]$variables[[1]];phens1 = phens[[1]]; k=1; useoffset=T
 makeModels=function(phens1, vars2, k, 
-                    project=T,logpthresh = -5,useglm=T,useoffset=F,
+                    project=T,logpthresh = -5,useglm=T,useoffset=T,
                    func_str="function(y) y"
                   ){
   phen2 = phens1
@@ -1107,7 +1107,8 @@ makeModels=function(phens1, vars2, k,
   family = getOption("fspls.family",self$family[[1]]) #ypred$family[[1]]
   if(family=="multinomial") useoffset=F
   nme1 = ""
-  for(jk in 1:len){
+  jk=1
+  while(jk<=len){
     b_i_name = vars2[[jk]]
     prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=ypred, project=project, useglm=useglm, logpthresh =logpthresh,useoffset=useoffset)
     if(is.null(prev_i1)) break;
@@ -1116,13 +1117,14 @@ makeModels=function(phens1, vars2, k,
     nmes[[jk]] = nme1
     models[[jk]] =prev_i1$simplify()
     prev_i = prev_i1
+    jk = jk+1
   }
   models = models[1:length(nmes)]
   names(models) = nmes
   models
 },
  makeNextModel=function(prev_i, b_i_name, subphens, k, transform_func, family, ypred=NULL, project=T, useglm=T,    logpthresh = -5,
-                        useoffset=F,
+                        useoffset=T,
                         CHECK=getOption("fspls.check",F),
                         verbose=getOption("fspls.verbose1",F)) {
    data =self
@@ -1186,11 +1188,11 @@ makeModels=function(phens1, vars2, k,
 #      dimnames(df2)[[2]] = 1:ncol(self$y[[1]])
       }
   
-    if(CHECK && !is.null(ypred)){ ## recalculation of constant offset
-     ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=F)
-      new_const = prev_i1$updateConst(subphens,ypred, data,k, transform_func, useglm=getOption("glmnet",T),verbose=verbose, update=F)
-    }
     if(verbose  && !is.null(ypred)){
+      
+      ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=F)
+      new_const = prev_i1$updateConst(subphens,ypred, data,k, transform_func, useglm=getOption("glmnet",T),verbose=verbose, update=F)
+      
       ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=T)
       rmsv=(ypred$calcRMSV(self$y, nonNA,     flip=FALSE))
       print(quantile(rmsv$value))

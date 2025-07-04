@@ -180,6 +180,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     names(constants_proj) = names(phensi)
                     na_k=non_na_x & self$nonNA
                   for(kk1 in 1:length(phensi)){
+                    if(verbose)print(names(phensi)[[kk1]])
                     #kk1 = 1;  
                     kk = names(phensi)[[kk1]]
                     phensi1 = phensi[[kk1]]
@@ -204,6 +205,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           names(consts) = levs1[-length(levs1)]
                           df = data.frame(list(y=factor(y1c,levels=sort(unique(y1c))),x= yp1[,1]))
                           m1=try(polr(y~x,  data=df,Hess=T, method="logistic"))  
+                 
                           if(abs(m1$coefficients[[1]]-1)>0.5){
                             print(m1$coefficients)
                             print(self$var)
@@ -215,6 +217,10 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                            # gl = glm(data$y[non_na_x & nonNA,kk]~ yp1[,1], family="gaussian")
                             #self$constants_proj[[kk]][[kk_1]] = consts_prev[[kk]] #rep(NA, length(levs1)-1) #gl$coefficients[1]
                           }else{
+                            if(verbose){
+                              print(m1$coefficients)
+                              print(m1$zeta) 
+                            }
                             constants_proj[[kk]][[kk_1]]= m1$zeta
                           }
                         }
@@ -242,6 +248,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                              nonNAy = !is.na(y1c)
                            ridge=glmnet(cbind(ones[nonNAy],yp1[nonNAy,kk_1]),y1c[nonNAy],family=family[[kk]], alpha = 0)
                            rbeta <- coef(ridge,s=min(ridge$lambda))
+                         if(verbose)  print(rbeta)
                        #    if(abs(rbeta[3,1]-1)>diff_thresh) stop("problem with weights")
                         if(verbose)   print(rbeta)
                           sum(rbeta[1:2,1])
