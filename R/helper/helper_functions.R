@@ -74,7 +74,7 @@ length(unique(eval1$`data:family`))
 .plotEval1<-function(eval3,
            shape_color=c("pheno","subpheno"),linetype="fullmodel",showranges=T,
            txtsize=1,logy=F,legend=F,sep_by="",scales="free",
-           grid0 = c("cohort","measure"),grid1 = "cv_full"
+           grid0 = c("cohort","measure"),grid1 = "cv_full",title=""
           ){
  
   linetype_nme = paste(linetype, collapse="_");
@@ -101,9 +101,10 @@ length(unique(eval1$`data:family`))
   ggps=lapply(phenos, function(ph){ 
     eval5 = subset(eval2, sep_by==ph)
   ggp<-ggplot(eval5)+geom_point(aes_string(x="numvars", y="mid",  shape=shape_color_nme,size="nsamps", color=shape_color_nme))+
-    geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=shape_color_nme)) +ggtitle(ph)
+    geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=shape_color_nme)) +ggtitle(paste(title,ph))
   if(showranges){ ## geom_ribbon vs geom_errorbar
-   ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype,color=shape_color_nme, fill = shape_color_nme ), alpha = 0.1)
+    
+   ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype_nme,color=shape_color_nme, fill = shape_color_nme ), alpha = 0.1)
   }
   if(nchar(grid0_nme)>0){
     if(nchar(grid1_nme)>0){
