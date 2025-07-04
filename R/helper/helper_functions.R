@@ -722,7 +722,9 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   pchisq(sum(chisq), df = length(pvs), lower.tail=F)
 }
 
-.plotArea1<-function(predictions,family="binomial",rename=T, len = 1,grid="model~pheno", p_incl="",max_vars = 100){
+.plotArea1<-function(predictions,family="binomial",rename=T, 
+                     subset = 1:length(predictions[[1]][[1]][[1]]),
+                     len = 1,grid="model~pheno", p_incl="",max_vars = 100){
   nmesp1 = names(predictions); names(nmesp1) = nmesp1
   #nme1 = nmesp1[[1]]
   lapply(nmesp1, function(nme1){
@@ -735,15 +737,19 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
       names(inds) = names(pred2)
       lapply(inds, function(i){
         title = paste(nme1,nme2, names(inds)[i[]])
-        .plotArea(pred2[i],family=family, rename=rename, len=len, grid=grid, p_incl="", max_vars = max_vars,title=title)
+        .plotArea(pred2[i],family=family, 
+                  subset = subset,
+                  rename=rename, len=len, grid=grid, p_incl="", max_vars = max_vars,title=title)
       })
     })
   })
 }
 
-.plotArea<-function(predictions, family="binomial",rename=T, len = 1,grid="model~pheno", p_incl="", max_vars = 100,title=""){
+.plotArea<-function(predictions, 
+                    subset = 1:length(predictions[[1]]),
+                    family="binomial",rename=T, len = 1,grid="model~pheno", p_incl="", max_vars = 100,title=""){
   area_p=.merge1_new(lapply(predictions, function(train){  
-    .merge1_new(lapply(train, function(model){
+    .merge1_new(lapply(train[subset], function(model){
       .merge1_new(lapply(model, function(test){
         .merge1_new(lapply(test, function(fam){
         phens = dimnames(fam$y)[[2]]; names(phens)=phens
@@ -1369,6 +1375,7 @@ fromJSONM<-function(json){
   })
 }
 
+#mod1 = final_models[[1]][[1]]; final_model = final_models[[1]]
 .extractWeights<-function(final_models){
   weights = lapply(final_models, function(final_model){
 model_weights = unlist(lapply(final_model, function(mod1){
@@ -1382,7 +1389,7 @@ model_weights = unlist(lapply(final_model, function(mod1){
     df
   })
 }),rec=F)
-cbind(model_weights[[1]][,1:2], data.frame(lapply(model_weights, function(mw)mw[,3])))
+cbind(model_weights[[1]][,1:2], data.frame(lapply(model_weights, function(mw)mw[,-(1:2)])))
 
   })
 }

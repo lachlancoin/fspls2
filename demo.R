@@ -14,6 +14,8 @@ library(pROC);
 library(nnet)  ## for multinomial
 library("binom") ## for plotting
 library(confintr)
+
+library(cowplot)
 #library(wCorr)
 ##LOAD CODE
 ##SHOULD RUN FROM FSPLS2 directory
@@ -34,7 +36,7 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[3]; pthresh = 0.01 ; randomise=F; duplicate=F
+datasets =examples[3]; pthresh = 0.001 ; randomise=F; duplicate=F
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
 
@@ -43,7 +45,8 @@ func_y = list(y="function(y) y")  #'{"y":"function(y) y","y1":"function(y) y^2"}
 runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
                  func_y = list(y="function(y) y")){
   y = datasets[[1]]$y
-  flags = list(pthresh = pthresh, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  
+  flags = list(pthresh = pthresh, max=10,nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  project=T,
+               useoffset=T,useglm=T,
                transform_y =toJSON(func_y) )
   ## MAKE THE FSPLS DATA OBJECT
   if(duplicate){
@@ -57,10 +60,11 @@ runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
   phens=datasAll$pheno()
   
   ## FIND VARIABLES
-  vars_all = datasAll$select(phens, flags,verbose=F)
+  vars_all = datasAll$select(phens, flags,verbose=T)
   #print(variables_all)
   ## FIT MODELS
   options("fspls.verbose1"=T)
+  
   all_models = datasAll$makeAllModels(vars_all, phens, flags)
   eval0 = datasAll$evaluateAllModels(all_models, phens, flags)
   #eval = subset(eval, model!="avg")
@@ -115,7 +119,6 @@ for(i in 1:length(examples)){
   print(i)
   ggp_all[[i]] = runAll(examples[i], randomise=F, pthresh = 0.0001)
 }
-library(cowplot)
 plot_grid(ggp_all[[1]][[1]], ggp_all[[2]][[1]], ggp_all[[3]][[1]],ggp_all[[4]][[1]])
 names(ggp_all) = names(examples)
 #runAll(datasets[1])

@@ -40,9 +40,10 @@ path="~/github/FSPLS-publication-repo/input"
 print(dir(path,full=T,rec=T))
 
 
-flags = list(pthresh = 1e-2, nrep=1,batch=0, max=50,topn=100,beam=1,all_v_all=F, one_v_rest=T)
+flags = list(pthresh = 1e-3, nrep=10,batch=0, max=50,topn=100,beam=1,all_v_all=F, one_v_rest=F)
 flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)", "x3":"function(x) x^3","1x":"function(x) 1/x"}'
 flags[['transform']] = '{"x" :"function(x) x","log" :"function(x) log1p(x)"}'
+flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)"}'
 
 flags[['transform']] = '{"x" :"function(x) x"}'
 
@@ -55,6 +56,8 @@ rds = readRDS("/home/unimelb.edu.au/lcoin/github/FSPLS-publication-repo/output/a
 
 
 ## MAKE THE FSPLS DATA OBJECT
+vars = apply(rawl$golub$dataset$rna,2,var)
+rawl$golub$dataset$rna = rawl$golub$dataset$rna[,vars>=quantile(vars)[1]] ## remove low variance cols
 datasAll =datasEnv$new(rawl,flags=flags) 
 datasAll$update(flags)
 
@@ -64,12 +67,8 @@ phens = phens[1]
 ## FIND VARIABLES
 vars_all = datasAll$select(phens, flags,verbose=T)
 ## FIT MODELS
-options("fspls.verbose1"=F)
+options("fspls.verbose1"=T); options("fspls.CHECK"=F)
 all_models = datasAll$makeAllModels(vars_all, phens, flags)
-xv = unlist(lapply(1:length(all_models[[1]]), function(i){
-      (.sumChisq((unlist(all_models[[1]][[i]][[1]]$full$golub$pvs))))
-}))
-plot(exp(xv))
 eval = datasAll$evaluateAllModels(all_models, phens, flags)
 ##PLOT
 eval1 = .calcEval1(eval, rename=F)

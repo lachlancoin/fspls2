@@ -8,6 +8,7 @@
     d = datas1[[nmed]]
     prev_i = vars_l1[[nmed]]
     family = strsplit(names(subphens)[[1]],"\\.")[[1]][1]
+    if(family=="multinomial") useoffset=F
     prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=NULL, project=project, useglm=T, logpthresh =0, useoffset=useoffset)
     prev_i1
   })
@@ -406,7 +407,9 @@ datasEnv<-R6Class("datasEnv", public = list(
       vars2
     })
     names(variables) = lapply(variables, function(l2)paste(names(l2), collapse=";"))
-   self$convert1(variables, phens)
+  result=self$convert1(variables, phens)
+  func_str = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
+  lapply(func_str, function(xx) result)
   },
   select=function(phens,flags,verbose=F ){
     nreps1 =ncol(self$datas[[1]]$looc$incl)

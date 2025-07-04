@@ -836,7 +836,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
       x = cbind(yp1[nonNAk,], x1_[nonNAk,1])
       dimnames(x)[[2]] = c(paste0("A",1:(ncol(x)-1)),"x")
     }else{
-      x = x_
+      x = x_[nonNAk,,drop=F]
     }
     yp1 = yp1[nonNAk,,drop=F]  
     if(family=="multinomial"){
