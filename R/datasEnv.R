@@ -7,9 +7,6 @@
   pvs_all= lapply(nmesd, function(nmed){
     d = datas1[[nmed]]
     prev_i = vars_l1[[nmed]]
-    #b_i1 = var_new[[length(var_new)]]
-    #prev_var =  var_new[-length(var_new)]
-    #prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,ypred, project=project, useglm=useglm, logpthresh =logpthresh,)
     family = strsplit(names(subphens)[[1]],"\\.")[[1]][1]
     prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=NULL, project=project, useglm=T, logpthresh =0)
     prev_i1

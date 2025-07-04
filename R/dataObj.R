@@ -846,18 +846,6 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
       rdf=multinom_ridge(x,y,w)
       const_term = rdf$const
       beta_new1 =  rdf$beta
-      #xM = x %*% beta_new1
-      
-      #m1 = try(multinom(y~as.matrix(x),weights=w, trace=F))
-    #  if(inherits(m1,"try-error")){
-    #    stop("multinom error")
-    #  }
-    #  sm  = summary(m1)
-    #  beta_new1=t(sm$coefficients[,-1,drop=F])
-    #  if(ncol(beta_new1)!=ncol(x) && ncol(x)==1){
-     #   beta_new1 = t(beta_new1)
-    #  }
-     # const_term = sm$coefficients[,1]
     }else if(family=="ordinal" ){
       use_bin = length(unique(y))<=2
        ty=as.list(table(y))
@@ -1013,13 +1001,23 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
           ll1 = -0.5 *m1$dev        
           pv1 = .lrt(ll2,ll1,2,1, log.p=T)
         }else if(family=="ordinal"){
-          df1 = data.frame(cbind(y,yp1 ));df1$y=factor(df1$y, levels = sort(unique(df1$y)))  
-          m1=polr(y~yp1,  data=df1,weights=w,Hess=T, method="logistic")
-          df1$yp1 =  yp_new[,1]
-          m2=polr(y~yp1,  data=df1,weights=w,Hess=T, method="logistic")
+          pv =tryCatch({
+          df1 = data.frame(cbind(y,as.matrix(yp1 )));
+          df1$y=factor(df1$y, levels = sort(unique(df1$y)))  
+          func = paste0("y~",paste(colnames(df1)[-1], collapse="+"))
+          m1=polr(func,  data=df1,weights=w,Hess=T, method="logistic")
+          df1[,2] =  yp_new[,1]
+          m2=polr(func,  data=df1,weights=w,Hess=T, method="logistic")
           ll1 = logLik(m1)
           ll2 =  logLik(m2)
-          pv1=.lrt(ll2,ll1,2,1,log.p=T)          
+          .lrt(ll2,ll1,2,1,log.p=T)  
+          },error=function(w){
+            m1=glm(y~yp1[,1],family="gaussian")
+            m2=glm(y~yp_new[,1], family="gaussian")
+            ll2 = logLik(m2)
+            ll1 =  logLik(m1)
+            pv1 = .lrt(ll2,ll1,2,1, log.p=T)
+          })
         }else{
           m1=glm(y~yp1[,1],family=family)
           m2=glm(y~yp_new[,1], family=family)
