@@ -74,7 +74,8 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                                           b_i = NULL,b_i_name=NULL,
                                           var = list(), varnames = list(),
                                           W_all = matrix(nrow=0, ncol=0),
-                                         mean_x = NULL, pvs = c()
+                                         mean_x = NULL, pvs = c(),
+                                         useoffset=T
                                          ){
                       self$pvs = pvs
                       self$sumPv = .sumChisq(unlist(pvs))
@@ -129,6 +130,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           }else{
                             b_n1 = as.matrix(data.frame(b_n1)) #, nrow = 1)
                           }
+                          if(!useoffset) return(b_n1)
                           if(nrow(b_n1)==1){ 
                             return( rbind(prev_i$betas_proj[[b_n]], b_n1))
                           }
