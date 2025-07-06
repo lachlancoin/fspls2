@@ -402,7 +402,7 @@ dataObj<-R6Class("dataObj", public = list(
   types="vector",
   nrow="integer",
   vars="list",
-  var_thresh="double",
+#  var_thresh="double",
   min_minor="double",
   prev="list",
   y="matrix",
@@ -419,7 +419,7 @@ dataObj<-R6Class("dataObj", public = list(
   norms_list="list",
   norm_done="list",   ##dataframe of prev calculated
   mem_dirs="list",  ##outfile to write new norms calculated in this session
-  cols_incl="list",
+ # cols_incl="list",
   ypreds_all="ypredObj",
   family="character",
  
@@ -1001,7 +1001,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
           ll1 = -0.5 *m1$dev        
           pv1 = .lrt(ll2,ll1,2,1, log.p=T)
         }else if(family=="ordinal"){
-          pv =tryCatch({
+          pv1 =tryCatch({
           df1 = data.frame(cbind(y,as.matrix(yp1 )));
           df1$y=factor(df1$y, levels = sort(unique(df1$y)))  
           func = paste0("y~",paste(colnames(df1)[-1], collapse="+"))
@@ -1016,7 +1016,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
             m2=glm(y~yp_new[,1], family="gaussian")
             ll2 = logLik(m2)
             ll1 =  logLik(m1)
-            pv1 = .lrt(ll2,ll1,2,1, log.p=T)
+             .lrt(ll2,ll1,2,1, log.p=T)
           })
         }else{
           m1=glm(y~yp1[,1],family=family)
@@ -1869,8 +1869,8 @@ randomise=function(n= nrow(self$y[[1]]),
     self$initTrain();  
   }
 },
-  init1=function( var_threshs,nrep = getOption("fspls.nrep",1), batch = getOption("fspls.batch",0),
-                 genes_incls = list()){  ## this function initialises training paramaters for this dataset
+  init1=function( var_threshs,nrep = getOption("fspls.nrep",1), batch = getOption("fspls.batch",0)
+                 ){  ## this function initialises training paramaters for this dataset
     set.seed(self$seed)
     rand = sample(nrow(self$data[[1]]))
     self$looc=loocObj$new(self, nrep = nrep, batch = batch,
@@ -1896,7 +1896,7 @@ randomise=function(n= nrow(self$y[[1]]),
     #ym[,nonNA]=1
     norm=self$norm
     n = nrow(self$data[[1]])
-    incls_all1 = unique(unlist(getOption("incls", list(names(self$data)))))
+   
     vars = lapply(names(norm), function(norm_nme){
       norm1 = norm[[norm_nme]]
       (norm1*norm1)/(n-1)
@@ -1909,21 +1909,10 @@ randomise=function(n= nrow(self$y[[1]]),
     })
     names(var_thresh) = names(norm)
     
-    self$cols_incl = lapply(names(norm), function(norm_nme){
-      norm1 = norm[[norm_nme]]
-      if(!(norm_nme %in% incls_all1)) return(NULL)
-      genes_inc = genes_incls
-      variance = vars[[norm_nme]]
-      varthresh = var_thresh[[norm_nme]]
-       var_res = variance>=varthresh
-      if(!is.null(genes_inc) && length(genes_inc)>0){
-        var_res = var_res & (names(norm1) %in% genes_inc)
-      }
-      var_res
-    })
+   
     self$vars = vars
-    self$var_thresh = var_thresh
-    names( self$cols_incl) = names(norm)
+   # self$var_thresh = var_thresh
+  #  names( self$cols_incl) = names(norm)
     
     self$UDVP=NULL;
     
@@ -1931,6 +1920,23 @@ randomise=function(n= nrow(self$y[[1]]),
    
   #  self$ypred=ypredObj$new(self,NULL,  params,family)
   },
+cols_incl =function(varthresh){ 
+  norm = self$norm
+  nme_norm =names(norm); names(nme_norm) = nme_norm
+  lapply(nme_norm, function(norm_nme){
+  norm1 = norm[[norm_nme]]
+  incls_all1 = unique(unlist(getOption("incls", list(names(self$data)))))
+  if(!(norm_nme %in% incls_all1)) return(NULL)
+ # genes_inc = self$genes_incls
+  variance = self$vars[[norm_nme]]
+ # varthresh = var_thresh[[norm_nme]]
+  var_res = variance>=varthresh
+  #if(!is.null(genes_inc) && length(genes_inc)>0){
+   # var_res = var_res & (names(norm1) %in% genes_inc)
+  #}
+  var_res
+})
+},
   updateY=function(y1,    family=NULL,CHECK=T, all_v_all=F, one_v_rest=F){ ## updates y
     if(is.null(rownames(y1))){
       if(nrow(y1)==nrow(self$data[[1]])){
@@ -2091,19 +2097,10 @@ randomise=function(n= nrow(self$y[[1]]),
       if(is.null(rownames(cm))) rownames(cm) = 1:nrow(cm)
       cm
       })
- #   self$updateY(y, weights =weights, CHECK=T)
-#    self$y = y
-  #  nrow = ncol(y)
- # self$ymod =lapply(data, function(d){
-#      nrowd =  nrow(d)
- #     matrix(0, nrow=nrow, ncol = nrowd)
- #   })  
+
     self$nrow = nrow(self$data[[1]])
     self$train=NULL
-    #self$min_minor =apply(y,2, function(yv){
-    #  t1 = table(yv)
-    #  min_minor = if(length(t1)<=1)0 else min(t1)
-    #}) 
+   
      
     #self$ypreds_all= ypredObj$new(self,NULL, maxn,family)
     nrowd =  nrow(self$data[[1]])
@@ -2116,14 +2113,7 @@ randomise=function(n= nrow(self$y[[1]]),
       mx
       })
     
-    #      lapply(self$data,  function(d1){ #mc.cores=getOption("fspls.cores.prep",1)
-    #      a =dgemm( A=ym, B=d1)[1,]/sum(ym)
-    
-    #      a
-    #  biganalytics::apply(data$data[[v1]],2, function(g) mean(g[nonNA]))[todoInds[[v1]]]
-    #  } )
-    #    norm = NULL
-    #    if( !is.null(attr(self$data[[1]],"norm"))){
+  
     nmes1 = names(self$data)
     self$norm = lapply(self$data, function(d1) {
       normm = attr(d1,"norm")
@@ -2141,15 +2131,6 @@ randomise=function(n= nrow(self$y[[1]]),
       normm
       
       })
-    #   }
-    # if(FALSE){
-    #   if(is.null(norm) || length(norm[[1]])!= ncol(self$data[[1]])){
-    #      print("recalculating norms")
-    #      stop("!!")
-    #      norm = lapply(self$data, function(v1){
-    ##        -1 *biganalytics::apply(v1,2, function(g) sqrt(sum((g-mean(g))^2)))
-    #     }) # norm = -1*apply(x^2,2,sum,na.rm=T)^.5
-    #  }
     self$norms_list = lapply(self$norm, function(n) list())
     
   }

@@ -1,7 +1,7 @@
 ##SET APPROPRIATE LIB PATHS 
 
 ##SHOULD BE RUN FROM WHERE GIT CLONED TO
-.libPaths("~/R/x86_64-pc-linux-gnu-library/4.1/")
+.libPaths("~/R/x86_64-pc-linux-gnu-library/4.4/")
 options(bigmemory.allow.dimnames=TRUE)
 library(jsonlite)
 library(R6)
@@ -36,7 +36,7 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[3]; pthresh = 0.001 ; randomise=F; duplicate=F
+datasets =examples[2]; pthresh = 0.001 ; randomise=F; duplicate=F
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
 
@@ -46,7 +46,7 @@ runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
                  func_y = list(y="function(y) y")){
   y = datasets[[1]]$y
   flags = list(pthresh = pthresh, max=10,nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  project=T,
-               useoffset=T,useglm=T,
+               useoffset=T,useglm=T,quantiles = c(0,0.1),
                transform_y =toJSON(func_y) )
   ## MAKE THE FSPLS DATA OBJECT
   if(duplicate){
