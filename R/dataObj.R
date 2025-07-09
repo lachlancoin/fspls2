@@ -1869,7 +1869,7 @@ randomise=function(n= nrow(self$y[[1]]),
     self$initTrain();  
   }
 },
-  init1=function( var_threshs,nrep = getOption("fspls.nrep",1), batch = getOption("fspls.batch",0)
+  init1=function( nrep = getOption("fspls.nrep",1), batch = getOption("fspls.batch",0)
                  ){  ## this function initialises training paramaters for this dataset
     set.seed(self$seed)
     rand = sample(nrow(self$data[[1]]))
@@ -1902,12 +1902,7 @@ randomise=function(n= nrow(self$y[[1]]),
       (norm1*norm1)/(n-1)
     })
     names(vars) = names(norm)
-    var_thresh =  lapply(names(norm), function(norm_nme){
-      vt = var_threshs[[norm_nme]]
-      if(vt==0) vt = 1e-9
-      max(quantile(vars[[norm_nme]], pr=var_threshs[[norm_nme]] ,na.rm=T), 1e-20)
-    })
-    names(var_thresh) = names(norm)
+   
     
    
     self$vars = vars
@@ -1920,22 +1915,23 @@ randomise=function(n= nrow(self$y[[1]]),
    
   #  self$ypred=ypredObj$new(self,NULL,  params,family)
   },
-cols_incl =function(varthresh){ 
+cols_incl =function(varthreshs, genes_inc){ 
   norm = self$norm
   nme_norm =names(norm); names(nme_norm) = nme_norm
   lapply(nme_norm, function(norm_nme){
-  norm1 = norm[[norm_nme]]
-  incls_all1 = unique(unlist(getOption("incls", list(names(self$data)))))
-  if(!(norm_nme %in% incls_all1)) return(NULL)
- # genes_inc = self$genes_incls
-  variance = self$vars[[norm_nme]]
- # varthresh = var_thresh[[norm_nme]]
-  var_res = variance>=varthresh
-  #if(!is.null(genes_inc) && length(genes_inc)>0){
-   # var_res = var_res & (names(norm1) %in% genes_inc)
-  #}
-  var_res
-})
+      norm1 = norm[[norm_nme]]
+      var_thresh = var_threshs[[norm_nme]]
+      incls_all1 = unique(unlist(getOption("incls", list(names(self$data)))))
+      if(!(norm_nme %in% incls_all1)) return(NULL)
+     # genes_inc = self$genes_incls
+      variance = self$vars[[norm_nme]]
+     # varthresh = var_thresh[[norm_nme]]
+      var_res = variance>=varthresh
+      if(!is.null(genes_inc) && length(genes_inc)>0 && genes_inc!="all"){
+        var_res = var_res & (names(norm1) %in% genes_inc)
+      }
+      var_res
+  })
 },
   updateY=function(y1,    family=NULL,CHECK=T, all_v_all=F, one_v_rest=F){ ## updates y
     if(is.null(rownames(y1))){
@@ -1951,6 +1947,7 @@ cols_incl =function(varthresh){
     fams = unique(family)
     names(fams) = fams
     y = lapply(fams, function(fam){
+      print(fam)
       inds = which(family==fam)
       names(inds) = dimnames(y1)[[2]][inds]
       if(fam=="multinomial"){
@@ -1963,14 +1960,22 @@ cols_incl =function(varthresh){
         return(.expandFactors(y1[mi1,inds,drop=F]))
       }else if(fam=="ordinal"){
         return(lapply(inds, function(ind){
-          Matrix(as.matrix(y1[,ind,drop=F]))
+          Matrix(as.matrix(y1[mi1,ind,drop=F]))
         }))
       }else{
         if(typeof(y1)=="S4"){
-          return(list(getSparseSubMatrix(getSparseSubMatrix(y1, inds, by="col"), mi1, by="row")))
+          return (list(y1[mi1,inds]))
+         # return(list(getSparseSubMatrix(getSparseSubMatrix(y1, inds, by="col"), mi1, by="row")))
         }
+       for(jj in inds){
+         levs = levels(y1[,jj])
+         if(!is.null(levs)){
+           y1[,jj] = as.numeric(y1[,jj])
+         }
+       }
         
-        return(list(Matrix(as.matrix(y1[,inds,drop=F]), sparse=T)))
+        
+        return(list(Matrix(as.matrix(y1[mi1,inds,drop=F]), sparse=T)))
       }
     })
     if(all_v_all) names(y) = gsub("multinomial","binomial.multiway",names(y))

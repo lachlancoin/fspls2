@@ -18,11 +18,16 @@
   types = attr(y_mat, "types")
   
   if(!is.null(types)){
-    return(lapply(types, function(typ){
+    return(lapply(1:length(types), function(i){
+      typ = types[[i]]
       if(typ=="double") return("gaussian")
       if(typ=="boolean") return("binomial")
       if(typ=="integer") return("ordinal")
-      if(typ=="character") return("multinomial")
+      if(typ=="character"){
+        tbl=table(y_mat[[i]])
+        if(length(tbl)<=2) return("binomial")
+        return("multinomial")
+      }
     }))
   }
     if(typeof(y_mat)=="list"){
@@ -129,13 +134,13 @@ datasEnv<-R6Class("datasEnv", public = list(
     self$type="slow1"
     types_all = getOption("types_all",names(datas[[1]]$data))
     names(types_all) = types_all
-    var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_quantile",0.00))
-    genes_incls=.readFlag(flags,"genes_incls",NULL) #,getOption("genes_incls",NULL)
+ #   var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_quantile",0.00))
+  #  
     batch=.readFlag(flags, "batch",0)
     all_v_all = .readFlag(flags,"all_v_all",F)
     one_v_rest = .readFlag(flags,"one_v_rest",F)
     nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
-    invisible(lapply(datas, function(data) data$init1(var_threshs, nrep=nrep,  batch = batch)))
+    invisible(lapply(datas, function(data) data$init1(nrep=nrep,  batch = batch)))
     varn = getOption("varn",c())
    
     invisible(lapply(1:length(datas), function(ik) {
@@ -155,11 +160,11 @@ datasEnv<-R6Class("datasEnv", public = list(
   update=function( flags = list()){
     types_all = getOption("types_all",names(self$datas[[1]]$data))
     names(types_all) = types_all
-    var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_quantile",0.00))
+  #  var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_quantile",0.00))
     batch=.readFlag(flags, "batch",0)
     
     nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
-    invisible(lapply(self$datas, function(data) data$init1(var_threshs, nrep=nrep,  batch = batch)))
+    invisible(lapply(self$datas, function(data) data$init1(nrep=nrep,  batch = batch)))
     varn = getOption("varn",c())
     for(ik in 1:length(self$datas)){
       self$datas[[ik]]$initTrain(varn=varn)
@@ -419,6 +424,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     train_nme = .readFlag(flags,'train', names(datas1))
     train_nme = train_nme[train_nme %in% names(datas1)]
     quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
+    genes_incls=fromJSON(.readFlag(flags,"genes_incls",'{"all":["all"]}')) #,getOption("genes_incls",NULL)
     if(length(train_nme)==0) train_nme = names(datas1)[[1]]
     names(train_nme) = train_nme
     maxsize=.readFlag(flags,'max',50)
@@ -436,7 +442,9 @@ datasEnv<-R6Class("datasEnv", public = list(
                      topn = num_pvals, pthresh =exp(logpvthresh), data_types = incl)
     phens_index = 1:length(phens)
     names(phens_index) = names(phens)
-    var_thresh = lapply(train_nme, function(data_nme) quantile(unlist(datas1[[data_nme]]$vars), quantiles))
+    var_thresh = lapply(train_nme, function(data_nme){
+      lapply(datas1[[data_nme]]$vars, function(v) quantile(v, quantiles))
+    })
    #funcst = func_str[[1]]; k=1;p_index = phens_index[[1]]
     vars_combined=lapply(func_str,function(funcst){
       print(funcst)
@@ -449,17 +457,19 @@ datasEnv<-R6Class("datasEnv", public = list(
         if(FALSE) cat(p_index); cat("\t");
       #  vars_l = list(mStateObj$new(c(),c(), NULL))  ## initialise vars_l
         vars_l =list(lapply(train_nme,function(xx) stateObj$new(subphens, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all = NULL)))
-        for(qq in 1:length(quantiles)){
-        while(logpv<logpvthresh && length(vars_l[[1]][[1]]$var)<maxsize){
+        for(g_incl in genes_incls){
+         for(qq in 1:length(quantiles)){
+         while(logpv<logpvthresh && length(vars_l[[1]][[1]]$var)<maxsize){
           #vars = vars_l[[1]]
           angles_all = lapply(vars_l, function(vars_l1){
             nxt_vars1 =  tryCatch({
               varnames = vars_l1[[1]]$var_names; type = self$type
             angles=lapply(train_nme, function(data_nme) datas1[[data_nme]]$getAngles1(subphens,varnames,incl=incl,k=k, type=type))
             names(angles) = train_nme
-            cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl(var_thresh[[data_nme]][qq]))
+            cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl(var_thresh[[data_nme]][qq]), g_incl)
              comb1=.combineAngles(angles,cols_incl,topn=topn)
             comb=.summariseAngles(comb1,topn)
+            if(length(comb)==0) return(NULL)
             num_pvals1 = min(num_pvals, length(comb))
             nxt_vars = lapply(1:num_pvals1, function(ik){
                b_i_name = comb[[ik]]
@@ -496,6 +506,7 @@ datasEnv<-R6Class("datasEnv", public = list(
           }
         }
         }
+      }
        
         #lapply(datas1, function(d)d$saveParquet())
         #lapply(vars_l, function(v) v$var)
