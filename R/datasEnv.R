@@ -14,6 +14,18 @@
   })
   pvs_all
 }
+.nonZero<-function(am2){
+  am2[unlist(lapply(am2, length))>0]
+}
+getFullModels<-function(all_models){
+  .nonZero(lapply(all_models, function(all_model1){
+    .nonZero(lapply(all_model1, function(all_model2){
+      .nonZero(lapply(all_model2, function(all_model3){
+        all_model3[names(all_model3) %in% "full"]
+      }))
+    }))
+  }))
+}
 .getFamily<-function(y_mat, family1=NULL){
   types = attr(y_mat, "types")
   
