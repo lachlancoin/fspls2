@@ -18,6 +18,7 @@ trainObj<-R6Class("trainObj",
                     looc_incl = "vector",
                     products="list",
                     func_str="character",
+                    phens1 = "list",
                   #  funcs="closure",
                   #  func_str = "character",
                   #  ifuncs="list",
@@ -41,17 +42,22 @@ trainObj<-R6Class("trainObj",
                       self$k=NA
                       
                     },
-                    transform=function(weights, k, func_str){
-                      self$func_str = func_str
+                    transform=function(weights, k, funcst, phens1){
+                      self$func_str = funcst
                      # func_str1 = paste("function(x)",func_str)
-                      funcs =  eval(str2lang(func_str))
+                      funcs =  eval(str2lang(funcst))
                       y1 = self$y1
                       looc_incl_k_ij = self$looc_incl[,k]
                       means_y = lapply(y1, function(y1)rep(0, ncol(y1)))
-                      for(colk in 1:length(y1)){
+                      inds_to_do = which(names(self$y1) %in% names(phens1))
+                      for(colk1 in 1:length(inds_to_do)){
+                        colk = inds_to_do[colk1]
+                        #print(colk)
                         ncols=ncol(y1[[colk]])
                         meansy = rep(0, ncols)
-                        for(j in 1:ncols){
+                        inds_to_do_1 = which(dimnames(y1[[colk]])[[2]] %in% phens1[colk1])
+                        for(j in inds_to_do_1){
+                        #  print(j)
                              v = funcs(y1[[colk]][,j])
                              nonNA1 = !is.na(v) & looc_incl_k_ij
                              d_w = weights[nonNA1]
@@ -77,10 +83,19 @@ trainObj<-R6Class("trainObj",
                   #    })
                   #    nonNA
                   #  },
-                    update=function(data,k,func_str,
+                    update=function(data,k,funcst,phens,incl = names(data$data),
                                     var=list(), varnames = list(), W_all = matrix(nrow=0, ncol=0)){
-                        ycols = 1:length(self$y1)
-                        self$func_str = func_str
+                      phen_fams = unlist(lapply(phens, function(ph) names(ph)))
+                      phen_fam = unique(phen_fams)
+                      names(phen_fam) = phen_fam
+                      phens1 = lapply(phen_fam, function(pf){
+                        ab = unique(unlist(phens[which(phen_fams==pf)])  )
+                        names(ab)=ab
+                        ab
+                      })
+                      self$phens1 = phens1
+                        ycols = which(names(self$y1) %in% names(phens1))
+                        self$func_str = funcst
                      
                       #  if(!is.na(k)){
                       #   if(k[1]==self$k[1])  return(NULL)
@@ -89,14 +104,25 @@ trainObj<-R6Class("trainObj",
                           # no need to update
                       #phensi = ycols
                         #.transform<-function(y1,  nonNA, weights, mean_y){
-                      self$transform(data$weights, k, func_str)
+                      self$transform(data$weights, k, funcst, phens1)
+                      inds1 = which(names(self$yTr) %in% names(phens1))
                    #   for(i in 1:length(self$funcs)){
-                        ymean = lapply(self$yTr,function(yTr1) apply(yTr1,1,mean)) ## should be mean 0
+                      nmes_phens1 = names(phens1); names(nmes_phens1) = nmes_phens1
+                      ymean = lapply(nmes_phens1, function(nme_p1){
+                        yTr1 = self$yTr[[nme_p1]]
+                        subinds = dimnames(yTr1)[[1]] %in% phens1[[nmes_phens1]]
+                        apply(yTr1[subinds,,drop=F],1,mean)
+                      })
+                        #ymean = lapply(self$yTr,function(yTr1) apply(yTr1,1,mean)) ## should be mean 0
                         #if(max(abs(unlist(ymean)))>1e-5)stop("problem")
                     #  }
-                      self$products= lapply(1:length(data$data), function(ik){
+                      names(incl) = incl
+                      self$products= lapply(incl, function(ik){
                         x = data$data[[ik]]
-                        lapply(self$yTr, function(yTr1){
+                        lapply(nmes_phens1, function(nme_p1){
+                          yTr1 = self$yTr[[nme_p1]]
+                          subinds = dimnames(yTr1)[[1]] %in% phens1[[nmes_phens1]]
+                          yTr1 = yTr1[subinds,,drop=F]
                          # lapply(yTr_, function(yTr1){ ##NEED TO ADD POWS
                             # print(dim(yTr1))
                             #  print(dim(x))
@@ -106,13 +132,14 @@ trainObj<-R6Class("trainObj",
                           #})
                         })
                       })
-                      names(self$products) = names(data$data)
-                      phens = data$pheno()
-                      phensi = data$phensi(phens)
+                     # names(self$products) = names(data$data)
+                     # phens = data$pheno()
+                    #  phensi = data$phensi(phens)
                    #   self$prev[[k]] = stateObj$new(phensi, data, self,k, self$mean_y,var=var, varnames=varnames, W_all = W_all)
                     },
                     
                     calcMean=function( looc_incl_k_ij, weights){
+                      if(TRUE) stop(" not used")
                       lapply(self$y1, function(yTr){
                         apply(yTr,2, function(v){
                           nonNA = !is.na(v) & looc_incl_k_ij

@@ -80,7 +80,7 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
 }
 
 
-.combineAngles<-function(angles,cols_incl, incl=names(angles[[1]]), topn=100){
+.combineAngles<-function(angles,cols_incl, incl, topn=100){
   names(incl)=incl
   comb_all = lapply(incl,function(inc1){
     comb1 = lapply(1:length(angles), function(i){
@@ -102,19 +102,13 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
     .sumMatrices(comb1)
   })
   top_angles=whichpart1(comb_all, n=topn, return_scores=T)
-  t1=sort(unlist(top_angles, rec=T))
-  t1[t1<999]
+  t1 = .merge1_new(lapply(top_angles, function(ta){
+    data.frame(list(names = names(ta), value=ta[1]))
+  }),addName="data_type")
+  t1 = t1[order(t1$value),]
+  subset(t1, value<999)
 }
 
-.summariseAngles<-function(t1, topn){
-  if(length(t1)<topn)topn = length(t1)
-  outp =lapply(names(t1)[1:topn], function(str){
-    spl=strsplit(str,"\\.")[[1]]
-    c(spl[1],paste(spl[-1],collapse="."))
-  })
-  names(outp) = names(t1)[1:length(outp)]
-  outp
-}
 
 .check<-function(var1,var2){
   if(length(var1)!=length(var2)) stop("not match var")
@@ -435,6 +429,7 @@ convert=function(b_i1){
     stop(paste("could not find",b_i1[[1]]))
   }
   var_ind = which(dimnames(self$data[[data_ind]])[[2]]==b_i1[2])
+  if(length(var_ind)==0) return(NULL)
   c(data_ind, var_ind)
 },
 pheno = function(maxpheno=1e9,sep=F, sep_group=F){ 
@@ -1130,6 +1125,7 @@ makeModels=function(phens1, vars2, k,
    data =self
    nonNA=self$looc$incl[,k]
     b_i = self$convert(b_i_name)
+    if(is.null(b_i)) return(NULL)
     mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
     prev_var = prev_i$var
     self$updateUDVP(prev_var)
@@ -1707,8 +1703,9 @@ phensi=function(phens){
 ##incl is which of the layers to include
 getAngles1=function(subphens,varnames,incl=names(self$data), k=1,type="slow1"){
   var=lapply(varnames, self$convert)
- phensi = self$phensi(subphens)
- names(phensi)=names(subphens)
+  var = var[unlist(lapply(var, length))>0]
+  phensi = self$phensi(subphens)
+  names(phensi)=names(subphens)
   self$getAngles(phensi,var ,incl=incl, k=k, type=type)
 },
   getAngles=function(phensi, var,incl=names(self$data), k=1,type="slow1"){  ## type can be fast, slow, assoc, slow1 .. fast gives wrong results
@@ -1850,10 +1847,10 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
         self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,NULL,k, var=var, varnames=varnames, W_all = W_all)
       }
   },
-update=function(k,func_str,varn = c()){
+update=function(k,funcst,phens, varn = c()){
   var = self$extractVar(varn)
   W_all = if(length(var)==0) matrix(nrow=0, ncol=0) else  .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
-  self$train$update(self,k,func_str, var=var,varnames=varn, W_all = W_all)
+  self$train$update(self,k,funcst, phens, var=var,varnames=varn, W_all = W_all)
 },
 randomise=function(n= nrow(self$y[[1]]),
                    indices=sample.int(n,n)){
@@ -1915,20 +1912,18 @@ randomise=function(n= nrow(self$y[[1]]),
    
   #  self$ypred=ypredObj$new(self,NULL,  params,family)
   },
-cols_incl =function(varthreshs, genes_inc){ 
+cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #incl, g_incl,qq
   norm = self$norm
-  nme_norm =names(norm); names(nme_norm) = nme_norm
-  lapply(nme_norm, function(norm_nme){
+ names(incl) = incl
+  lapply(incl, function(norm_nme){
+     varthreshs = var_threshs[[norm_nme]]
       norm1 = norm[[norm_nme]]
-      var_thresh = var_threshs[[norm_nme]]
-      incls_all1 = unique(unlist(getOption("incls", list(names(self$data)))))
-      if(!(norm_nme %in% incls_all1)) return(NULL)
-     # genes_inc = self$genes_incls
+      varthresh = var_threshs[[norm_nme]][qq]
       variance = self$vars[[norm_nme]]
      # varthresh = var_thresh[[norm_nme]]
       var_res = variance>=varthresh
-      if(!is.null(genes_inc) && length(genes_inc)>0 && genes_inc!="all"){
-        var_res = var_res & (names(norm1) %in% genes_inc)
+      if(!is.null(g_incl) && length(g_incl)>0 && g_incl!="all"){
+        var_res = var_res & (names(norm1) %in% g_incl)
       }
       var_res
   })
@@ -1970,7 +1965,7 @@ cols_incl =function(varthreshs, genes_inc){
        for(jj in inds){
          levs = levels(y1[,jj])
          if(!is.null(levs)){
-           y1[,jj] = as.numeric(y1[,jj])
+           y1[,jj] = as.numeric(y1[,jj])-1
          }
        }
         

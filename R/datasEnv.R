@@ -9,9 +9,14 @@
     prev_i = vars_l1[[nmed]]
     family = strsplit(names(subphens)[[1]],"\\.")[[1]][1]
     if(family=="multinomial") useoffset=F
-    prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=NULL, project=project, useglm=T, logpthresh =0, useoffset=useoffset)
-    prev_i1
+    prev_i1 = try(d$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=NULL, project=project, useglm=T, logpthresh =0, useoffset=useoffset))
+    if(inherits(prev_i1,"try-error")) {
+      print(paste("problem", nmed))
+      return(NULL)
+    }
+     prev_i1
   })
+  pvs_all = pvs_all[unlist(lapply(pvs_all, length))>0]
   pvs_all
 }
 .nonZero<-function(am2){
@@ -441,8 +446,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     names(train_nme) = train_nme
     maxsize=.readFlag(flags,'max',50)
     num_pvals = min(topn, 10)
-    incl = .readFlag(flags,'data_types',names(datas1[[1]]$data))
-    names(incl )= incl
+    incls = fromJSON(.readFlag(flags,'data_types',toJSON(list(names(datas1[[1]]$data)))))
     logpvthresh = log(.readFlag(flags,"pthresh",1e-5))
     logpv=-100
     nreps = 1:nreps1
@@ -451,40 +455,44 @@ datasEnv<-R6Class("datasEnv", public = list(
     func_str = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
     flags_out = list(train=train_nme,  max=maxsize, 
                      nreps = nreps, beam=beam,func_str = func_str,
-                     topn = num_pvals, pthresh =exp(logpvthresh), data_types = incl)
+                     topn = num_pvals, pthresh =exp(logpvthresh), data_types = incls)
     phens_index = 1:length(phens)
     names(phens_index) = names(phens)
     var_thresh = lapply(train_nme, function(data_nme){
       lapply(datas1[[data_nme]]$vars, function(v) quantile(v, quantiles))
     })
-   #funcst = func_str[[1]]; k=1;p_index = phens_index[[1]]
+   #funcst = func_str[[1]]; k=1;p_index = phens_index[[1]]; g_incl  = genes_incls[[1]]; qq =1; incl = incls[[1]]
     vars_combined=lapply(func_str,function(funcst){
       print(funcst)
      variables=lapply(nreps, function(k){
       print(paste("cv",k,"of",length(nreps)))
       jj1=0
-      invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst))); ### update training object
+      invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, phens))); ### update training object
       res2=  lapply(phens_index, function(p_index){
         subphens = phens[[p_index]]
         if(FALSE) cat(p_index); cat("\t");
-      #  vars_l = list(mStateObj$new(c(),c(), NULL))  ## initialise vars_l
         vars_l =list(lapply(train_nme,function(xx) stateObj$new(subphens, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all = NULL)))
+        for(incl in incls){
         for(g_incl in genes_incls){
          for(qq in 1:length(quantiles)){
          while(logpv<logpvthresh && length(vars_l[[1]][[1]]$var)<maxsize){
-          #vars = vars_l[[1]]
+          #vars_l1 = vars_l[[1]]
           angles_all = lapply(vars_l, function(vars_l1){
             nxt_vars1 =  tryCatch({
               varnames = vars_l1[[1]]$var_names; type = self$type
-            angles=lapply(train_nme, function(data_nme) datas1[[data_nme]]$getAngles1(subphens,varnames,incl=incl,k=k, type=type))
+            angles=lapply(train_nme, function(data_nme) {
+              print(data_nme); 
+              datas1[[data_nme]]$getAngles1(subphens,varnames,incl=incl,k=k, type=type)
+              })
             names(angles) = train_nme
-            cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl(var_thresh[[data_nme]][qq]), g_incl)
-             comb1=.combineAngles(angles,cols_incl,topn=topn)
-            comb=.summariseAngles(comb1,topn)
-            if(length(comb)==0) return(NULL)
-            num_pvals1 = min(num_pvals, length(comb))
+            cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl(var_thresh[[data_nme]],incl, g_incl,qq)) ### fix 
+             comb=.combineAngles(angles,cols_incl,incl,topn=topn)
+         
+            if(nrow(comb)==0) return(NULL)
+            num_pvals1 = min(num_pvals, nrow(comb))
             nxt_vars = lapply(1:num_pvals1, function(ik){
-               b_i_name = comb[[ik]]
+            #  print(ik)
+               b_i_name = c(comb$data_type[[ik]], comb$names[[ik]])
                nv = .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], vars_l1, b_i_name,k, funcst, project = project, useoffset=useoffset)
               attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){
                  unlist(nv1$pvs)
@@ -516,6 +524,7 @@ datasEnv<-R6Class("datasEnv", public = list(
              print(paste("logpv",logpv,jj1))
              jj1 = jj1+1
           }
+        }
         }
         }
       }
