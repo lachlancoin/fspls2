@@ -12,21 +12,6 @@
 #colk is family col
 
 
-.sumMatrices<-function(matrices){
-  if(length(matrices)==0) return(NULL)
-  m=matrices[[1]]
-  varn = dimnames(m)[[2]]
-  if(length(matrices)>1){
-    for(k in 2:length(matrices)){
-      mi1 = match(varn,dimnames(matrices[[k]])[[2]])
-      m[!is.na(mi1)] =m[!is.na(mi1)]+ matrices[[k]][mi1[!is.na(mi1)]]
-      m[is.na(mi1)] = 9999
-      #m = m+matrices[[k]]
-    }
-  }
-  m
-}
-
 mStateObj<-R6Class("mStateObj",
                    public = list(
                      var="list",
