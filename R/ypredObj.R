@@ -594,7 +594,8 @@ ypredObj<-R6Class("ypredObj", public = list(
 #  ypred$updateYP(data, prev, nonNA, !within)  
 #},
 
-updateYP=function(d,prev_i1,  nonNA, flip=T, ignore.na=F, liab=T){
+updateYP=function(d,full_model,  nonNA, flip=T, ignore.na=F, liab=T){
+  prev_i1=full_model
   ypred = self
   prev_kj = prev_i1 
   phensi=self$phensi
@@ -684,7 +685,8 @@ calcRMSV=function(y, nonNA, inverse_func = function(y) y,      flip=F){
   w1= if(is.null(ind_1)) self$weights else self$weights[ind_1]
   nsamps = length(which(ind_1))
   .merge1_new(lapply(nme_phens, function(nme_p1){
-    family= strsplit(nme_p1,"\\.")[[1]][1]
+    family=  getOption("fspls.family",strsplit(nme_p1,"\\.")[[1]][1])
+    
     fam = family
     mtype = match(family,names(types_))
     if(length(which(is.na(mtype)))>0) stop("could not find match in types_")
