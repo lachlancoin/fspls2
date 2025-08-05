@@ -2038,7 +2038,7 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #i
         }))
       }else{
         if(typeof(y1)=="S4"){
-          return (list(y1[mi1,inds]))
+          return (list(y1[mi1,inds,drop=F]))
          # return(list(getSparseSubMatrix(getSparseSubMatrix(y1, inds, by="col"), mi1, by="row")))
         }
        for(jj in inds){
