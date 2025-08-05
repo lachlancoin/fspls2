@@ -99,7 +99,8 @@ length(unique(eval1$`data:family`))
   eval2$numvars = as.numeric(eval2$numvars)
 # eval2$isfull = (eval2$isfull+1)/2.0
   ggps=lapply(phenos, function(ph){ 
-    eval5 = subset(eval2, sep_by==ph)
+    eval5 = subset(eval2, sep_by==ph & !is.na(mid))
+    
   ggp<-ggplot(eval5);
   if(point) ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_color_nme,size="nsamps", color=shape_color_nme))
   if(line)  ggp<-ggp+geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=shape_color_nme)) +ggtitle(paste(title,ph))

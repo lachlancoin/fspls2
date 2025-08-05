@@ -47,7 +47,7 @@ trainObj<-R6Class("trainObj",
                       funcs =  eval(str2lang(funcst))
                       y1 = self$y1
                       looc_incl_k_ij = self$looc_incl[,k]
-                      means_y = lapply(y1, function(y1)rep(0, ncol(y1)))
+                      means_y = lapply(y1, function(y1_)rep(0, ncol(y1_)))
                       inds_to_do = which(names(self$y1) %in% names(phens1))
                       for(colk1 in 1:length(inds_to_do)){
                         colk = inds_to_do[colk1]
@@ -84,13 +84,13 @@ trainObj<-R6Class("trainObj",
                   #    })
                   #    nonNA
                   #  },
-                    update=function(data,k,funcst,phens,incl,
+                    update=function(data,k,funcst,subphens,incl,
                                     var=list(), varnames = list(), W_all = matrix(nrow=0, ncol=0)){
-                      phen_fams = unlist(lapply(phens, function(ph) names(ph)))
+                      phen_fams = names(subphens) #unlist(lapply(phens, function(ph) names(ph)))
                       phen_fam = unique(phen_fams)
                       names(phen_fam) = phen_fam
                       phens1 = lapply(phen_fam, function(pf){
-                        ab = unique(unlist(phens[which(phen_fams==pf)])  )
+                        ab = unique(unlist(subphens[which(phen_fams==pf)])  )
                         names(ab)=ab
                         ab
                       })
@@ -111,7 +111,8 @@ trainObj<-R6Class("trainObj",
                       nmes_phens1 = names(phens1); names(nmes_phens1) = nmes_phens1
                       ymean = lapply(nmes_phens1, function(nme_p1){
                         yTr1 = self$yTr[[nme_p1]]
-                        subinds = dimnames(yTr1)[[1]] %in% phens1[[nmes_phens1]]
+                        subinds = dimnames(yTr1)[[1]] %in% phens1 #[[nmes_phens1]]
+                        if(length(which(subinds))==0) subinds = dimnames(yTr1)[[1]] %in% phens1[[nmes_phens1]]
                         apply(yTr1[subinds,,drop=F],1,mean,na.rm=T)
                       })
                         #ymean = lapply(self$yTr,function(yTr1) apply(yTr1,1,mean)) ## should be mean 0
@@ -125,7 +126,8 @@ trainObj<-R6Class("trainObj",
                         x = data$data[[ik]]
                         lapply(nmes_phens1, function(nme_p1){
                           yTr1 = self$yTr[[nme_p1]]
-                          subinds = dimnames(yTr1)[[1]] %in% phens1[[nmes_phens1]]
+                          subinds = dimnames(yTr1)[[1]] %in% phens1#[[nmes_phens1]]
+                          if(length(which(subinds))==0) subinds = dimnames(yTr1)[[1]] %in% phens1[[nmes_phens1]]
                           yTr1 = yTr1[subinds,,drop=F]
                          # lapply(yTr_, function(yTr1){ ##NEED TO ADD POWS
                             # print(dim(yTr1))

@@ -2,7 +2,7 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
 
 .calcPvalue<-function(x,y, beta_new1, yp1,w, family){   ## this seems to not work anymore for multinomial
   if(length(which(!is.na(y)))==0) return (0)
-  if(is.matrix(x)){
+  if(is.matrix(x) || typeof(x)=="S4"){
     yp_new = x %*% beta_new1
   }else{
     yp_new = as.matrix(x * beta_new1, ncol=1)
@@ -853,12 +853,11 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
     #yp = beta_new1%*%x1
     #a = lm(y~yp[1,])
     #summary(a)
-    if(FALSE){  ##this consistent for pvs??
+    if(family=="multinomial" ){  ##this consistent for pvs?? easiest way to get pvalue for multinomial and single variable x
       m1=lm(x~y)
       ll1 = logLik(m1)
       ll2 =  logLik(update(m1, ~1))
       pv1 = .lrt(ll1,ll2,2,1, log.p=T)
-      
     }else{
        pv1 = .calcPvalue(x,y, beta_new1, 1,w, family)
        
@@ -2074,7 +2073,7 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #i
         
       }else{
         if(typeof(y1)=="S4"){
-          return (list(y1[mi1,inds]))
+          return (list(y1[mi1,inds,drop=F]))
          # return(list(getSparseSubMatrix(getSparseSubMatrix(y1, inds, by="col"), mi1, by="row")))
         }
        for(jj in inds){

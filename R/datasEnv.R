@@ -262,7 +262,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     
     logpthresh= log(.readFlag(flags,"pthresh",1e-3))
     project=.readFlag(flags,"project",TRUE)
-    #nme_v_all = nmes_vars_all[[1]]; v_nme = names(vars_all[[1]]$variables)[1]; max=10; verbose=T; k=1
+    #nme_v_all = nmes_vars_all[[1]]; v_nme = names(vars_all[[1]]$variables)[1]; max=10; verbose=T; k=1;variables =vars_all[[nme_v_all]]$variables;  v_nme = names(variables)[[1]]
     lapply(nmes_vars_all, function(nme_v_all){
       if(verbose) print(nme_v_all)
       vars = vars_all[[nme_v_all]]
@@ -489,10 +489,11 @@ datasEnv<-R6Class("datasEnv", public = list(
       print(paste("cv",k,"of",length(nreps)))
       jj1=0
       incls_all = unique(unlist(incls))
-      invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, phens,incls_all))); ### update training object
+      #invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, phens,incls_all))); ### update training object
       res2=  lapply(phens_index, function(p_index){
         if(verbose) print(paste("pindex",p_index,k,length(nreps)))
         subphens = phens[[p_index]]
+        invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, subphens,incls_all))); ### update training object
         if(FALSE) cat(p_index); cat("\t");
         vars_l =list(lapply(train_nme,function(xx) stateObj$new(subphens, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all = NULL)))
         #vars_l1 = vars_l[[1]]
