@@ -31,21 +31,30 @@ getFullModels<-function(all_models){
     }))
   }))
 }
-.getFamily<-function(y_mat, family1=NULL){
+.getFamily<-function(y_mat, family1=NULL, max_ordinal=20){
   types = attr(y_mat, "types")
   
   if(!is.null(types)){
-    return(lapply(1:length(types), function(i){
+    indst = 1:length(types)
+    names(indst) = names(y_mat)
+    family = (lapply(indst, function(i){
       typ = types[[i]]
       if(typ=="double") return("gaussian")
       if(typ=="boolean") return("binomial")
-      if(typ=="integer") return("ordinal")
+      if(typ=="integer") {
+        tbl=if(is.list(y_mat)) table(y_mat[[i]]) else table(y_mat[,i])
+        if(length(tbl)<=2) return("binomial")
+       if(length(tbl)>max_ordinal) return("gaussian")
+        return("ordinal")
+      }
       if(typ=="character"){
         tbl=if(is.list(y_mat)) table(y_mat[[i]]) else table(y_mat[,i])
         if(length(tbl)<=2) return("binomial")
         return("multinomial")
       }
     }))
+    subinds = unlist(lapply(family, length))==0
+    return(family)
   }
     if(typeof(y_mat)=="list"){
     return(lapply(y_mat,function(y){
@@ -57,7 +66,10 @@ getFullModels<-function(all_models){
       }
       if(length(unique(y[!is.na(y)]))<=2) return("binomial")
       vals = unique(y)
-      if(sum(abs(vals-round(vals)))<1e-9) return("ordinal")
+      if(sum(abs(vals-round(vals)))<1e-9) {
+        if(length(table(vals))>max_ordinal) return("gaussian")
+        return("ordinal")
+      }
       return("gaussian")
     }))
   }else{
@@ -213,6 +225,9 @@ datasEnv<-R6Class("datasEnv", public = list(
       }))
     })
   },
+ cats = function(maxpheno = 1e9){
+    lapply(self$datas, function(d) d$cats(maxpheno))
+ },
   pheno=function(maxpheno=1e9,sep=F, sep_group = F, exclude=NULL){
    res = self$datas[[1]]$pheno(maxpheno=maxpheno, sep=sep, sep_group = sep_group);
   if(!is.null(exclude)){
@@ -222,6 +237,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   }
    res
   },
+
   angles=function(vars,phens,flags){
     datas = self$datas
     topn = .readFlag(flags,'topn', 100) 

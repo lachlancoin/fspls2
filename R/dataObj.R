@@ -103,23 +103,32 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
   m1 = Matrix(as.matrix(res),sparse=T)
 }
 
-.expandFactors<-function(y){
+.expandFactors<-function(y, max_cats=50){
   res = lapply(1:ncol(y), function(i){
+    print(i)
     y1 = y[,i]
     if(!is.factor(y1)) y1 = factor(y1, levels = sort(unique(y1)))
     levs1 = levels(y1)
+    if(length(levs1) > max_cats) {
+      warning(paste("more than max_cats", names(y)[[i]],length(levs1), max_cats))
+      return(NULL)
+    }
     mat = Matrix(0, nrow = length(y1), ncol = length(levs1), dimnames = list(rownames(y), levs1),sparse=T)
     if(length(which(is.na(y1)))>0){
       mat[is.na(y1),]=rep(NA, length(levs1))
     }
     for(j in 1:length(levs1)){
-      mat[y1==levs1[[j]],j]=1
+      indsy1 = which(y1==levs1[[j]])
+      if(length(indsy1)>0){
+        mat[indsy1,j]=1
+      }
     }
     attr(mat,"factor")=y1
     mat
   })
+
   names(res) = dimnames(y)[[2]]
-  
+  res = res[unlist(lapply(res, length))>0]
   res
 }
 
@@ -502,6 +511,22 @@ convert=function(b_i1){
   var_ind = which(dimnames(self$data[[data_ind]])[[2]]==b_i1[2])
   if(length(var_ind)==0) return(NULL)
   c(data_ind, var_ind)
+},
+cats = function(maxpheno = 1e9){
+  fam=self$family
+  phens =  lapply(1:length(fam), function(i){
+    y1 = self$y[[i]]
+    if(fam[[i]]=="multinomial"){
+      y1 = attr(y1, "factor")
+      l1 = list(levels(y1))
+    }else{
+      cn = colnames(y1)[1:min(maxpheno, ncol(y1))]
+      l1 = list(apply(y1,2,table))
+    }
+    names(l1) = names(self$y)[[i]]
+    l1
+  })
+  names(phens) = names(self$y)
 },
 pheno = function(maxpheno=1e9,sep=F, sep_group=F){ 
  phens =  lapply(self$y, function(y1) colnames(y1)[1:min(maxpheno, ncol(y1))])
@@ -1133,6 +1158,7 @@ makeModels=function(phens1, vars2, k,
                    func_str="function(y) y"
                   ){
   phen2 = phens1
+  if(length(phens1)>1) stop("assuming just one phenotype here")
   ypred=self$ypred(phen2)
   transform_func = eval(str2lang(func_str))
   #if(length(phen2)>1) stop("just one group .. need to fix for multiple types")
@@ -1151,7 +1177,7 @@ makeModels=function(phens1, vars2, k,
   len = length(vars2)
   models = vector("list", len)
   useglm=getOption("glmnet",T)
-  family = getOption("fspls.family",self$family[[1]]) #ypred$family[[1]]
+  family = getOption("fspls.family",strsplit(names(phens1),"\\.")[[1]]) #ypred$family[[1]]
   if(family=="multinomial") useoffset=F
   nme1 = ""
   jk=1
@@ -2019,10 +2045,12 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #i
     missing_vals = dimnames(self$data[[1]])[[1]][is.na(mi1)]
     if(length(matching_vals)==0) stop("could not match pheno with matrix")
     family=if(!is.null(family)) family else .inferFamily(y1)
-    fams = unique(family)
+    subinds = unlist(lapply(family, length))>0
+  #  family = family]
+    fams = unique(family[subinds])
     names(fams) = fams
     y = lapply(fams, function(fam){
-      print(fam)
+      #print(fam)
       inds = which(family==fam)
       names(inds) = dimnames(y1)[[2]][inds]
       if(fam=="multinomial"){
@@ -2034,9 +2062,16 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #i
         
         return(.expandFactors(y1[mi1,inds,drop=F]))
       }else if(fam=="ordinal"){
-        return(lapply(inds, function(ind){
+        l1 = lapply(inds, function(ind){
+        #  print(ind)
+          tryCatch({
           Matrix(as.matrix(y1[mi1,ind,drop=F]))
-        }))
+          },error=function(ew){
+            return(NULL)
+          })
+        })
+        l1 [unlist(lapply(l1, length))>0]
+        
       }else{
         if(typeof(y1)=="S4"){
           return (list(y1[mi1,inds]))

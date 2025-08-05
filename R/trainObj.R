@@ -27,14 +27,9 @@ trainObj<-R6Class("trainObj",
                                           ){  #y is a list of sparse matrices
                     #  types_ =     getOption("fspls.types", fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC"}'))
                       self$family=family
-                   #   self$func_str = func_str
-                   #   self$funcs =  eval(str2lang(paste("function(x)",func_str)))
-                    
-                      
                       self$means_y = list()
                       self$looc_incl=looc$incl
                       self$y1=y
-#                      self$yNA = yNA
                       self$yTr =
                         lapply(self$y1,function(y11){
                             y12 = t(y11)
