@@ -40,7 +40,7 @@ path="~/github/FSPLS-publication-repo/input"
 print(dir(path,full=T,rec=T))
 
 
-flags = list(pthresh = 1e-3, nrep=10,batch=0, max=50,topn=100,beam=1,all_v_all=F, one_v_rest=F)
+flags = list(pthresh = 1e-5, nrep=5,batch=0, max=50,topn=100,beam=1,all_v_all=T, one_v_rest=F)
 flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)", "x3":"function(x) x^3","1x":"function(x) 1/x"}'
 flags[['transform']] = '{"x" :"function(x) x","log" :"function(x) log1p(x)"}'
 flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)"}'
@@ -57,11 +57,11 @@ rds = readRDS("/home/unimelb.edu.au/lcoin/github/FSPLS-publication-repo/output/a
 
 ## MAKE THE FSPLS DATA OBJECT
 vars = apply(rawl$golub$dataset$rna,2,var)
-rawl$golub$dataset$rna = rawl$golub$dataset$rna[,vars>=quantile(vars)[1]] ## remove low variance cols
+rawl$golub$dataset$rna = rawl$golub$dataset$rna[,vars>quantile(vars)[1]] ## remove low variance cols
 datasAll =datasEnv$new(rawl,flags=flags) 
 datasAll$update(flags)
 
-phens=datasAll$pheno(sep=T)
+phens=datasAll$pheno(sep=F)
 phens = phens[1]
 #phens$all$binomial.multiway = phens$all$binomial.multiway[2]
 ## FIND VARIABLES
@@ -77,7 +77,9 @@ ggps = .plotEval1(eval1, legend=T, showrange=F)
 #ggps = .plotEval1(eval, rename=F,grid="subpheno~cv", sep="pheno",sep=)
 ggps
 
-ggps=.plotEval1(eval1,grid0="pheno", showranges=T, scales="free",sep="cv_full")
+ggps=.plotEval1(eval1,grid0="pheno", grid1="",showranges=T, scales="free",sep="cv_full");
+#ggps=.plotEval1(eval1,grid0="pheno", showranges=T, scales="free",sep="pheno")
+
 
 ggps=.plotEval1(eval1,  grid0="pheno",grid1="", showranges=T, scales="free", sep="cv_full")
 
