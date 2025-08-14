@@ -10,7 +10,11 @@ loocObj<-R6Class("loocObj", public = list(
                       incl_full = T,
                       nrows = nrow(data$data[[1]]),
                       rand = sample(nrows),  ## randomisation
-                      nrep=getOption("fspls.nrep",1), batch=getOption("fspls.batch",0)){
+                      nrep=getOption("fspls.nrep",1), 
+                      batch=getOption("fspls.batch",0),
+                      pheno_balance=NULL
+                      ){
+   
     len_y = nrows #length(data$y[,1])
 #    nonNA = apply(data$y,c(1,2),function(x) !is.na(x))
 #    non_na_inds = which(apply(nonNA, 1,function(x) length(which(x))>0))
@@ -39,6 +43,23 @@ loocObj<-R6Class("loocObj", public = list(
       self$useAll = useAll
       self$nrep=0
       self$incl=as.matrix(useAll)
+    }else if(!is.null(pheno_balance)  && batch==1){
+      phens1 = unlist(lapply(data$y, function(y1) which(dimnames(y1)[[2]]==pheno_balance)))
+      y2 = data$y[[names(phens1)[[1]]]][,phens1[[1]]]
+      tbl=table(y2)
+      cnt=min(tbl)
+      nmet = sort(unique(y2)); names(nmet) = nmet
+      v2 = rep(T, length(y2))
+      incl2 = unlist(lapply(nmet, function(nmet1){
+        s1= as.list(sample(which(y2==nmet1),cnt,replace=T))
+      }))
+        incl= data.frame(lapply(incl2, function(s2){
+            v3 = v2
+            v3[s2] = FALSE
+            v3
+        }))
+        if(incl_full) incl = cbind( incl, useAll)
+        self$incl = incl
     }else{
       reps_k = seq(1, len_y1+1, batch)
       reps_k[length(reps_k)] = len_y1+1

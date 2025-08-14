@@ -1,3 +1,10 @@
+#library(reticulate)
+
+#use_python("/apps/easybuild-2022/easybuild/software/Compiler/GCCcore/11.3.0/Python/3.11.3/bin/python")
+#library(anndata)
+#setwd("/data/scratch/projects/punim1068/Zhitao")
+#data = read_h5ad("PanCancer_igt_s9_fine_counts.h5ad", backed='r') 
+
 ##SET APPROPRIATE LIB PATHS 
 
 ##SHOULD BE RUN FROM WHERE GIT CLONED TO

@@ -57,7 +57,9 @@ getFullModels<-function(all_models){
     return(family)
   }
     if(typeof(y_mat)=="list"){
-    return(lapply(y_mat,function(y){
+      nmey = names(y_mat); names(nmey)=nmey
+    family = lapply(nmey,function(ynme){
+      y  = y_mat[[ynme]]
       if(!is.numeric(y)){
         y = as.factor(y);
       }
@@ -66,12 +68,13 @@ getFullModels<-function(all_models){
       }
       if(length(unique(y[!is.na(y)]))<=2) return("binomial")
       vals = unique(y)
-      if(sum(abs(vals-round(vals)))<1e-9) {
+      if(sum(abs(vals-round(vals)), na.rm=T)<1e-9) {
         if(length(table(vals))>max_ordinal) return("gaussian")
         return("ordinal")
       }
       return("gaussian")
-    }))
+    })
+    return(family)
   }else{
    
   return(apply(y_mat,2,function(y){
@@ -83,7 +86,10 @@ getFullModels<-function(all_models){
     }
     if(length(unique(y[!is.na(y)]))<=2) return("binomial")
     vals = unique(y)
-    if(sum(abs(vals-round(vals)))<1e-9) return("ordinal")
+    if(sum(abs(vals-round(vals)), na.rm=T)<1e-9){
+      if(length(table(vals))>max_ordinal) return("gaussian")
+      return("ordinal")
+    }
     return("gaussian")
     }))
   }
@@ -139,13 +145,21 @@ datasEnv<-R6Class("datasEnv", public = list(
               return(mats2) 
             }
             mat3 =  func(mats2$matrix)
+            mat3[which(is.infinite(mat3))]=NA
             na_ind = which(is.na(mat3))
             na_m = mats2$matrixNA
             if(length(na_ind)>0){
-              stop("added NAs")
               na_m[na_ind] = 1
+              mat31 = apply(mat3,2,function(v){ ## sets mean to col mean
+                mv = mean(v, na.rm=T)
+                v[is.na(v)]=mv
+                v
+              })
+              mat3 = Matrix(mat31, sparse=TRUE)
+             # na_ind1 = which(is.na(mat3), arr.ind=T)
+              #na_cols = unique(na_ind1[,2])
             }
-            list(matrix = func(mats2$matrix), matrixNA = na_m)
+            list(matrix = mat3, matrixNA = na_m)
           })
         }),rec=F)
         names(tm1) = gsub("\\.","_",names(tm1))
@@ -169,7 +183,8 @@ datasEnv<-R6Class("datasEnv", public = list(
     all_v_all = .readFlag(flags,"all_v_all",F)
     one_v_rest = .readFlag(flags,"one_v_rest",F)
     nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
-    invisible(lapply(datas, function(data) data$init1(nrep=nrep,  batch = batch)))
+    pheno_balance=.readFlag(flags,"pheno_balance",NULL)
+    invisible(lapply(datas, function(data) data$init1(pheno_balance = pheno_balance, nrep=nrep,  batch = batch)))
     varn = getOption("varn",c())
    
     invisible(lapply(1:length(datas), function(ik) {
@@ -197,7 +212,8 @@ datasEnv<-R6Class("datasEnv", public = list(
     batch=.readFlag(flags, "batch",0)
     
     nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
-    invisible(lapply(self$datas, function(data) data$init1(nrep=nrep,  batch = batch)))
+    balance=.readFlag(flags,"pheno_balance",NULL)
+    invisible(lapply(self$datas, function(data) data$init1(pheno_balance = balance, nrep=nrep,  batch = batch)))
     varn = getOption("varn",c())
     for(ik in 1:length(self$datas)){
       self$datas[[ik]]$initTrain(varn=varn)

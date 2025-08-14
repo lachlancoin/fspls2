@@ -1971,13 +1971,15 @@ randomise=function(n= nrow(self$y[[1]]),
     self$initTrain();  
   }
 },
-  init1=function( nrep = getOption("fspls.nrep",1), batch = getOption("fspls.batch",0)
+  init1=function( pheno_balance = getOption("fspls.balance",NULL), nrep = getOption("fspls.nrep",1), batch = getOption("fspls.batch",0)
                  ){  ## this function initialises training paramaters for this dataset
     set.seed(self$seed)
     rand = sample(nrow(self$data[[1]]))
     self$looc=loocObj$new(self, nrep = nrep, batch = batch,
                           incl_full = T,
-                          rand = rand)
+                          rand = rand,
+                          pheno_balance = pheno_balance
+                          )
     if(nrep==1){
       #should really do this inside looc obj
       self$looc$incl = self$looc$incl[,2,drop=F]
