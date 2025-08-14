@@ -1157,7 +1157,7 @@ makeModels=function(phens1, vars2, k,
                    func_str="function(y) y"
                   ){
   phen2 = phens1
-  if(length(phens1)>1) stop("assuming just one phenotype here")
+  #if(length(phens1)>1) stop("assuming just one phenotype here")
   ypred=self$ypred(phen2)
   transform_func = eval(str2lang(func_str))
   #if(length(phen2)>1) stop("just one group .. need to fix for multiple types")
@@ -1176,8 +1176,9 @@ makeModels=function(phens1, vars2, k,
   len = length(vars2)
   models = vector("list", len)
   useglm=getOption("glmnet",T)
-  family = getOption("fspls.family",strsplit(names(phens1),"\\.")[[1]]) #ypred$family[[1]]
-  if(family=="multinomial") useoffset=F
+  fams1 = lapply(names(phens1), function(st1)strsplit(st1,"\\.")[[1]][1])
+  family = getOption("fspls.family",fams1) #ypred$family[[1]]
+  if(family[[1]]=="multinomial") useoffset=F
   nme1 = ""
   jk=1
   while(jk<=len){
@@ -1234,14 +1235,14 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
    # b_new_proj1 = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=!project,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
     
     betas_new = b_new_proj$betas
-      constants_proj =if(family=="multinomial") b_new_proj$constants[[1]] else b_new_proj$constants
-      pvs =if(family=="multinomial") b_new_proj$pvs[[1]] else b_new_proj$pvs
+      constants_proj =if(family[[1]]=="multinomial") b_new_proj$constants[[1]] else b_new_proj$constants
+      pvs =if(family[[1]]=="multinomial") b_new_proj$pvs[[1]] else b_new_proj$pvs
    #   print(pvs)
     #  if(.sumChisq(pvs)>logpthresh ){
         
      # return(NULL)
     #  }
-    tbls = if(family=="multinomial") b_new_proj$tbls[[1]]  else b_new_proj$tbls
+    tbls = if(family[[1]]=="multinomial") b_new_proj$tbls[[1]]  else b_new_proj$tbls
     prev_i1=stateObj$new(subphens,data, betas_new,constants_proj, tbls, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = NULL,pvs =pvs, useoffset=useoffset)
   #  prev_i1$setOffset() 
     prev_i1$setOffset()

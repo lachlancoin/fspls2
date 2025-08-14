@@ -1,7 +1,7 @@
 ##SET APPROPRIATE LIB PATHS 
 
 ##SHOULD BE RUN FROM WHERE GIT CLONED TO
-.libPaths("~/R/x86_64-pc-linux-gnu-library/4.4/")
+.libPaths("~/R/x86_64-pc-linux-gnu-library/4.1/")
 options(bigmemory.allow.dimnames=TRUE)
 library(jsonlite)
 library(R6)
@@ -14,6 +14,10 @@ library(pROC);
 library(nnet)  ## for multinomial
 library("binom") ## for plotting
 library(confintr)
+
+##to store signatures
+library(DBI); 
+library(RSQLite);
 
 library(cowplot)
 #library(wCorr)
@@ -36,17 +40,17 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[2]; pthresh = 0.001 ; randomise=F; duplicate=F
+datasets =examples[4]; pthresh = 0.001 ; randomise=F; duplicate=F
 options("fspls.types"=
-          fromJSON('{"gaussian": ["correlation"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
+          fromJSON('{"gaussian": ["correlation","rms"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
 
 func_y = list(y="function(y) y")  #'{"y":"function(y) y","y1":"function(y) y^2"} '
 
 runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
                  func_y = list(y="function(y) y")){
   y = datasets[[1]]$y
-  flags = list(pthresh = pthresh, max=10,nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  project=T,
-               useoffset=T,useglm=T,quantiles = c(0,0.1),
+  flags = list(pthresh = pthresh, max=10,nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  project=T,
+               useoffset=T,useglm=T,#quantiles = toJSON(c(0,0.1)),
                transform_y =toJSON(func_y) )
   ## MAKE THE FSPLS DATA OBJECT
   if(duplicate){
@@ -56,17 +60,30 @@ runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
   datasets[[1]]$y = y2
   }
   datasAll =datasEnv$new(datasets,flags=flags) 
+  sigs = datasAll$getSigDB(reload=T)
+  
+  sigs$datas(); 
+  #sigs$clear_all()
   if(randomise) datasAll$randomise()
   phens=datasAll$pheno()
   
   ## FIND VARIABLES
   vars_all = datasAll$select(phens, flags,verbose=T)
-  #print(variables_all)
-  ## FIT MODELS
+  
+  sigs$saveVars(vars_all, phens, flags)
+  sigs$experiments()
+  
+  vars_all1 = sigs$loadVars(flags, phens)
+  print(vars_all1)
   options("fspls.verbose1"=T)
   
   all_models = datasAll$makeAllModels(vars_all, phens, flags)
-  eval0 = datasAll$evaluateAllModels(all_models, phens, flags)
+  sigs$saveModels(all_models, flags,phens,"")
+  all_models1 = sigs$loadModels(flags, phens ,"")
+  eval0 = datasAll$evaluateAllModels(all_models1, phens, flags)
+  
+  sigs$saveEval(eval0, flags, phens, "")
+  eval1 = sigs$loadEval(flags,phens,"")
   #eval = subset(eval, model!="avg")
   
   if(FALSE){ ## show cum plots

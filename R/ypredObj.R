@@ -237,6 +237,8 @@ liability<-function(xM){ ## use with glmnet output
  
   betas =  prev_i1$betas[[kk1]]
   vars1 = prev_i1$var
+  yp = .rep(constants, length(which(ind_1)))
+  
   if(length(vars1)==0) return(yp)
   betas1 = prev_i1$betas[[kk]]
 #  mean_x = prev_i1$mean_x
@@ -246,7 +248,6 @@ liability<-function(xM){ ## use with glmnet output
  #print(y1_off)
  
 #  yp = .rep(constants+y1_off[1,1], length(which(ind_1)))
-  yp = .rep(constants, length(which(ind_1)))
   
   incl1 = unlist(lapply(vars1, length))==2
   df1 = as.matrix(data.frame(vars1[incl1]))

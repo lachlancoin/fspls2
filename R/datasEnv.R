@@ -123,13 +123,24 @@ getFullModels<-function(all_models){
 datasEnv<-R6Class("datasEnv", public = list(
   datas = "list",
   type="character",
+  sigsdir="character",
+  sigs="list",
+  flags ="list",
   initialize=function(
               datasets,
               ys = lapply(datasets, function(d) d$y),
               flags = list(),
               mats = lapply(datasets, function(d) lapply(d$data, function(d1).getSparseMatrices(d1))),
               families=lapply(ys, function(d) .getFamily(d)),
+              dbDir="./",
                       memDir=NULL){
+    self$flags = flags
+    ### MAKE SIGNATURE DIRECTORY
+    self$sigsdir=paste(dbDir,"fspls_signatures",sep="/")
+    
+    self$sigs = list()
+   
+    #####
     
     if(!is.null(flags$transform) & typeof(mats[[1]][[1]][[1]])=="S4"){
       transforms =fromJSON (flags$transform)
@@ -205,6 +216,19 @@ datasEnv<-R6Class("datasEnv", public = list(
      self$datas[[k]]$updateWeights(subphens)
    } 
   },
+   getSigDB=function(nme1,reload= F, clear=F){
+     if(is.null(nme1)) return(NULL)
+   if(reload || is.null(self$sigs[[nme1]])){
+     self$sigs[[nme1]]=   sigEnv$new(self$sigsdir,nme1, clear=clear)
+     self$sigs[[nme1]]$updateData(data_flags = self$flags, 
+                                  data_names =names(self$datas), 
+                                  data_types = names(self$datas[[1]]$data),
+                                  dims = self$dims(),
+                                  phenos =self$datas[[1]]$pheno(), user="")
+     #self$sigs[[nme1]]$data_id
+   }
+   self$sigs[[nme1]]
+ },
   update=function( flags = list()){
     types_all = getOption("types_all",names(self$datas[[1]]$data))
     names(types_all) = types_all
@@ -271,7 +295,17 @@ datasEnv<-R6Class("datasEnv", public = list(
     })
     angles_all
   },
-  makeAllModels=function(vars_all, phens, flags, verbose=F, max = 1e6){
+  makeAllModels=function(vars_all, phens, flags, verbose=F, max = 1e6,db=NULL){
+    
+    sigDB = self$getSigDB(db)
+    
+    if(!is.null(sigDB) ){
+      all_models = sigDB$loadModels(flags,phens)
+      if(!is.null(all_models) && length(all_models)>0){
+        return(all_models)
+      }
+    }
+    
     nmes_vars_all = names(vars_all); names(nmes_vars_all) = nmes_vars_all
     func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
     #nme_v_all = nmes_vars_all[[1]]
@@ -279,7 +313,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     logpthresh= log(.readFlag(flags,"pthresh",1e-3))
     project=.readFlag(flags,"project",TRUE)
     #nme_v_all = nmes_vars_all[[1]]; v_nme = names(vars_all[[1]]$variables)[1]; max=10; verbose=T; k=1;variables =vars_all[[nme_v_all]]$variables;  v_nme = names(variables)[[1]]
-    lapply(nmes_vars_all, function(nme_v_all){
+    combined_models=lapply(nmes_vars_all, function(nme_v_all){
       if(verbose) print(nme_v_all)
       vars = vars_all[[nme_v_all]]
       func_str = func_strs[[nme_v_all]]
@@ -351,6 +385,10 @@ datasEnv<-R6Class("datasEnv", public = list(
     }
     all_models
     })
+    if(!is.null(sigDB) ){
+      sigDB$saveModels (combined_models, flags, phens)
+    }
+    combined_models
   },
   makeModels=function(vars2, inds, phens,func_str, flags){
     datas=self$datas
@@ -467,7 +505,14 @@ datasEnv<-R6Class("datasEnv", public = list(
   func_str = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
   lapply(func_str, function(xx) result)
   },
-  select=function(phens,flags,verbose=F ){
+  select=function(phens,flags,verbose=F, db=NULL ){
+    sigDB = self$getSigDB(db)
+    if(!is.null(sigDB) ){
+      vars_all = sigDB$loadVars(flags, phens)
+      if(!is.null(vars_all)){
+        return(vars_all)
+      }
+    }
     nreps1 =ncol(self$datas[[1]]$looc$incl)
     datas1 = self$datas
     project=.readFlag(flags,"project",T)
@@ -585,7 +630,9 @@ datasEnv<-R6Class("datasEnv", public = list(
     })
     self$post_process(variables,flags_out)
   })
-  
+    if(!is.null(sigDB) ){
+      sigDB$saveVars(vars_combined, flags,phens)
+    }
  
    vars_combined
   },
@@ -611,9 +658,17 @@ datasEnv<-R6Class("datasEnv", public = list(
     })
     res3
  },
-  evaluateAllModels=function(all_models, phens,flags){ ## different folds with same variables
+  evaluateAllModels=function(all_models, phens,flags, db=NULL){ ## different folds with same variables
 ##                          inds = as.numeric(names(all_models))){
     #self = all_models
+    sigDB = self$getSigDB(db)
+    
+    if(!is.null(sigDB) ){
+      eval1 = sigDB$loadEval(flags,phens, user="")
+      if(!is.null(eval1) && nrow(eval1)>0){
+        return(eval1)
+      }
+    }
     if(length(all_models)==0) return(NULL)
     nme_d = .readFlag(flags,"test",names(self$datas))
     names(nme_d) = nme_d
@@ -648,7 +703,12 @@ datasEnv<-R6Class("datasEnv", public = list(
     eval2 = eval1%>% pivot_wider(names_from="submeasure")
   #  isfull=eval2$model %in% full_model_nmes
   #  eval2%>%tibble::add_column(isfull=isfull)
-    eval2
+    if(!is.null(sigDB) ){
+      sigDB$saveEval(eval2, flags,phens, user="")
+      eval1 = sigDB$loadEval(flags,phens, user="")
+      return(eval1)
+    }
+    .calcEval1(eval2)
   },
   pvalues=function(vars,phens,transform_y,flags){
     datas = self$datas

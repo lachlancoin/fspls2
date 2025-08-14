@@ -1305,11 +1305,28 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   invisible(ggp1)
 }
 
-##converting to and from matrices
-toJSONM<-function(matr)toJSON(list(attr=(attributes(matr)),  m = matr ))
+##converting to and from matrices.  can be either a matrix or an list of matrices
+toJSONM<-function(matr){
+  attr = if(typeof(matr)=="list" ) lapply(matr, attributes) else attributes(matr)
+  json=toJSON(list(attr=attr,  m = matr ), digits=NA)
+  json
+}
+
 fromJSONM<-function(json){
-  attributes(ab$m) = ab$attr
-  ab$m 
+  ab1 = fromJSON(json, simplifyMatrix = F)
+  attr1 = ab1$attr
+  if(is.null(attr1)) return(ab1)
+  mat1 = ab1$m
+  if(typeof(attr1)=="list"){
+    for(k in names(attr1)){
+      attributes(mat1[[k]])=attr1[[k]]
+    }
+  }else{
+   # dim(mat) = attr$dim
+  #  dimnames(mat) = as.list(attr$dimnames)
+   attributes(mat1) = ab1$attr
+  }
+  mat1
 }
 
 
