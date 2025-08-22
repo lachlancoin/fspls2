@@ -231,19 +231,52 @@ datasEnv<-R6Class("datasEnv", public = list(
     }))
     self$datas = datas
   },
- plotData=function(vars_all, phens1 = vars_all$phens, all_types=F, transform_x = NULL, violin=F, assoc=F){
-  df4= .merge1_new( lapply(self$datas, function(d) d$plotData(vars_all, phens1 = phens1, all_types=all_types, transform_x = transform_x, violin=violin, assoc=assoc)), 
+ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x = NULL, violin=F, assoc=F){
+  df4= .merge1_new( lapply(self$datas, function(d) d$plotData(vars_all1, phens1 = phens1, all_types=all_types, transform_x = transform_x, violin=violin, assoc=assoc)), 
                 addName="dataset")
-  facet= if(!is.null(df4[['transform']])) "transform~data" else "data"
+  facet= if(!is.null(df4[['transform']]) ) "transform~pheno1" else "pheno1"
   df4$y = factor(df4$y)
+  gene_levs = unlist(lapply(unlist(vars_all1$variables,rec=F), function(x) x[[2]]))
+  gene_levs = gene_levs[!duplicated(gene_levs)]
+  df4$gene = factor(df4$gene, levels = gene_levs)
+  df5=df4%>% separate(col="pheno",sep="\\.", into=c("family","pheno1"))
+  df6=subset(df5, family=="gaussian")
+  df7=(subset(df5, family!="gaussian"))
  # color= if(length(unique(df4$dataset))>1) "dataset" else #"pheno"
-   ggp<-ggplot(df4, aes(x=y, y=value, color=pheno, shape=gene, linetype=dataset))+facet_grid(facet, scales="free")+ggtitle(unlist(phens1))
+  ggp = NULL; ggp1 = NULL
+  if(nrow(df7)>0){
+   ggp<-ggplot(df7, aes(x=y, y=value, color=gene, shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
    if(violin){
      ggp<-ggp+geom_violin()+geom_point()
    }else{
      ggp<-ggp+geom_boxplot()
    }
-   ggp
+  }
+   if(nrow(df6)>0){
+     prbs=c(0.33,0.5,0.66)
+   df6_1 =df6 %>% unite("comb",gene,data,family,pheno1,dataset,sep="__")
+   comb1=unique(df6_1$comb); names(comb1)=comb1
+   quants=.merge1_new(lapply(comb1,function(c1){
+     df6_2 = subset(df6_1, comb==c1)
+     df6_2$y = as.numeric(as.character(df6_2$y))
+     df6_2 = df6_2[order(df6_2$y),]
+     yv = unique(df6_2$y)
+     names(yv)=yv
+    .merge1_new(lapply(yv, function(yv1){
+       df6_3 = subset(df6_2, y<=yv1)
+         q1=quantile(df6_3$value,na.rm=T,probs = prbs)
+        df_=data.frame(t(data.frame(q1)))
+        df_
+     }),addName="y")
+   }), addName="comb")
+   quants1 = quants %>% separate("comb", sep="__", into=c("gene","data","family","pheno1","dataset"))
+   names(quants1) = gsub("\\.","",names(quants1))
+   quants1$y = as.numeric(quants1$y)
+   ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=gene, fill=gene,shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
+   ggp1<-ggp1+geom_line()+geom_ribbon(alpha=0.1)
+   }
+   
+   list("binomial"=ggp,"gaussian"=ggp1)
  },
   updateWeights=function(subphens = self$pheno()[[1]][1]){ ## upweights low count values
    for(k in 1:length(self$datas)){

@@ -125,6 +125,7 @@ liability<-function(xM){ ## use with glmnet output
 .calcYpred_ord<-function(prev_kj, data, ind_1,levs,
                          kk=1,
                          liab=T,
+                         betas1=prev_kj$betas[[kk]],
                          const =prev_kj$constants_proj[[kk]][[1]]){
   #  if(getOption("fspls.DRS",F)){
   #    betas1 = apply(betas1,c(1,2), function(b) if(b>DRS_thresh) 1 else if(b<-1*DRS_thresh) -1 else 0)
@@ -139,8 +140,8 @@ liability<-function(xM){ ## use with glmnet output
 #    return(if(liab) liability1(yp, constants) else yp)
   }
   
-  betas =  prev_kj$betas
-  betas1 = betas[[kk]]
+#  betas =  prev_kj$betas
+#  betas1 = betas[[kk]]
   #print(names(prev_))
   # print(prev_kj$constants_proj)
   #if(!is.null(numvar))vars1 = vars1[1:numvar]
@@ -172,7 +173,8 @@ liability<-function(xM){ ## use with glmnet output
 .calcYpred_binomial<-function(prev_kj, data, ind_1,
                                kk=1,kk1="",
                               liab=T,
-                              constants= prev_kj$constants_proj[[kk]]){
+                              betas1 = prev_kj$betas[[kk1]],
+                              constants= prev_kj$constants_proj[[kk1]]){
   #  if(getOption("fspls.DRS",F)){
   #    betas1 = apply(betas1,c(1,2), function(b) if(b>DRS_thresh) 1 else if(b<-1*DRS_thresh) -1 else 0)
   #  }
@@ -185,8 +187,8 @@ liability<-function(xM){ ## use with glmnet output
     return(if(liab) .logistic(yp+constants[[1]]) else yp)
   }
   
-  betas =  prev_kj$betas
-  betas1 = betas[[kk]]
+  #betas =  prev_kj$betas
+  #betas1 = betas[[kk1]]
   
  # mean_x = prev_kj$mean_x
   #print(mean_x)
@@ -230,17 +232,18 @@ liability<-function(xM){ ## use with glmnet output
 
 .calcYpred_1<-function(prev_i1, data1, ind_1,
                        kk=1,kk1="",
+                       betas1 = prev_kj$betas[[kk1]],
                        constants= prev_i1$constants_proj[[kk]]
                        #constants= unlist(prev_kj$constants_proj)
 ){
  
  
-  betas =  prev_i1$betas[[kk1]]
+  #betas =  prev_i1$betas[[kk1]]
   vars1 = prev_i1$var
   yp = .rep(constants, length(which(ind_1)))
   
   if(length(vars1)==0) return(yp)
-  betas1 = prev_i1$betas[[kk]]
+  #betas1 = prev_i1$betas[[kk]]
 #  mean_x = prev_i1$mean_x
   
 #  y1_off = mean_x %*% betas1
@@ -635,7 +638,7 @@ updateYP=function(d,full_model,  nonNA, flip=T, ignore.na=F, liab=T){
       self$ypreds[[kk1]][ind_1,!is.na(mi22)] =  as.matrix(ab[,mi22[!is.na(mi22)]]) 
     }else if(family=="ordinal"){
       constants = prev_kj$constants_proj[[kk1]]
-      betas = prev_kj$betas[[kk1]]
+      betas1 = prev_kj$betas[[kk1]]
       for(kk_1 in 1:length(kk)){
         ncols = ncol(self$ypreds[[kk1]])
         constk = constants[[kk_1]]
@@ -648,16 +651,19 @@ updateYP=function(d,full_model,  nonNA, flip=T, ignore.na=F, liab=T){
         }
         levs1 = 0:length(constk)
          ab= .calcYpred_ord(prev_kj,  data, ind_1, levs = levs1,
+                                                betas1 = betas1,
                                                  kk=kk_1, const = constk, liab=liab)  ## for multi-prediction
        
         self$ypreds[[kk1]][ind_1,] =  ab
       }
     }else if(family=="binomial"){
-      kk_1 = 1
+    #  kk_1 = 1
       constants = unlist(prev_kj$constants_proj[[kk1]])
      # for(kk_1 in 1:length(kk)){
         ab =   .calcYpred_binomial(prev_kj,  data, ind_1, kk1 = kk1,
-                                                    kk=kk_1, constants = constants, liab=liab)  ## for multi-prediction
+                                                    kk=kk_1, 
+                                     betas1 = prev_kj$betas[[kk1]],
+                                   constants = constants, liab=liab)  ## for multi-prediction
         self$ypreds[[kk1]][ind_1,] =ab
       #}
     }else{
@@ -667,7 +673,9 @@ updateYP=function(d,full_model,  nonNA, flip=T, ignore.na=F, liab=T){
       constants = unlist(prev_kj$constants_proj[[kk1]])
 #      constants = prev_kj$constants_proj[[kk1]]
  #     for(kk_1 in 1:length(kk)){
-        ab = .calcYpred_1(prev_kj,  data, ind_1,kk=kk_1, kk1 = kk1,constants=constants) 
+        ab = .calcYpred_1(prev_kj,  data, ind_1,kk=kk_1, kk1 = kk1,
+                          betas1 = prev_kj$betas[[kk1]],
+                          constants=constants) 
         self$ypreds[[kk1]][ind_1,] = ab
   #    }
     }

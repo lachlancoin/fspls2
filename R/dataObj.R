@@ -1297,14 +1297,14 @@ getNonNAInds=function(inds){
     apply(df,1,min)!=0
 },
 
-plotData=function(vars_all, phens1 = vars_all$phens, all_types=F, transform_x = NULL, violin=F, assoc=F){
+plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x = NULL, violin=F, assoc=F){
   phensi = self$phensi(phens1)
   nmei = names(phensi); names(nmei) = nmei
   df = data.frame(lapply(nmei, function(nmei1){
     as.matrix(self$y[[nmei1]][,phensi[[nmei1]],drop=F])
   }))
   
-  variables = vars_all$variables
+  variables = vars_all1$variables
   names(variables)=NULL
   vars = unlist(variables, recursive=F)
   incls = names(self$data); names(incls)=incls
@@ -1321,7 +1321,7 @@ plotData=function(vars_all, phens1 = vars_all$phens, all_types=F, transform_x = 
   }
   into=c("data","gene")
   
-  if(!is.null(transform_x)){
+  if(!is.null(transform_x) && all_types){
     nmev = names(vars)
     transform_x1 = fromJSON(transform_x)
     nme_t = names(transform_x1)
@@ -1342,6 +1342,8 @@ plotData=function(vars_all, phens1 = vars_all$phens, all_types=F, transform_x = 
    x[which(na_x)] = NA
    x
   }))
+  names(df2)=unlist(lapply(vars, function(x)paste(x,collapse="__")))
+ 
   
   if(assoc){
     nmes_df = names(df);names(nmes_df) = nmes_df;
@@ -1365,7 +1367,7 @@ plotData=function(vars_all, phens1 = vars_all$phens, all_types=F, transform_x = 
   nme_df = names(df); names(nme_df) = nme_df
   df4 = .merge1_new(lapply(nme_df, function(nmedf1){
     df_k = df[[nmedf1]]
-    df3=df2 %>% tibble::add_column(y=df_k) %>% pivot_longer(names(df2)) %>% separate("name",sep="\\.", into=into)
+    df3=df2 %>% tibble::add_column(y=df_k) %>% pivot_longer(names(df2)) %>% separate("name",sep="__", into=into)
   }),addName="pheno")
   df4$y = factor(df4$y)
   df4 = subset(df4, !is.na(y))
@@ -1454,7 +1456,7 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
   #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
   nmes_models = names(all_models_y[[1]][[1]]) #[[1]]);
   names(nmes_models) = nmes_models
-  numvar = numvars[[1]]; nmes1 = nmes_models[[1]];group_name = group_names[[1]]
+  #numvar = numvars[[1]]; nmes1 = nmes_models[[1]];group_name = group_names[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
