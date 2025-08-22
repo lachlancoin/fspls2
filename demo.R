@@ -40,18 +40,18 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[4]; pthresh = 0.001 ; randomise=F; duplicate=F
+datasets =examples[1]; pthresh = 0.001 ; randomise=F; duplicate=F
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation","rms"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
 
-func_y = list(y="function(y) y")  #'{"y":"function(y) y","y1":"function(y) y^2"} '
+transform_y=c("function(y) y","function(y) y")
 
 runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
-                 func_y = list(y="function(y) y")){
+                 transform_y = c("function(y) y","function(y) y")){
   y = datasets[[1]]$y
   flags = list(pthresh = pthresh, max=10,nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  project=T,
-               useoffset=T,useglm=T,#quantiles = toJSON(c(0,0.1)),
-               transform_y =toJSON(func_y) )
+               useoffset=T,useglm=T#quantiles = toJSON(c(0,0.1))
+              )
   ## MAKE THE FSPLS DATA OBJECT
   if(duplicate){
   y2 = do.call(cbind,replicate(2,datasets[[1]]$y,simplify=F))
@@ -60,36 +60,39 @@ runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
   datasets[[1]]$y = y2
   }
   datasAll =datasEnv$new(datasets,flags=flags) 
-  sigs = datasAll$getSigDB(reload=T)
+  sigs = datasAll$getSigDB(nme1="combined",reload=T)
   
-  sigs$datas(); 
   #sigs$clear_all()
   if(randomise) datasAll$randomise()
-  phens=datasAll$pheno()
+  phens=datasAll$pheno()$all
   
   ## FIND VARIABLES
-  vars_all = datasAll$select(phens, flags,verbose=T)
+  vars_all = datasAll$select(phens, flags,transform_y = transform_y, verbose=T)
   
-  sigs$saveVars(vars_all, phens, flags)
+  sigs$saveVars(vars_all)
   sigs$experiments()
   
-  vars_all1 = sigs$loadVars(flags, phens)
-  print(vars_all1)
-  options("fspls.verbose1"=T)
+#  options("fspls.verbose1"=T)
   
-  all_models = datasAll$makeAllModels(vars_all, phens, flags)
-  sigs$saveModels(all_models, flags,phens,"")
-  all_models1 = sigs$loadModels(flags, phens ,"")
-  eval0 = datasAll$evaluateAllModels(all_models1, phens, flags)
+  all_models = datasAll$makeAllModels(vars_all)
+  sigs$saveModels(all_models)
+  #all_models1 = sigs$loadModels(flags, phens ,"")
+  eval1 = datasAll$evaluateAllModels(all_models)
   
   sigs$saveEval(eval0, flags, phens, "")
   eval1 = sigs$loadEval(flags,phens,"")
   #eval = subset(eval, model!="avg")
+  ggps1=.plotEval2(eval1,legend=T, grid1="subpheno", grid0="measure",shape_color=c("data"),sep_by=c("cv_full"), showranges=T, scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   
   if(FALSE){ ## show cum plots
-      predictions0 =datasAll$extractPredictions(all_models,phens, flags, CV = F, liab=F, data_nme = names(datasAll$datas)[[1]]);
-      ggp_pred0=.plotArea1(predictions0, rename=T,max_vars=44)
-      ggp_pred0
+    predictions0 =datasAll$extractPredictions(all_models, CV = F, liab=F, data_nme = names(datasAll$datas)[[1]]);
+    area_p = .getAreaPlot1(predictions0)
+    #aa=roc(predictions[[2]]$y, predictions[[2]]$X0)
+    ggp_pred0=.plotArea(area_p, rename=F)
+    
+     # predictions0 =datasAll$extractPredictions(all_models,phens, flags, CV = F, liab=F, data_nme = names(datasAll$datas)[[1]]);
+    #  ggp_pred0=.plotArea1(predictions0, rename=T,max_vars=44)
+    #  ggp_pred0
   }
   if(is.null(eval)) return (NULL)
   eval3 = .calcEval1(eval0)

@@ -10,7 +10,7 @@
 ##SHOULD BE RUN FROM WHERE GIT CLONED TO
 .libPaths("~/R/x86_64-pc-linux-gnu-library/4.1/")
 if(rev(strsplit(getwd(),"/")[[1]])[1]!="fspls2")stop("not in right directory")
-options(bigmemory.allow.dimnames=TRUE)
+ options(bigmemory.allow.dimnames=TRUE)
 
 library(jsonlite)
 library(R6)

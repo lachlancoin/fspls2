@@ -1,5 +1,12 @@
 default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC"}')
 
+.mkBinary<-function(y){
+  yn = rep(NA, length(y))
+  yn[y<=median(y,na.rm=T)]=0
+  yn[y>median(y,na.rm=T)]=1
+  
+  yn
+}
 .calcPvalue<-function(x,y, beta_new1, yp1,w, family){   ## this seems to not work anymore for multinomial
   if(length(which(!is.na(y)))==0) return (0)
   if(is.matrix(x) || typeof(x)=="S4"){
@@ -447,25 +454,7 @@ fitModel<-function(yTr,x1,offset=NULL, family=getOption("family","binomial"),
   res
 }
 
-dataObj1<-R6Class("dataObj", public = list(
-  y="matrix",
- # ymod="matrix",
-#  seed="integer",
-#  subset="logical",  ### used to restrict to subsets in looc Obj
-  looc="loocObj",
-  ypreds_all="ypredObj",
-  family="character",
-  train="trainObj",
-  #UDVP="UDVPObj",  
-  initialize=function(data){
-    self$y = data$y
-    self$ypreds_all = data$ypreds_all$clone()
-    self$looc = data$looc
-    self$family = data$family
-    self$train = lapply(data$train, function(d) trainObj1$new(d))
-  }
-  )
-)
+
 
 
 
@@ -484,7 +473,7 @@ dataObj<-R6Class("dataObj", public = list(
 #  ones_x="matrix",
   #ymod="matrix",
   weights="matrix",
-  train="trainObj",
+  train="list", #trainObj",
   seed="integer",
   subset="logical",  ### used to restrict to subsets in looc Obj
   looc="loocObj",
@@ -959,9 +948,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
           if(strict) warning("polr!!!")
           #  print(df)
           # print(m1)
-          yn = y
-          yn[y<=median(y)]=0
-          yn[y>median(y)]=1
+          yn = .mkBinary(y)
+         
           m1=glm(yn~as.matrix(x), family="binomial", weights=w)
           #warning("polr error .. using gaussian!!")
           #m1=glm(y~x, family="gaussian", weights=w)
@@ -1303,18 +1291,97 @@ nreps=function(){
 
 getNonNAInds=function(inds){
     df=data.frame(lapply(inds, function(k){
-      self$train$looc_incl[,k]#  $nonNA1(k, self$y)
+      self$looc$incl[,k]#  $nonNA1(k, self$y)
       #nonNAs[[kk]] 
     }))
     apply(df,1,min)!=0
 },
 
-extractPredictions=function(all_models_,phens1, nme_p,flags, CV = FALSE,liab=T,
+plotData=function(vars_all, phens1 = vars_all$phens, all_types=F, transform_x = NULL, violin=F, assoc=F){
+  phensi = self$phensi(phens1)
+  nmei = names(phensi); names(nmei) = nmei
+  df = data.frame(lapply(nmei, function(nmei1){
+    as.matrix(self$y[[nmei1]][,phensi[[nmei1]],drop=F])
+  }))
+  
+  variables = vars_all$variables
+  names(variables)=NULL
+  vars = unlist(variables, recursive=F)
+  incls = names(self$data); names(incls)=incls
+  
+  if(all_types){
+    genes = unique(unlist(lapply(vars, function(x) x[[2]])))
+    names(genes) = genes
+    vars1 = lapply(incls, function(incl){
+      lapply(genes, function(g){
+       c(incl,g)
+      })
+    })
+    vars = unlist(vars1,rec=F)
+  }
+  into=c("data","gene")
+  
+  if(!is.null(transform_x)){
+    nmev = names(vars)
+    transform_x1 = fromJSON(transform_x)
+    nme_t = names(transform_x1)
+    to_repl=paste0("_",names(transform_x1))
+    for(kk in nme_t){
+      nmev = gsub(paste0("_",kk), paste0(".",kk), nmev)
+    }
+    names(vars) = nmev
+    into=c("data","transform","gene")
+  #  facet="transform~data"
+  }
+ 
+  
+  df2 = data.frame(lapply(vars, function(vark){
+   inds = self$convert(vark)
+   x = self$data[[inds[1]]][,inds[2]]
+   na_x = self$dataNA[[inds[1]]][,inds[2]]
+   x[which(na_x)] = NA
+   x
+  }))
+  
+  if(assoc){
+    nmes_df = names(df);names(nmes_df) = nmes_df;
+    nmes_df2 = names(df2);names(nmes_df2) = nmes_df2;
+    
+    pvs=lapply(nmes_df, function(nme_df_){
+      lapply(nmes_df2, function(nme_df2_){
+          m2=lm(df2[[nme_df2_]] ~df[[nme_df_]])
+          m1=glm(df2[[nme_df2_]] ~1)
+        ll2 = logLik(m2)
+        ll1 =  logLik(m1)
+        pv1 = .lrt(ll2,ll1,2,1, log.p=F)
+        pv1
+      })
+    })
+    pv_res = sort(unlist(pvs))
+    print(pv_res)
+    return(pv_res)
+  }
+  
+  nme_df = names(df); names(nme_df) = nme_df
+  df4 = .merge1_new(lapply(nme_df, function(nmedf1){
+    df_k = df[[nmedf1]]
+    df3=df2 %>% tibble::add_column(y=df_k) %>% pivot_longer(names(df2)) %>% separate("name",sep="\\.", into=into)
+  }),addName="pheno")
+  df4$y = factor(df4$y)
+  df4 = subset(df4, !is.na(y))
+  
+  df4
+},
+
+extractPredictions=function(all_models_,phens1, flags, CV = FALSE,liab=T,
                             ypred = self$ypred(phens1)){
   d = self
+  nmesp = names(phens1)
+  names(nmesp)= nmesp
   #all_models1_ = all_models_[[1]]
-  res_all = lapply(all_models_, function(all_models1_){
-    all_models1 = all_models1_[[nme_p]]
+  all_models1 = all_models_
+ # res_all = lapply(all_models_, function(all_models1_){
+  #  all_models1 = all_models1_[[nme_p]]
  # evals = .merge1_new(lapply(all_models, function(all_models1){
     full_ind = names(all_models1)=="full"
     full_model = all_models1[["full"]]
@@ -1326,11 +1393,10 @@ extractPredictions=function(all_models_,phens1, nme_p,flags, CV = FALSE,liab=T,
     evals = lapply(nmes_models, function(nmes1){
     #  dim(ypred$ypreds[[1]])
       if(!is.null(full_model) && ! CV){
-        nonNA =self$train$looc_incl[,self$nreps()]
+        nonNA =self$looc$incl[,self$nreps()]
         prev_i1 = full_model[[nmes1]]
         ypred$updateYP(d,prev_i1, nonNA, flip=FALSE, liab=liab )
-        nmesp = names(phens1)
-        names(nmesp)= nmesp
+
         return(lapply(nmesp, function(nmesp1){
           phens1[[nmesp1]]
           yy2 = d$y[[nmesp1]]
@@ -1340,8 +1406,9 @@ extractPredictions=function(all_models_,phens1, nme_p,flags, CV = FALSE,liab=T,
 #        d$updateYpredsInds(phens,full_model[[nmes1]], d$nreps(), ypred )
       }
       if(length(nmesm)>0 && CV){
+        inds = as.numeric(nmesm)
         for(j in 1:length(nmesm)){
-          nonNA =self$train$looc_incl[,inds[[j]]]
+          nonNA =self$looc$incl[,inds[[j]]]
           ypred$updateYP(self, all_models1[[j]][[nmes1]], nonNA, flip=TRUE, liab=liab)
 #          d$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
         }
@@ -1360,9 +1427,10 @@ extractPredictions=function(all_models_,phens1, nme_p,flags, CV = FALSE,liab=T,
     #,addName="trainedOn")
     #}),addName="fullmodel")
   
-  return(evals[lapply(evals,length)>0])
-  })
-res_all[lapply(res_all,length)>0]
+  
+ # })
+#res_all[lapply(res_all,length)>0]
+evals
 },
 ypred=function(phens1){
   family = unlist(lapply(names(phens1), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1])))
@@ -1371,7 +1439,7 @@ ypred=function(phens1){
 },# inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
 #all_models_y = all_models$y; inverse_func_str = fromJSON(flags1$transform_y_inverse)[[1]]; self = datasAll$datas[[1]]
 evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
-                           ypreds = lapply(phens, function(phens1) self$ypred(phens1)),
+                           ypred = self$ypred(phens), #lapply(phens, function(phens1) self$ypred(phens1)),
                            verbose=F
                          ){
   d = self
@@ -1383,19 +1451,20 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
   numvars = unlist(lapply(group_names, function(x) length(strsplit(x,";")[[1]])))
   numvars1 = sort(unique(numvars))
   names(numvars1) = numvars1
-  pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
-  nmes_models = names(all_models_y[[1]][[1]][[1]]);
+  #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
+  nmes_models = names(all_models_y[[1]][[1]]) #[[1]]);
   names(nmes_models) = nmes_models
-  #pheno_nme = pheno_nmes[[1]]; numvar = numvars[[1]]; nmes1 = nmes_models[[1]];group_name = group_names[[1]]
+  numvar = numvars[[1]]; nmes1 = nmes_models[[1]];group_name = group_names[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
-    .merge1_new(lapply(pheno_nmes, function(pheno_nme){
-      ypred = ypreds[[pheno_nme]]; if(is.null(ypred)) stop("ypred is null")
+    #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
+      #ypred = ypreds[[pheno_nme]]; 
+      if(is.null(ypred)) stop("ypred is null")
       .merge1_new(lapply(nmes_models, function(nmes1){
         group_names2 = group_names[numvars==numvar]
         evals = .merge1_new(lapply(group_names2, function(group_name){
           if(verbose) print(paste(numvar,nmes1,group_name))
-          all_models1 = all_models_y[[group_name]][[pheno_nme]]   
+          all_models1 = all_models_y[[group_name]]#[[pheno_nme]]   
               full_ind = names(all_models1)=="full"
               full_model = all_models1[["full"]][[nmes1]]
               all_models2 = lapply(all_models1[!full_ind], function(am) am[[nmes1]])
@@ -1406,15 +1475,15 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
               inds=as.numeric(nmesm)
               res1 = NULL; res2 = NULL
               if(!is.null(full_model)){
-                #ypredObj$updateYP(self, phens, )#= self$train$looc_incl[,k2]
-                nonNA =self$train$looc_incl[,self$nreps()]
+                #ypredObj$updateYP(self, phens, )#= self$looc$incl[,k2]
+                nonNA =self$looc$incl[,self$nreps()]
                 ypred$updateYP(d, full_model, nonNA, flip=FALSE, liab=liab)
                 res1 = ypred$calcRMSV(self$y, nonNA,  inverse_func=transform_func,     flip=FALSE)%>% tibble::add_column(isfull=T)
                 #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
               }
               if(length(nmesm)>0){
                 for(j in 1:length(nmesm)){
-                  nonNA =self$train$looc_incl[,inds[[j]]]
+                  nonNA =self$looc$incl[,inds[[j]]]
                   prev_i1 = all_models2[[j]]
                   ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
@@ -1448,7 +1517,7 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
       
         rbind(evals, avgs1[,mi2])
       }),addName="trainedOn")
-    }),addName="pheno_group")
+   # }),addName="pheno_group")
   }),addName="numvars")
   evals_all$numvars = as.numeric(evals_all$numvars)
   evals_all
@@ -1689,12 +1758,12 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
   ##NOTE PROJOUT1 ALSO SUBTRACTS MEAN, BUT FOR PROJOUT WE HAVE TO ADJUST FOR MEAN
   ##IF WE USE PROJOUT1 then x is actually W
   #mean_x = if(type %in% c("slow","assoc")) NULL else self$mean_x[[ik]]#  x_s$mean_x
-  yTr =self$train$yTr  #this is zero in the NA positions of d,ie yTr[,d$nonNA]  should be all zero
+  yTr =self$train[[k]]$yTr  #this is zero in the NA positions of d,ie yTr[,d$nonNA]  should be all zero
   ## should we store this as transpose??
  
   #y = self$y
- d = self$train
-  nonNA = lapply(d$nonNA,t)
+ #d = self$train[[k]]
+ # nonNA = lapply(d$nonNA,t)
 #  yTr[,!nonNA]=0
      if(assoc){
        stop("rethink this")
@@ -1724,7 +1793,7 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
           phensi1 = phensi[[ii]]
        #  lapply(phi, function(ii){
           yTr1 = yTr[[nme_i]]
-          product =self$train$product(ik,ii,phensi1)
+          product =self$train[[k]]$product(ik,ii,phensi1)
           if(length(var)==0){
            
             #  self$train$products[[ik]][[ii]][phensi1,,drop=F]  #[,self$cols_incl[[ik]],drop=F]
@@ -1771,7 +1840,7 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
 },
 getAngleInner=function(phensi,ik,k,var){
   stop("problems with this")
-  d = self$train
+  d = self$train[[k]]
   UDV=self$UDVP
   var = UDV$var
   dnorm =self$norm[[ik]]  ##USING THE SAME NORM EVEN AFTER PROJECTION, NEED TO FIX
@@ -1899,7 +1968,7 @@ translate=function(prev1){
 
 updateYpredsAll=function( phensi, 
                           ypred = self$ypreds_all,
-                           prevsk = lapply(1:self$nreps(), function(k) self$train$prev[[k]]),
+                           prevsk = lapply(1:self$nreps(), function(k) self$train[[k]]$prev),
                            nme = names(prevsk[[length(prevsk)]])
                            ){ ## within=T  means predict on samples trained on
   for(k in 1:(self$nreps()-1)){
@@ -1936,27 +2005,45 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
       c(ind1,ind2)
     })
   },
-  initTrain=function(varn=c(),var=list(),varnames = list(), W_all = matrix(nrow=0, ncol=0)){
-   nrep = ncol(self$looc$incl)
-   
-      self$train = #lapply(1:nrep, function(k){
-        trainObj$new( self$y,self$looc , self$family) #lapply(1:ncol,function(k) 
-     # t$update(self,k,var=var,varnames=varn, W_all = W_all)
-        #t             
-     #})
-      phens=self$pheno()
-      phensi = self$phensi(phens)
-      nrep = ncol(self$looc$incl)
-      self$prev = list()
-      for(k in 1:nrep){
-        #    phensi,data, betas_new, constants_proj,  k, #mean_y,
-        self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,NULL,k, var=var, varnames=varnames, W_all = W_all)
-      }
-  },
-update=function(k,funcst,phens, incl=  names(self$data),varn = c()){
+## gets ready for training - updates train, prev looc
+update=function(phens,flags, transform_y,varn = c()){ ## this updates the reps and train
+  set.seed(self$seed)
+  incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
+  if(length(incls) == 0 )incls = list("all"=names(self$data))
+  incls_all = unique(unlist(incls))
+  funcst = transform_y[[1]]
+  #incl = incls_all
+  batch=.readFlag(flags, "batch",0)
+  nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
+  pheno_balance = if(.readFlag(flags,"pheno_balance",FALSE)) unlist(phens) else NULL
+  rand = sample(nrow(self$data[[1]]))
+  self$looc=loocObj$new(self, nrep = nrep, batch = batch,
+                        incl_full = T,
+                        rand = rand,
+                        pheno_balance = pheno_balance)
+  if(nrep==1){
+    #should really do this inside looc obj
+    self$looc$incl = self$looc$incl[,2,drop=F]
+  }
+  if(!is.null(self$subset)){
+    ## apply subset via the looc object to avoid subsetting big matrix
+    self$looc$incl[!self$subset,] = rep(FALSE, ncol(self$looc$incl))
+  }
+  within=T
+  nrep = ncol(self$looc$incl)
+  self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$looc , self$family)) #lapply(1:ncol,function(k)
   var = self$extractVar(varn)
   W_all = if(length(var)==0) matrix(nrow=0, ncol=0) else  .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
-  self$train$update(self,k,funcst, phens, incl,var=var,varnames=varn, W_all = W_all)
+  for(k in 1:length(self$train)){
+    self$train[[k]]$update(self,k,funcst, phens, incls_all,var=var,varnames=varn, W_all = W_all)
+  }
+  #phens=self$pheno()
+  phensi = self$phensi(phens)
+  self$prev = list()
+  for(k in 1:nrep){
+    #    phensi,data, betas_new, constants_proj,  k, #mean_y,
+    self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,NULL,k, var=var, varnames=varn, W_all = W_all)
+  }
 },
 randomise=function(n= nrow(self$y[[1]]),
                    indices=sample.int(n,n)){
@@ -1972,54 +2059,7 @@ randomise=function(n= nrow(self$y[[1]]),
     self$initTrain();  
   }
 },
-  init1=function( pheno_balance = getOption("fspls.balance",NULL), nrep = getOption("fspls.nrep",1), batch = getOption("fspls.batch",0)
-                 ){  ## this function initialises training paramaters for this dataset
-    set.seed(self$seed)
-    rand = sample(nrow(self$data[[1]]))
-    self$looc=loocObj$new(self, nrep = nrep, batch = batch,
-                          incl_full = T,
-                          rand = rand,
-                          pheno_balance = pheno_balance
-                          )
-    if(nrep==1){
-      #should really do this inside looc obj
-      self$looc$incl = self$looc$incl[,2,drop=F]
-    }
-    if(!is.null(self$subset)){
-      ## apply subset via the looc object to avoid subsetting big matrix
-      self$looc$incl[!self$subset,] = rep(FALSE, ncol(self$looc$incl))
-    }
-    within=T
-   # family = self$family
-    #ncol = ncol(self$looc$incl)
-    nrep = ncol(self$looc$incl)
-    beam=getOption("fspls.beam",c(1,1))
-    #maxn= beam[[2]]*beam[[1]]
-    
-    nmes1 = names(self$data); names(nmes1) = nmes1
-    #data$ymod[[1]]
-    #ym[,nonNA]=1
-    norm=self$norm
-    n = nrow(self$data[[1]])
-   
-    vars = lapply(names(norm), function(norm_nme){
-      norm1 = norm[[norm_nme]]
-      (norm1*norm1)/(n-1)
-    })
-    names(vars) = names(norm)
-   
-    
-   
-    self$vars = vars
-   # self$var_thresh = var_thresh
-  #  names( self$cols_incl) = names(norm)
-    
-    self$UDVP=NULL;
-    
-    #self$UDVP_all=vector('list', ncol)
-   
-  #  self$ypred=ypredObj$new(self,NULL,  params,family)
-  },
+  
 cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #incl, g_incl,qq
   norm = self$norm
  names(incl) = incl
@@ -2081,9 +2121,11 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #i
         }
        for(jj in inds){
          levs = levels(y1[,jj])
-         if(!is.null(levs)){
-           y1[,jj] = as.numeric(y1[,jj])-1
+         if(is.null(levs)){
+           levs = sort(unique(y1[,jj]))
+           y1[,jj] = factor(y1[,jj],levels=levs)
          }
+           y1[,jj] = as.numeric(y1[,jj])-1
        }
         
         
@@ -2249,7 +2291,20 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #i
       
       })
     self$norms_list = lapply(self$norm, function(n) list())
+    nmes1 = names(self$data); names(nmes1) = nmes1
+    norm=self$norm
+    n = nrow(self$data[[1]])
     
+    vars = lapply(names(norm), function(norm_nme){
+      norm1 = norm[[norm_nme]]
+      (norm1*norm1)/(n-1)
+    })
+    names(vars) = names(norm)
+    
+    
+    
+    self$vars = vars
+    self$UDVP=NULL;
   }
 )
 )

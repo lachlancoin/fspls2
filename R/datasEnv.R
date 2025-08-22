@@ -1,4 +1,21 @@
-
+.extractFullVars<-function(vars_all){
+  subinds = which(unlist(lapply(vars_all$inds, function(x) length(grep('full',names(x)))))>0)
+  list(variables = vars_all$variables[subinds], inds = vars_all$inds[subinds], cumpv = vars_all$cumpv[subinds], flags = vars_all$flags,
+       phens=vars_all$phens, transform_y = vars_all$transform_y)
+}
+.extractFullModels<-function(all_models, full_model_only=F){
+  subinds = which(unlist(lapply(all_models$models, function(x) length(grep('full', names(x)))))>0)
+  models1 = all_models$models[subinds]
+  res1 =list(flags = all_models$flags, phens=all_models$phens, transform_y = all_models$transform_y)
+  if(!full_model_only) {
+    res1$models = models1
+  }else{
+  res1$models = lapply(models1, function(mod1){
+    mod1[grep('full', names(mod1))]
+  })
+  }
+  res1
+}
 .getPvsAll<-function(subphens,datas1, vars_l1, b_i_name,k, funcst, project=T, useoffset=T){
   transform_func = eval(str2lang(funcst))
   #var_new = c(prev_i$var,b_i)
@@ -77,7 +94,7 @@ getFullModels<-function(all_models){
     return(family)
   }else{
    
-  return(apply(y_mat,2,function(y){
+  famsy = (apply(y_mat,2,function(y){
     if(!is.numeric(y)){
       y = as.factor(y);
     }
@@ -87,11 +104,12 @@ getFullModels<-function(all_models){
     if(length(unique(y[!is.na(y)]))<=2) return("binomial")
     vals = unique(y)
     if(sum(abs(vals-round(vals)), na.rm=T)<1e-9){
-      if(length(table(vals))>max_ordinal) return("gaussian")
+      if(length(vals)>max_ordinal) return("gaussian")
       return("ordinal")
     }
     return("gaussian")
     }))
+  famsy
   }
 }
 
@@ -195,28 +213,44 @@ datasEnv<-R6Class("datasEnv", public = list(
     one_v_rest = .readFlag(flags,"one_v_rest",F)
     nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
     pheno_balance=.readFlag(flags,"pheno_balance",NULL)
-    invisible(lapply(datas, function(data) data$init1(pheno_balance = pheno_balance, nrep=nrep,  batch = batch)))
+  #  invisible(lapply(datas, function(data) data$init1(pheno_balance = pheno_balance, nrep=nrep,  batch = batch)))
     varn = getOption("varn",c())
    
     invisible(lapply(1:length(datas), function(ik) {
       y1 = ys[[ik]] #dists[[ik]]$updateYdb(cats[['cats']])
       family = families[[ik]]
+     
+      
       datas[[ik]]$updateY(y1, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
   #    datas[[ik]]$updateYdb(dists[[ik]]$mydb, cats[['cats']])
   #    missing_vals = self$updateY(y1, family=family, CHECK=T)
       
-      datas[[ik]]$initTrain(varn=varn)
+  #    datas[[ik]]$initTrain(varn=varn)
     #data[[ik]]$initY()
      return(NULL)
     }))
     self$datas = datas
   },
+ plotData=function(vars_all, phens1 = vars_all$phens, all_types=F, transform_x = NULL, violin=F, assoc=F){
+  df4= .merge1_new( lapply(self$datas, function(d) d$plotData(vars_all, phens1 = phens1, all_types=all_types, transform_x = transform_x, violin=violin, assoc=assoc)), 
+                addName="dataset")
+  facet= if(!is.null(df4[['transform']])) "transform~data" else "data"
+  df4$y = factor(df4$y)
+ # color= if(length(unique(df4$dataset))>1) "dataset" else #"pheno"
+   ggp<-ggplot(df4, aes(x=y, y=value, color=pheno, shape=gene, linetype=dataset))+facet_grid(facet, scales="free")+ggtitle(unlist(phens1))
+   if(violin){
+     ggp<-ggp+geom_violin()+geom_point()
+   }else{
+     ggp<-ggp+geom_boxplot()
+   }
+   ggp
+ },
   updateWeights=function(subphens = self$pheno()[[1]][1]){ ## upweights low count values
    for(k in 1:length(self$datas)){
      self$datas[[k]]$updateWeights(subphens)
    } 
   },
-   getSigDB=function(nme1,reload= F, clear=F){
+   getSigDB=function(nme1="",reload= F, clear=F){
      if(is.null(nme1)) return(NULL)
    if(reload || is.null(self$sigs[[nme1]])){
      self$sigs[[nme1]]=   sigEnv$new(self$sigsdir,nme1, clear=clear)
@@ -229,20 +263,7 @@ datasEnv<-R6Class("datasEnv", public = list(
    }
    self$sigs[[nme1]]
  },
-  update=function( flags = list()){
-    types_all = getOption("types_all",names(self$datas[[1]]$data))
-    names(types_all) = types_all
-  #  var_threshs=  lapply(types_all, function(v) .readFlag(flags, "var_quantile",0.00))
-    batch=.readFlag(flags, "batch",0)
-    
-    nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
-    balance=.readFlag(flags,"pheno_balance",NULL)
-    invisible(lapply(self$datas, function(data) data$init1(pheno_balance = balance, nrep=nrep,  batch = batch)))
-    varn = getOption("varn",c())
-    for(ik in 1:length(self$datas)){
-      self$datas[[ik]]$initTrain(varn=varn)
-    }
-  },
+ 
   
   randomise=function(){
     for(i in 1:length(self$datas)){
@@ -295,28 +316,29 @@ datasEnv<-R6Class("datasEnv", public = list(
     })
     angles_all
   },
-  makeAllModels=function(vars_all, phens, flags, verbose=F, max = 1e6,db=NULL){
+  makeAllModels=function(vars_all, phens=vars_all$phens, flags=vars_all$flags, transform_y=vars_all$transform_y,verbose=F, max = 1e6,
+                         db=vars_all$db){
     
     sigDB = self$getSigDB(db)
     
     if(!is.null(sigDB) ){
-      all_models = sigDB$loadModels(flags,phens)
-      if(!is.null(all_models) && length(all_models)>0){
+      all_models = sigDB$loadModels(flags,phens, transform_y=transform_y)
+      if(!is.null(all_models) && length(all_models$models)>0){
         return(all_models)
       }
     }
     
-    nmes_vars_all = names(vars_all); names(nmes_vars_all) = nmes_vars_all
-    func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
+   # nmes_vars_all = names(vars_all); names(nmes_vars_all) = nmes_vars_all
+    #func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
     #nme_v_all = nmes_vars_all[[1]]
     
     logpthresh= log(.readFlag(flags,"pthresh",1e-3))
     project=.readFlag(flags,"project",TRUE)
-    #nme_v_all = nmes_vars_all[[1]]; v_nme = names(vars_all[[1]]$variables)[1]; max=10; verbose=T; k=1;variables =vars_all[[nme_v_all]]$variables;  v_nme = names(variables)[[1]]
-    combined_models=lapply(nmes_vars_all, function(nme_v_all){
-      if(verbose) print(nme_v_all)
-      vars = vars_all[[nme_v_all]]
-      func_str = func_strs[[nme_v_all]]
+    #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
+   # combined_models=lapply(nmes_vars_all, function(nme_v_all){
+    #  if(verbose) print(nme_v_all)
+      vars = vars_all#[[nme_v_all]]
+      func_str = transform_y[[1]] #func_strs[[nme_v_all]]
       all_models = list()
       variables = vars$variables
       var_inds = vars$inds
@@ -340,55 +362,64 @@ datasEnv<-R6Class("datasEnv", public = list(
           if(is.null(mod1)){
              all_models[[names(models1)[[k]]]] = models1[[k]]
           }else{
-            for(p_nme in names(models1[[k]])){
-              mod2 = all_models[[names(models1)[[k]]]][[p_nme]]
+           # for(p_nme in names(models1[[k]])){
+              mod2 = all_models[[names(models1)[[k]]]]#[[p_nme]]
               if(is.null(mod2)){
-                all_models[[names(models1)[[k]]]][[p_nme]] = models1[[k]][[p_nme]]
+                all_models[[names(models1)[[k]]]]= models1[[k]]#[[p_nme]]#[[p_nme]] 
+                            
               }else{
-                for(r_nme in names(models1[[k]][[p_nme]])){
-                   mod3 = all_models[[names(models1)[[k]]]][[p_nme]][[r_nme]]
+                for(r_nme in names(models1[[k]])){ #[[p_nme]])){
+                   mod3 = all_models[[names(models1)[[k]]]][[r_nme]] #[[p_nme]][[r_nme]]
                    if(is.null(mod3)){
-                     all_models[[names(models1)[[k]]]][[p_nme]][[r_nme]] = models1[[k]][[p_nme]][[r_nme]]
+                     all_models[[names(models1)[[k]]]][[r_nme]]= models1[[k]][[r_nme]] #[[p_nme]][[r_nme]] #[[p_nme]][[r_nme]] 
+                                
                    }else{
                      print("already calculated!")
                    }
                 }
               }
-            }
+            #}
           }
         }
       }else{ ## fill in gaps
-        for(p_i in 1:length(inds)){
-          p_nme = names(inds)[p_i]
-          models2 = all_models[[nme_]][[p_nme]]  
+        #for(p_i in 1:length(inds)){
+         # p_nme = names(inds)[p_i]
+          models2 = all_models[[nme_]]#[[p_nme]]  
           if(is.null(models2)){
-            models2 = self$makeModels( vars2, inds[p_i],phens[which(names(phens) %in% p_nme)],func_str,flags)
+            models2 = self$makeModels( vars2, inds#[p_i]
+                                       ,phens#[which(names(phens) %in% p_nme)]
+                                       ,func_str,flags)
             for(k in 1:length(models2)){
-              all_models[[names(models2)[[k]]]][[p_nme]] = models2[[k]][[p_nme]]
+              all_models[[names(models2)[[k]]]] = models2[[k]]#[[p_nme]]#[[p_nme]]
+                     
             }
           }else{
-            for(r_i in 1:length(names(inds[[p_i]]))){
-              r_nme = names(inds[[p_i]])[r_i]
-              models3 = all_models[[nme_]][[p_nme]][[r_nme]]  
+            for(r_i in 1:length(names(inds))){ #[[p_i]]))){
+              r_nme = names(inds)[[r_i]] #[[p_i]])[r_i]
+              models3 = all_models[[nme_]][[r_nme]] #[[p_nme]][[r_nme]]  
               if(is.null(models3)){
-                inds2 = lapply(inds[p_i], function(indsk)indsk[r_i])
-                models3 = self$makeModels( vars2, inds2,phens[which(names(phens) %in% p_nme)],func_str, flags)
+                inds2 = lapply(inds#[p_i]
+                               , function(indsk)indsk[r_i])
+                models3 = self$makeModels( vars2, inds2,phens#[which(names(phens) %in% p_nme)]
+                                                ,func_str, flags)
                 for(k in 1:length(models3)){
-                  all_models[[names(models3)[[k]]]][[p_nme]][[r_nme]] = models3[[k]][[p_nme]][[r_nme]]
+                  all_models[[names(models3)[[k]]]][[r_nme]]= models3[[k]][[r_nme]] #[[p_nme]][[r_nme]]#[[p_nme]][[r_nme]] 
+                        
                 }
               }
             }
           }
-        }
+        #}
        
       }
     }
-    all_models
-    })
+    all_models_=list(models=all_models, flags = flags, phens = phens, transform_y = transform_y, db=db)
+    #})
     if(!is.null(sigDB) ){
-      sigDB$saveModels (combined_models, flags, phens)
+      sigDB$saveModels (all_models_)
     }
-    combined_models
+    #combined_models
+   all_models_
   },
   makeModels=function(vars2, inds, phens,func_str, flags){
     datas=self$datas
@@ -400,31 +431,32 @@ datasEnv<-R6Class("datasEnv", public = list(
     if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
     verbose=.readFlag(flags,"verbose",FALSE)
     #k = .readFlag(flags, 'rep',length(datas[[1]]$train))
-    nmes_inds = names(inds);names(nmes_inds)=nmes_inds
-    #nmes_inds1 = nmes_inds[[1]];d =datas[[1]]
-    models = lapply(nmes_inds, function(nmes_inds1){
-      inds1 = inds[[nmes_inds1]]
-      phens1 = phens[[nmes_inds1]]
+   # nmes_inds = names(inds);names(nmes_inds)=nmes_inds
+    #nmes_inds1 = nmes_inds[[1]];d =self$datas[[1]]
+    #models = lapply(nmes_inds, function(nmes_inds1){
+      inds1 = inds#[[nmes_inds1]]
+      phens1 = phens#[[nmes_inds1]]
       #k=inds1[[1]]
         mods1 = lapply(inds1, function(k){
+         # print(k)
             lapply(datas[names(datas) %in% train_nme], function(d){
               mods = d$makeModels(phens1, vars2,k,logpthresh = logpthresh,project=project, func_str=func_str, useoffset=useoffset)
             })
           #})
         })
         if(length(mods1)==0) stop("!!")
-        mods1
-    })
-    vars = names(models[[1]][[1]][[1]])
+        models=mods1
+    #})
+    vars = names(models[[1]][[1]])
     names(vars) = vars
     models2 = lapply(vars, function(v){
-      lapply(models, function(models1){
-      m3 = lapply(models1, function(m){
+     # lapply(models, function(models1){
+      m3 = lapply(models, function(m){
         m2 = lapply(m, function(m1) m1[[v]])
         m2[unlist(lapply(m2, length))>0]
       })
       m3[unlist(lapply(m3, length))>0]
-    })
+    #})
     })
   #  print(names(models2))
     models2
@@ -439,7 +471,8 @@ datasEnv<-R6Class("datasEnv", public = list(
       d$getVariance();      
     })
   },
-  post_process=function(variables, flags_out = list()){
+  post_process=function(variables){
+  #  variables = variables[unlist(lapply(variables, function(x) length(x[[1]]$var)))>0]
     full_index = length(variables)
     #lens = unlist(lapply(variables, function(x) length(x$var)))
     #if(max(lens)==0) return(list())
@@ -450,30 +483,31 @@ datasEnv<-R6Class("datasEnv", public = list(
     for(repn in names(variables)){
       full = repn==full_index
       var1 = variables[[repn]]
-      for(phenn in names(var1)){
-        var2 = var1[[phenn]][[1]]$var_names
-        names(var2) = var1[[phenn]][[1]]$varnames
-        cumpv = lapply(var1, function(vv) attr(vv,"cumpv"))
-        varn = paste(names(var2),collapse=";") #paste(names(var2), collapse=";")
-        if(is.null(vars_all[[varn]])){
-          vars_all[[varn]] = list()
-          vars_all1[[varn]] = var2
-          vars_all2[[varn]] = list()
-        }
-        repn1 = as.list(as.numeric(repn))
-        repn2 = as.list(cumpv)
-        names(repn1) = if(full) "full" else repn
-        names(repn2) = if(full) "full" else repn
-        if(is.null(vars_all[[varn]][[phenn]])){
-          vars_all[[varn]][[phenn]] =repn1
-          vars_all2[[varn]][[phenn]] =repn2
-        }else{
-          vars_all[[varn]][[phenn]] = c(vars_all[[varn]][[phenn]] , repn1)
-          vars_all2[[varn]][[phenn]] = c(vars_all2[[varn]][[phenn]] , repn2)
-        }
+    #  for(phenn in names(var1)){
+        var2 = var1[[1]]$var_names
+        if(length(var2)>0){
+            names(var2) = var1[[1]]$varnames
+            cumpv = attr(var1,"cumpv")#lapply(var1, function(vv) attr(vv,"cumpv"))
+            varn = paste(names(var2),collapse=";") #paste(names(var2), collapse=";")
+            if(is.null(vars_all[[varn]])){
+              vars_all[[varn]] = list()
+              vars_all1[[varn]] = var2
+              vars_all2[[varn]] = list()
+            }
+            repn1 = as.list(as.numeric(repn))
+            repn2 = as.list(cumpv)
+            names(repn1) = if(full) "full" else repn
+            names(repn2) = if(full) "full" else repn
+            if(is.null(vars_all[[varn]])){
+              vars_all[[varn]] =repn1
+              vars_all2[[varn]] =repn2
+            }else{
+              vars_all[[varn]] = c(vars_all[[varn]] , repn1)
+              vars_all2[[varn]] = c(vars_all2[[varn]] , repn2)
+            }
       }
     }
-    vars_combined = list(variables = vars_all1, inds = vars_all,cumpv=vars_all2, flags=flags_out) 
+    vars_combined = list(variables = vars_all1, inds = vars_all,cumpv=vars_all2) 
   
     vars_combined
   },
@@ -505,14 +539,30 @@ datasEnv<-R6Class("datasEnv", public = list(
   func_str = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
   lapply(func_str, function(xx) result)
   },
-  select=function(phens,flags,verbose=F, db=NULL ){
+update=function( phens, flags, transform_y=c("function(y) y","function(y) y"), varn=c()){
+#  types_all = getOption("types_all",names(self$datas[[1]]$data))
+ # names(types_all) = types_all
+#  batch=.readFlag(flags, "batch",0)
+#  nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
+#  pheno_balance = if(.readFlag(flags,"pheno_balance",FALSE)) unlist(phens) else NULL
+ # invisible(lapply(self$datas, function(data) data$init1(pheno_balance = pheno_balance, nrep=nrep,  batch = batch)))
+#  varn = getOption("varn",c())
+  train_nme = .readFlag(flags,"train", names(self$datas))
+  datas1 = self$datas
+  invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update( phens,flags,transform_y, varn=varn))); ### update training object - updates all
+  
+},
+
+  select=function(phens1,flags,transform_y=c("function(y) y","function(y) y"), verbose=F, db=NULL ){#c(y="function(y) y","function(y) y")
+    
     sigDB = self$getSigDB(db)
     if(!is.null(sigDB) ){
-      vars_all = sigDB$loadVars(flags, phens)
-      if(!is.null(vars_all)){
-        return(vars_all)
-      }
+      vars_all = sigDB$loadVars(flags, phens1, transform_y = transform_y)
+    
+      if(!is.null(vars_all)) return(vars_all)
+      vars_all$db=db
     }
+    self$update(phens1, flags, transform_y)
     nreps1 =ncol(self$datas[[1]]$looc$incl)
     datas1 = self$datas
     project=.readFlag(flags,"project",T)
@@ -529,34 +579,35 @@ datasEnv<-R6Class("datasEnv", public = list(
     num_pvals = min(topn, 10)
     incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
     if(length(incls) == 0 )incls = list("all"=names(datas1[[1]]$data))
+    incls_all = unique(unlist(incls))
     logpvthresh = log(.readFlag(flags,"pthresh",1e-5))
     logpv=-100
     nreps = 1:nreps1
     names(nreps) = nreps
     beam = .readFlag(flags,"beam",1)
-    func_str = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
-    flags_out = list(train=train_nme,  max=maxsize, 
-                     nreps = nreps, beam=beam,func_str = func_str,
-                     topn = num_pvals, pthresh =exp(logpvthresh), data_types = incls)
-    phens_index = 1:length(phens)
-    names(phens_index) = names(phens)
+    funcst = transform_y[[1]]
+   # phens_index = 1:length(phens)
+   # names(phens_index) = names(phens)
     var_thresh = lapply(train_nme, function(data_nme){
       lapply(datas1[[data_nme]]$vars, function(v) quantile(v, quantiles))
     })
-   #funcst = func_str[[1]]; k=1;p_index = phens_index[[1]]; g_incl  = genes_incls[[1]]; qq =1; incl = incls[[1]]; data_nme = train_nme[[1]]
-    vars_combined=lapply(func_str,function(funcst){
-      print(funcst)
+  # k=1; g_incl  = genes_incls[[1]]; qq =1; incl = incls[[1]]; data_nme = train_nme[[1]]
+  #  vars_combined=lapply(func_str,function(funcst){
+    #  print(funcst)
+    #subphens = phens1 #[[p_index]]
+    #invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(funcst, subphens,incls_all))); ### update training object - updates all
+    
      variables=lapply(nreps, function(k){
       print(paste("cv",k,"of",length(nreps)))
       jj1=0
-      incls_all = unique(unlist(incls))
+    
       #invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, phens,incls_all))); ### update training object
-      res2=  lapply(phens_index, function(p_index){
-        if(verbose) print(paste("pindex",p_index,k,length(nreps)))
-        subphens = phens[[p_index]]
-        invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, subphens,incls_all))); ### update training object
+     # res2=  lapply(phens_index, function(p_index){
+        if(verbose) print(paste(k,length(nreps)))
+       
+#        invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, subphens,incls_all))); ### update training object
         if(FALSE) cat(p_index); cat("\t");
-        vars_l =list(lapply(train_nme,function(xx) stateObj$new(subphens, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all = NULL)))
+        vars_l =list(lapply(train_nme,function(xx) stateObj$new(phens1, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all = NULL)))
         #vars_l1 = vars_l[[1]]
         for(incl in incls){
           if(verbose) print(incl)
@@ -568,7 +619,7 @@ datasEnv<-R6Class("datasEnv", public = list(
               varnames = vars_l1[[1]]$var_names; type = self$type
             angles=lapply(train_nme, function(data_nme) {
               #print(data_nme); 
-              datas1[[data_nme]]$getAngles1(subphens,varnames,incl=incl,k=k, type=type)
+              datas1[[data_nme]]$getAngles1(phens1,varnames,incl=incl,k=k, type=type)
               })
             names(angles) = train_nme
             cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl(var_thresh[[data_nme]],incl, g_incl,qq)) ### fix 
@@ -580,7 +631,7 @@ datasEnv<-R6Class("datasEnv", public = list(
             nxt_vars = lapply(inds1p, function(ik){
             #  print(ik)
                b_i_name = c(comb$data_type[[ik]], comb$names[[ik]])
-               nv = .getPvsAll(subphens,datas1[names(datas1) %in% train_nme], vars_l1, b_i_name,k, funcst, project = project, useoffset=useoffset)
+               nv = .getPvsAll(phens1,datas1[names(datas1) %in% train_nme], vars_l1, b_i_name,k, funcst, project = project, useoffset=useoffset)
               attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){
                  unlist(nv1$pvs)
                })))
@@ -625,70 +676,71 @@ datasEnv<-R6Class("datasEnv", public = list(
           ##just take the top
        # if(length(vars_l[[1]]$var)>0) print(vars_l)
         vars_l[[1]]#$var
-        })
-         res2[unlist(lapply(res2,function(xx) length(xx[[1]]$var)))>0]
+    #     res2[unlist(lapply(res2,function(xx) length(xx[[1]]$var)))>0]
     })
-    self$post_process(variables,flags_out)
-  })
+    vars_all=self$post_process(variables)
+    vars_all$flags = flags; vars_all$phens = phens1; vars_all$transform_y = transform_y ; vars_all$db=db
     if(!is.null(sigDB) ){
-      sigDB$saveVars(vars_combined, flags,phens)
+#      saveVars = function(vars_all,flags,phens,transform_y,user="", replace=T){
+      sigDB$saveVars(vars_all,replace=T)
     }
- 
-   vars_combined
+    vars_all
   },
-  extractPredictions=function(all_models,phens, flags, CV = FALSE, liab=T, data_nme  = names(self$datas)){
+  extractPredictions=function(all_models,phens=all_models$phens, flags=all_models$flags, CV = FALSE, liab=T, data_nme  = names(self$datas)){
     #datas = self$datas
     names(data_nme) = data_nme
-    nmes_p = names(phens); names(nmes_p) = nmes_p
-    #all_models_ = all_models[[1]]; nme_p = nmes_p[[1]]; d_nme = data_nme[[1]];phens1 = phens[[nme_p]]
-    res3 = lapply(all_models, function(all_models_){
-      res2 = lapply(nmes_p, function(nme_p){
-        phens1 = phens[[nme_p]]
+    #nmes_p = names(phens); names(nmes_p) = nmes_p
+    all_models_y = all_models$models
+    #all_models_ = all_models_y[[1]];d_nme = data_nme[[1]];# nme_p = nmes_p[[1]]; phens1 = phens[[nme_p]];
+    
+    res3 = lapply(all_models_y, function(all_models_){
+      #res2 = lapply(nmes_p, function(nme_p){
+       # phens1 = phens[[nme_p]]
         res2=lapply(data_nme, function(d_nme){
           d = self$datas[[d_nme]]
           if(is.null(d)){
             print(d_nme)
             stop("!!")
           }
-          d$extractPredictions(all_models_, phens1, nme_p,flags, CV=CV, liab=liab)
+          d$extractPredictions(all_models_, phens,flags, CV=CV, liab=liab)
         })
-      })
+      #})
    
     res2[lapply(res2,length)>0]
     })
-    res3
+    predictions0=res3[unlist(lapply(res3, function(x) length(x[[1]][[1]])))>0]
+    predictions0
  },
-  evaluateAllModels=function(all_models, phens,flags, db=NULL){ ## different folds with same variables
+  evaluateAllModels=function(all_models, phens=all_models$phens,flags=all_models$flags,
+                             transform_y=all_models$transform_y, db=all_models$db){ ## different folds with same variables
 ##                          inds = as.numeric(names(all_models))){
     #self = all_models
     sigDB = self$getSigDB(db)
     
     if(!is.null(sigDB) ){
-      eval1 = sigDB$loadEval(flags,phens, user="")
+      eval1 = sigDB$loadEval(flags,phens, transform_y,  user="")
       if(!is.null(eval1) && nrow(eval1)>0){
         return(eval1)
       }
     }
-    if(length(all_models)==0) return(NULL)
+    if(length(all_models$models)==0) return(NULL)
     nme_d = .readFlag(flags,"test",names(self$datas))
     names(nme_d) = nme_d
     print(nme_d)
-    func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
-    inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
+   # func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
+  #  inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
     #k=1
-    for(k in 1:length(func_strs)){ #CHECK INVERSE CORRECT
-      func0 = eval(str2lang(func_strs[[k]]))  ## should be inverse
-     func1 = eval(str2lang(inverse_func_strs[[k]]))  ## should be inverse
+      func0 = eval(str2lang(transform_y[[1]]))  ## should be inverse
+     func1 = eval(str2lang(transform_y[[2]]))  ## should be inverse
      xx = -10:10  
      if(max(abs(apply(cbind(xx,func1(func0(xx))),1,diff)),na.rm=T)>1e-5) stop("please provide inverse function")
-    }
     
-    mod_nmes = names(all_models); names(mod_nmes) = mod_nmes
+#    mod_nmes = names(all_models); names(mod_nmes) = mod_nmes
     #mod_nme = mod_nmes[[1]]; nme1 = nme_d[[1]] 
-    eval1=.merge1_new( lapply(mod_nmes, function(mod_nme){
-      inverse_func_str = inverse_func_strs[[mod_nme]]
-      all_models_y = all_models[[mod_nme]]
-     .merge1_new(lapply(nme_d, function(nme1){
+    #eval1=.merge1_new( lapply(mod_nmes, function(mod_nme){
+      inverse_func_str = transform_y[[2]]
+      all_models_y = all_models$models#[[mod_nme]]
+    eval1 =  .merge1_new(lapply(nme_d, function(nme1){
      d = self$datas[[nme1]]
       resd = try(d$evaluateAllModels(all_models_y,phens,inverse_func_str = inverse_func_str,flags))
       if(inherits(resd,"try-error")) {
@@ -697,18 +749,18 @@ datasEnv<-R6Class("datasEnv", public = list(
       }
       resd
     }),addName="data")
-    }),addName="transform_y")
+    #}),addName="transform_y")
     if(is.null(eval1)) return(NULL)
   #  eval1 = subset(eval1, model!="avg")
-    eval2 = eval1%>% pivot_wider(names_from="submeasure")
+    eval2 = eval1%>% pivot_wider(names_from="submeasure") %>% tibble::add_column(transform_y=strsplit(transform_y[[1]]," ")[[1]][2])
   #  isfull=eval2$model %in% full_model_nmes
   #  eval2%>%tibble::add_column(isfull=isfull)
     if(!is.null(sigDB) ){
-      sigDB$saveEval(eval2, flags,phens, user="")
-      eval1 = sigDB$loadEval(flags,phens, user="")
+      sigDB$saveEval(eval2, flags,phens, transform_y = transform_y,user="")
+      eval1 = sigDB$loadEval(flags,phens,transform_y = transform_y,  user="")
       return(eval1)
     }
-    .calcEval1(eval2)
+    .calcEval1(eval2, rename=F)
   },
   pvalues=function(vars,phens,transform_y,flags){
     datas = self$datas

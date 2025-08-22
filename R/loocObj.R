@@ -20,6 +20,14 @@ loocObj<-R6Class("loocObj", public = list(
 #    non_na_inds = which(apply(nonNA, 1,function(x) length(which(x))>0))
     useAll = rep(T, len_y)
     len_y1 = len_y #length(non_na_inds)
+    tbl2 = NULL
+    
+    if(length(pheno_balance)==1){
+      phens1 = unlist(lapply(data$y, function(y1) which(dimnames(y1)[[2]]==pheno_balance)))
+      y2 = data$y[[names(phens1)[[1]]]][,phens1[[1]]]
+      tbl2=table(y2)
+    }
+    
     if(!is.null(nrep) && nrep!=0){
 #      batch  = ceiling((len_y1)/nrep)
      # incl = matrix(T, nrow = len_y1, ncol =nrep)
@@ -43,7 +51,7 @@ loocObj<-R6Class("loocObj", public = list(
       self$useAll = useAll
       self$nrep=0
       self$incl=as.matrix(useAll)
-    }else if(!is.null(pheno_balance)  && batch==1){
+    }else if(length(pheno_balance)==1  && batch==1 && min(tbl2)>5){
       phens1 = unlist(lapply(data$y, function(y1) which(dimnames(y1)[[2]]==pheno_balance)))
       y2 = data$y[[names(phens1)[[1]]]][,phens1[[1]]]
       tbl=table(y2)

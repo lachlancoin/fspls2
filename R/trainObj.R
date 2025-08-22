@@ -84,7 +84,7 @@ trainObj<-R6Class("trainObj",
                   #    })
                   #    nonNA
                   #  },
-                    update=function(data,k,funcst,subphens,incl,
+                    update=function(data,k,funcst,subphens,incl=names(data$data),
                                     var=list(), varnames = list(), W_all = matrix(nrow=0, ncol=0)){
                       phen_fams = names(subphens) #unlist(lapply(phens, function(ph) names(ph)))
                       phen_fam = unique(phen_fams)
@@ -111,22 +111,22 @@ trainObj<-R6Class("trainObj",
                       nmes_phens1 = names(phens1); names(nmes_phens1) = nmes_phens1
                       ymean = lapply(nmes_phens1, function(nme_p1){
                         yTr1 = self$yTr[[nme_p1]]
-                        subinds = dimnames(yTr1)[[1]] %in% phens1 #[[nmes_phens1]]
-                        if(length(which(subinds))==0) subinds = dimnames(yTr1)[[1]] %in% phens1[[nmes_phens1]]
+                        subinds = dimnames(yTr1)[[1]] %in% unlist(phens1) #[[nmes_phens1]]
+                        if(length(which(subinds))==0) subinds = dimnames(yTr1)[[1]] %in% phens1[nmes_phens1]
                         apply(yTr1[subinds,,drop=F],1,mean,na.rm=T)
                       })
                         #ymean = lapply(self$yTr,function(yTr1) apply(yTr1,1,mean)) ## should be mean 0
                         #if(max(abs(unlist(ymean)))>1e-5)stop("problem")
                     #  }
-                      incl1 = names(data$data); names(incl1) = incl1
-                      print(incl1)
+                       incl1 = names(data$data); names(incl1) = incl1
+                   #   print(incl1)
                       #names(incl) = incl
                       self$products= lapply(incl1, function(ik){
                         if(!(ik %in% incl)) return(NULL)
                         x = data$data[[ik]]
                         lapply(nmes_phens1, function(nme_p1){
                           yTr1 = self$yTr[[nme_p1]]
-                          subinds = dimnames(yTr1)[[1]] %in% phens1#[[nmes_phens1]]
+                          subinds = dimnames(yTr1)[[1]] %in% unlist(phens1)#[[nmes_phens1]]
                           if(length(which(subinds))==0) subinds = dimnames(yTr1)[[1]] %in% phens1[[nmes_phens1]]
                           yTr1 = yTr1[subinds,,drop=F]
                          # lapply(yTr_, function(yTr1){ ##NEED TO ADD POWS

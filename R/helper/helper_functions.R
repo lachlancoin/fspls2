@@ -69,12 +69,25 @@ length(unique(eval1$`data:family`))
   }
   eval3
 }
+
+.plotEval2<-function(eval1,...){
+  if(is.null(eval1[['experiment_id']])){
+    return(.plotEval1(eval1,...))
+  }
+  expt1 = unique(eval1$experiment_id)
+  names(expt1) = expt1
+  lapply(expt1,function(expt) {
+    eval3 = subset(eval1, experiment_id==expt)
+    .plotEval1(eval3,...)
+  })
+}
+
 #      maxn = max(eval2$nsamps)
   #head(eval4)#pivot_wider(eval2, names_from = c("cv", "fullmodel", "numvars"), values_from ="value")
 .plotEval1<-function(eval3,
            shape_color=c("pheno","subpheno"),linetype="fullmodel",showranges=T,
            txtsize=1,logy=F,legend=F,sep_by="",scales="free",point=T,line=T,
-           grid0 = c("cohort","measure"),grid1 = "cv_full",title=""
+           grid0 = c("cohort","measure"),grid1 = "cv_full",title="", title1=""
           ){
  
   linetype_nme = paste(linetype, collapse="_");
@@ -100,10 +113,10 @@ length(unique(eval1$`data:family`))
 # eval2$isfull = (eval2$isfull+1)/2.0
   ggps=lapply(phenos, function(ph){ 
     eval5 = subset(eval2, sep_by==ph & !is.na(mid))
-    
+    ph3 = paste(sort(unique(apply(eval5[,names(eval5) %in% title1, drop=F],1,paste,collapse=","))), collapse=" ")
   ggp<-ggplot(eval5);
   if(point) ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_color_nme,size="nsamps", color=shape_color_nme))
-  if(line)  ggp<-ggp+geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=shape_color_nme)) +ggtitle(paste(title,ph))
+  if(line)  ggp<-ggp+geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=shape_color_nme)) +ggtitle(paste(title,ph, ph3))
   if(showranges){ ## geom_ribbon vs geom_errorbar
     
    ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype_nme,color=shape_color_nme, fill = shape_color_nme ), alpha = 0.1)
@@ -724,37 +737,22 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
 }
 
 .plotArea1<-function(predictions,family="binomial",rename=T, 
-                     subset = 1:length(predictions[[1]][[1]][[1]]),
-                     len = 1,grid="model~pheno", p_incl="",max_vars = 100){
-  nmesp1 = names(predictions); names(nmesp1) = nmesp1
-  #nme1 = nmesp1[[1]]
-  lapply(nmesp1, function(nme1){
-    pred1 = predictions[[nme1]]
-    nmesp2 = names(pred1); names(nmesp2) = nmesp2
-    #nme2 = nmesp2[[1]]
-    lapply(nmesp2, function(nme2){
-      pred2 = pred1[[nme2]]
-      inds = 1:length(pred2);
-      names(inds) = names(pred2)
-      lapply(inds, function(i){
-        title = paste(nme1,nme2, names(inds)[i[]])
-        .plotArea(pred2[i],family=family, 
-                  subset = subset,
-                  rename=rename, len=len, grid=grid, p_incl="", max_vars = max_vars,title=title)
-      })
-    })
-  })
+                     subset = 1:length(predictions[[1]][[1]]), #[[1]]),
+                     len = 1,grid="model~pheno", max_vars = 100){
+  area_p= .getAreaPlot1(predictions,family)
+  .plotArea(area_p, rename=rename, len = len,grid=grid,  max_vars = max_vars,title=title)
 }
 
-.plotArea<-function(predictions, 
-                    subset = 1:length(predictions[[1]]),
-                    family="binomial",rename=T, len = 1,grid="model~pheno", p_incl="", max_vars = 100,title=""){
-  area_p=.merge1_new(lapply(predictions, function(train){  
-    .merge1_new(lapply(train[subset], function(model){
-      .merge1_new(lapply(model, function(test){
-        .merge1_new(lapply(test, function(fam){
+.getAreaPlot1<-function(predictions0){
+  area_p=.merge1_new(lapply(predictions0, function(model){  
+    .merge1_new(lapply(model, function(train){
+      .merge1_new(lapply(train, function(test){
+        nmetest = names(test); names(nmetest)=nmetest
+        .merge1_new(lapply(nmetest, function(famnme){
+          fam = test[[famnme]]
+          family = strsplit(famnme,"\\.")[[1]][1]
         phens = dimnames(fam$y)[[2]]; names(phens)=phens
-        phens = phens[unlist(lapply(phens, function(p)length(grep(p_incl,p))))>0]
+       # phens = phens[unlist(lapply(phens, function(p)length(grep(p_incl,p))))>0]
         phensi= 1:length(phens)
         names(phensi) = phens
         .merge1_new(lapply(phensi, function(j){
@@ -775,11 +773,14 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
         }), addName="pheno")
         }), addName="family")
       }), addName="test")
-    }), addName="model")
     }), addName="train")
- 
-  #area_p$model
+    }), addName="model")
+  #attr(area_p,"family")=family
+  area_p
+}
+.plotArea<-function(area_p, rename=T, len = 1,grid="model~pheno",  max_vars = 100,title=""){
   print("now plotting")
+  family = area_p$family[[1]]
   area_p1=if(rename) .renameModels(area_p, len=len) else area_p
   #print(area_p1$subpheno)
   if(!is.null(area_p1[['subpheno']])){
