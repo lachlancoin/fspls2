@@ -6,6 +6,46 @@ toJSON1<-function(flags){
   if(typeof(flags)!="list") return(toJSON(sort(flags)))
   toJSON(.orderFlags(flags))
 }
+
+
+##converting to and from matrices.  can be either a matrix or an list of matrices
+toJSONM<-function(matr){
+  if(typeof(matr)=="list"){
+    attr = lapply(matr, function(m1) attributes(m1))
+    return(toJSON(list(attr=attr,m=matr)))
+  }else if(typeof(matr)=="double"){
+    attr =  attributes(matr)
+    json=toJSON(list(attr=attr,  m = matr ), digits=NA)
+    return(json)
+  }else{
+    stop("could not transform")
+  }
+}
+setAttr<-function(mat1, attr1){
+  if(typeof(mat1)=="list" && typeof(attr1)=="list" ){
+   res= lapply(1:length(attr1), function(k){
+      setAttr(mat1[[k]], attr1[[k]])
+    })
+   names(res) = names(attr1)
+   
+   return(res)
+  }else{
+    if(is.list(mat1) && length(mat1)==1 ){
+      mat1 = mat1[[1]]
+    }
+    attributes(mat1) = attr1
+  }
+  mat1
+}
+
+fromJSONM<-function(json){
+  ab1 = fromJSON(json, simplifyMatrix = T)
+  attr1 = ab1$attr
+  mat1 = ab1$m
+  if(is.null(ab1$attr)) return(ab1)
+  mat1=setAttr(mat1,attr1)
+  mat1
+}
 .correctFlags<-function(fl1,remove=c()){
   if(!is.null(fl1[['pheno_balance']])){
     fl1[['pheno_balance']]=TRUE
@@ -109,15 +149,17 @@ sigEnv<-R6Class("sigEnv", public = list(
    if(!("models" %in% self$tbls())) return(NULL)
    expt_id = self$getExpt(flags, phens, user,transform_y = transform_y, add_new=F)
    if(is.null(expt_id)) return(NULL)
-   vn1 =  dbGetQuery(self$mydb, 'SELECT * from models where experiment_id=:exptid',list(exptid=expt_id))
+   combined =  dbGetQuery(self$mydb, 'SELECT * from models where experiment_id=:exptid',list(exptid=expt_id))
+   vn1=combined
  #  trans_y = unique(vn$transform_y); names(trans_y)=trans_y
  ##debugging
-   #t_y = trans_y[[1]]; m_nme = vn$model_nme[[1]] ;p_g = vn$pheno_group[[1]]; rep1 = vn$rep[[1]]; ton = vn$trainedOn[[1]];
+   #m_nme = vn$model_nme[[1]] ;p_g = vn$pheno_group[[1]]; rep1 = vn$rep[[1]]; ton = vn$trainedOn[[1]];
    #vn5 = subset(vn, model_nme==m_nme & pheno_group==p_g & rep==rep1 & trainedOn==ton)
    #all_models1 = lapply(trans_y, function(ty){
     # vn1 = subset(vn, transform_y ==ty)
      mod_nme = unique(vn1$model_nme); names(mod_nme)=mod_nme
     all_models1 =  lapply(mod_nme, function(m_nme){
+      #print(m_nme)
        vn2 = subset(vn1, model_nme==m_nme)
        #pheno_group = unique(vn2$pheno_group); names(pheno_group)=pheno_group
        #lapply(pheno_group, function(p_g){
@@ -128,16 +170,18 @@ sigEnv<-R6Class("sigEnv", public = list(
            trainedOn = vn4$trainedOn; names(trainedOn)=trainedOn
            lapply(trainedOn, function(ton){
              vn5 = subset(vn4, trainedOn==ton)
-            res2 = list(betas = fromJSONM(vn5$betas[[1]]),
+            res2 = list(
+              betas = fromJSONM(vn5$betas[[1]]),
             var_names = fromJSON(vn5$var_names[[1]]),
-            constants_proj=fromJSONM(vn5$constants_proj[[1]]))
+            constants_proj=fromJSONM(vn5$constants_proj[[1]])
+            )
             res2
            })
            
          })
      })
    #})
-   list(models=all_models1, flags = flags, phens = phens, transform_y=transform_y)
+   list(models=all_models1, flags = flags, phens = phens, transform_y=transform_y, db=self$subnme)
  },
  saveModels=function(all_models, 
                      flags=all_models$flags, phens=all_models$phens,transform_y=all_models$transform_y, user="",replace=T){
@@ -219,6 +263,7 @@ sigEnv<-R6Class("sigEnv", public = list(
       ),
       flags=flags,
       phens =phens, 
+      db=self$subnme,
       transform_y = transform_y
       )
       res2

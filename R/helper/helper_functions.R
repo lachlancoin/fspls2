@@ -743,12 +743,14 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   .plotArea(area_p, rename=rename, len = len,grid=grid,  max_vars = max_vars,title=title)
 }
 
-.getAreaPlot1<-function(predictions0){
+.getAreaPlot1<-function(predictions0, families="binomial"){
+  if(is.null(families)) families = names(predictions0[[1]][[1]][[1]])
+  names(families)=families
   area_p=.merge1_new(lapply(predictions0, function(model){  
     .merge1_new(lapply(model, function(train){
       .merge1_new(lapply(train, function(test){
-        nmetest = names(test); names(nmetest)=nmetest
-        .merge1_new(lapply(nmetest, function(famnme){
+#        families = names(test); names(families)=families
+        .merge1_new(lapply(families, function(famnme){
           fam = test[[famnme]]
           family = strsplit(famnme,"\\.")[[1]][1]
         phens = dimnames(fam$y)[[2]]; names(phens)=phens
@@ -760,8 +762,8 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   #        names(indsk)=dimnames(fam$ypred[[phen]])[[2]]
          # .merge1_new(lapply(indsk , function(k){
             if(family=="gaussian"){
-               ap  = data.frame(list(knots = fam$y[,j],value=fam$ypred[,j]))
-               names(ap)=c("knots","value")
+               ap  = data.frame(list(knots = fam$y[,j],value=fam$ypred[,j]), counts=0, subpheno="", type="points")
+               names(ap)=c("knots","value","counts","subpheno", "type")
             }else if(family=="ordinal" || family=="gaussian"){
               ap = getAreaPlot(fam$ypred, fam$y[,j])
         }else{
@@ -777,6 +779,14 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
     }), addName="model")
   #attr(area_p,"family")=family
   area_p
+}
+.plotAreaSep=function(area_p, sep="pheno",...){
+  phens=unique(area_p[[sep]]);names(phens)=phens
+ lapply(phens, function(p){
+   p = phens[[1]]
+  area_p1=area_p[area_p[[sep]]==p,,drop=F]
+  .plotArea(area_p1, ...)
+ })  
 }
 .plotArea<-function(area_p, rename=T, len = 1,grid="model~pheno",  max_vars = 100,title=""){
   print("now plotting")
@@ -1306,29 +1316,6 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   invisible(ggp1)
 }
 
-##converting to and from matrices.  can be either a matrix or an list of matrices
-toJSONM<-function(matr){
-  attr = if(typeof(matr)=="list" ) lapply(matr, attributes) else attributes(matr)
-  json=toJSON(list(attr=attr,  m = matr ), digits=NA)
-  json
-}
-
-fromJSONM<-function(json){
-  ab1 = fromJSON(json, simplifyMatrix = F)
-  attr1 = ab1$attr
-  if(is.null(attr1)) return(ab1)
-  mat1 = ab1$m
-  if(typeof(attr1)=="list"){
-    for(k in names(attr1)){
-      attributes(mat1[[k]])=attr1[[k]]
-    }
-  }else{
-   # dim(mat) = attr$dim
-  #  dimnames(mat) = as.list(attr$dimnames)
-   attributes(mat1) = ab1$attr
-  }
-  mat1
-}
 
 
 .convert<-function(data,mode="rna", expand=F, max=100, factor=F){

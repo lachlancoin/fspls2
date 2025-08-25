@@ -353,21 +353,23 @@ datasEnv<-R6Class("datasEnv", public = list(
                          db=vars_all$db){
     
     sigDB = self$getSigDB(db)
-    
     if(!is.null(sigDB) ){
-      all_models = sigDB$loadModels(flags,phens, transform_y=transform_y)
-      if(!is.null(all_models) && length(all_models$models)>0){
+      all_models =try( sigDB$loadModels(flags,phens, transform_y=transform_y))
+      if(inherits(all_models,"try-error")) {
+        print(paste("problem reading from DB .. recalculating"))
+      }else if(!is.null(all_models) && length(all_models$models)>0){
         return(all_models)
       }
     }
-    
+    if(length(transform_y)==1) transform_y = fromJSON(transform_y)   ## this is to fix problem with JSON
+    #self$update(phens, flags, transform_y)
+    self$updateLOOC(phens,flags)
    # nmes_vars_all = names(vars_all); names(nmes_vars_all) = nmes_vars_all
     #func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
     #nme_v_all = nmes_vars_all[[1]]
     
     logpthresh= log(.readFlag(flags,"pthresh",1e-3))
     project=.readFlag(flags,"project",TRUE)
-    #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
    # combined_models=lapply(nmes_vars_all, function(nme_v_all){
     #  if(verbose) print(nme_v_all)
       vars = vars_all#[[nme_v_all]]
@@ -380,8 +382,10 @@ datasEnv<-R6Class("datasEnv", public = list(
       ord = order(unlist(lapply(variables, length)),decreasing=T)
       variables = variables[ord]
       var_inds = var_inds[ord]
+     #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
+      
      for(v_nme in names(variables)){
-     #  print(v_nme)
+       #print(v_nme)
        if(verbose)print(v_nme)
        vars2 = variables[[v_nme]]
        vars2 = vars2[1:min(length(vars2), max)]
@@ -572,17 +576,15 @@ datasEnv<-R6Class("datasEnv", public = list(
   func_str = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
   lapply(func_str, function(xx) result)
   },
-update=function( phens, flags, transform_y=c("function(y) y","function(y) y"), varn=c()){
-#  types_all = getOption("types_all",names(self$datas[[1]]$data))
- # names(types_all) = types_all
-#  batch=.readFlag(flags, "batch",0)
-#  nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
-#  pheno_balance = if(.readFlag(flags,"pheno_balance",FALSE)) unlist(phens) else NULL
- # invisible(lapply(self$datas, function(data) data$init1(pheno_balance = pheno_balance, nrep=nrep,  batch = batch)))
-#  varn = getOption("varn",c())
+updateTrain=function( phens, flags, transform_y=c("function(y) y","function(y) y")){
   train_nme = .readFlag(flags,"train", names(self$datas))
   datas1 = self$datas
-  invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update( phens,flags,transform_y, varn=varn))); ### update training object - updates all
+  invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$updateTrain( phens,flags,transform_y))); ### update training object - updates all
+},
+updateLOOC=function( phens, flags,varn=c()){
+  train_nme = .readFlag(flags,"train", names(self$datas))
+  datas1 = self$datas
+  invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$updateLOOC( phens,flags,varn=varn))); ### update training object - updates all
   
 },
 
@@ -595,7 +597,8 @@ update=function( phens, flags, transform_y=c("function(y) y","function(y) y"), v
       if(!is.null(vars_all)) return(vars_all)
       vars_all$db=db
     }
-    self$update(phens1, flags, transform_y)
+    self$updateLOOC(phens1, flags)
+    self$updateTrain(phens1, flags, transform_y)
     nreps1 =ncol(self$datas[[1]]$looc$incl)
     datas1 = self$datas
     project=.readFlag(flags,"project",T)

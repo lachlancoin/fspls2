@@ -84,8 +84,7 @@ trainObj<-R6Class("trainObj",
                   #    })
                   #    nonNA
                   #  },
-                    update=function(data,k,funcst,subphens,incl=names(data$data),
-                                    var=list(), varnames = list(), W_all = matrix(nrow=0, ncol=0)){
+                    update=function(data,k,funcst,subphens,incl=names(data$data)){
                       phen_fams = names(subphens) #unlist(lapply(phens, function(ph) names(ph)))
                       phen_fam = unique(phen_fams)
                       names(phen_fam) = phen_fam

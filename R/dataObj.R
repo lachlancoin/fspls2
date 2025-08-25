@@ -474,7 +474,6 @@ dataObj<-R6Class("dataObj", public = list(
   #ymod="matrix",
   weights="matrix",
   train="list", #trainObj",
-  seed="integer",
   subset="logical",  ### used to restrict to subsets in looc Obj
   looc="loocObj",
   mean_x="list",
@@ -1125,7 +1124,8 @@ getConstantsProj=function(phensi){  ##default constants
   names(constants_proj) = names(phensi)
   constants_proj
 },
-extractData=function(var, adjust=T){
+extractData=function(var, adjust=T,convert=F){
+  if(convert)var = lapply(var,self$convert)
   Dall = Matrix( 0,nrow = self$nrow, ncol = length(var), dimnames = list(dimnames(self$data[[1]])[[1]], names(var)), sparse=T)
   nme = rep("", length(var))
   if(length(var)==0)return(Dall)
@@ -1190,19 +1190,26 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
   if(fam=='multinomial'){
     fact=attr(y1,"factor")
   }else if(fam!="gaussian"){
-    fact = y1[,which(dimnames(y1)[[2]]==subphens[[1]][1])    ]
+    colind = which(dimnames(y1)[[2]]==subphens[[1]][1])
+    if(length(colind)==0){
+      print('h')
+      colind=which(dimnames(y1)[[2]]==names(subphens[[1]])[1]) 
+    }
+    fact = apply(y1[,colind ,drop=F  ],1,paste,collapse="_")
   }
   if(fam=="gaussian"){
    warning('not renormalising gaussian')
     return(NULL)
   }else{
-    tbl = table(fact)
+    naInds = fact=="NA" | is.na(fact)
+    tbl = table(fact[!naInds])
     w1   =(1.0/tbl)
     #w1 = w1/sum(w1)
     self$weights = rep(0, length(self$weights))
     for(kk in 1:length(w1)){
       self$weights[which(fact==names(tbl)[[kk]])] = w1[[kk]]
     }
+    self$weights[naInds] = min(w1)
   }
 },
  makeNextModel=function(prev_i, b_i_name, subphens, k, transform_func, family, ypred=NULL, project=T, useglm=T,    logpthresh = -5,
@@ -1238,9 +1245,12 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
       extractd0 = self$extractData(c(prev_i$var, list(b_i)), adjust=F)
       means_x = apply(extractd0,2,mean)
       extractd = self$extractData(c(prev_i$var, list(b_i)), adjust=T)
+      subnme = names(subphens)[[1]]
+      family = strsplit(subnme,"\\.")[[1]]
       df2 = data.frame(lapply(subphens[[1]], function(colind){
        
-        family = getOption("fspls.family",self$family)
+      #  family = getOption("fspls.family",self$family)
+       # phensi = self$phensi(subphens)
         if(family=="multinomial"){
           y_m = attr(self$y[[1]],"factor")
           m1 = try(multinom(y~as.matrix(extractd0),weights=w, trace=F))
@@ -1257,10 +1267,13 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
           roc(self$y[[1]][,3],x_p[,3])
           list(betas_n1, prev_i1$betas[[1]])
         }else{
-          nonNAy = !is.na(self$y[[1]][,colind])
-        ridge=glmnet(cbind(1,extractd0[nonNAy,]),self$y[[1]][nonNAy,colind,drop=F] ,family=family, alpha = 0)
+          y11 = self$y[[subnme]][,subphens[[subnme]],drop=F]
+          self$updateWeights(subphens)
+          nonNAy = !is.na(y11[,1])
+        ridge=glmnet(cbind(1,extractd0[nonNAy,]),y11[nonNAy,,drop=F] ,family=family, alpha = 0, weights =self$weights[nonNAy])
         rbeta <- coef(ridge,s=min(ridge$lambda))
-        ridge1 = glmnet(cbind(1, extractd0[nonNAy,] %*%  rbeta[-(1:2),,drop=F]), self$y[[1]][nonNAy,colind,drop=F], family = family, alpha=0)
+        aa = predict(ridge,cbind(1,extractd0[nonNAy,]),s=min(ridge1$lambda), family=family)
+        ridge1 = glmnet(cbind(1, extractd0[nonNAy,] %*%  rbeta[-(1:2),,drop=F]), y11[nonNAy,,drop=F], family = family, alpha=0)
         rbeta1 <- coef(ridge1,s=min(ridge1$lambda))
         print(rbeta1)
         return(cbind(rbeta[-(1:2),],prev_i1$betas[[1]]))
@@ -1272,7 +1285,6 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
       }
   
     if(verbose  && !is.null(ypred)){
-      
       ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=F)
       new_const = prev_i1$updateConst(subphens,ypred, data,k, transform_func, useglm=getOption("glmnet",T),verbose=verbose, update=F)
       
@@ -2007,16 +2019,41 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
       c(ind1,ind2)
     })
   },
+
 ## gets ready for training - updates train, prev looc
-update=function(phens,flags, transform_y,varn = c()){ ## this updates the reps and train
-  set.seed(self$seed)
+updateTrain=function(phens,flags, transform_y){ ## this updates the reps and train
+  funcst = transform_y[[1]]
+ 
+  if(!is.null(self$subset)){
+    ## apply subset via the looc object to avoid subsetting big matrix
+    self$looc$incl[!self$subset,] = rep(FALSE, ncol(self$looc$incl))
+  }
+  within=T
+  nrep = ncol(self$looc$incl)
+  self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$looc , self$family)) #lapply(1:ncol,function(k)
   incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
   if(length(incls) == 0 )incls = list("all"=names(self$data))
   incls_all = unique(unlist(incls))
-  funcst = transform_y[[1]]
+  for(k in 1:length(self$train)){
+    print(paste("update",k))
+    self$train[[k]]$update(self,k,funcst, phens, incls_all)
+  }
+  reweight=.readFlag(flags,"reweight",FALSE)
+  if(reweight){
+    self$updateWeights(phens)
+  }
+},
+updateLOOC=function(phens,flags,varn=c()){
+  set.seed(.readFlag(flags,"seed",42))
+ 
+ 
   #incl = incls_all
   batch=.readFlag(flags, "batch",0)
   nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
+  if(!is.null(self$looc) && nrep == ncol(self$looc$incl)){
+    print("no need to update, although we should probably check if the phens changed")
+    return(NULL)
+  }
   pheno_balance = if(.readFlag(flags,"pheno_balance",FALSE)) unlist(phens) else NULL
   rand = sample(nrow(self$data[[1]]))
   self$looc=loocObj$new(self, nrep = nrep, batch = batch,
@@ -2027,22 +2064,13 @@ update=function(phens,flags, transform_y,varn = c()){ ## this updates the reps a
     #should really do this inside looc obj
     self$looc$incl = self$looc$incl[,2,drop=F]
   }
-  if(!is.null(self$subset)){
-    ## apply subset via the looc object to avoid subsetting big matrix
-    self$looc$incl[!self$subset,] = rep(FALSE, ncol(self$looc$incl))
-  }
-  within=T
-  nrep = ncol(self$looc$incl)
-  self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$looc , self$family)) #lapply(1:ncol,function(k)
-  var = self$extractVar(varn)
-  W_all = if(length(var)==0) matrix(nrow=0, ncol=0) else  .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
-  for(k in 1:length(self$train)){
-    self$train[[k]]$update(self,k,funcst, phens, incls_all,var=var,varnames=varn, W_all = W_all)
-  }
-  #phens=self$pheno()
   phensi = self$phensi(phens)
   self$prev = list()
+  nrep = ncol(self$looc$incl)
+  var = self$extractVar(varn)
+  W_all = if(length(var)==0) matrix(nrow=0, ncol=0) else  .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
   for(k in 1:nrep){
+    #  print(k)
     #    phensi,data, betas_new, constants_proj,  k, #mean_y,
     self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,NULL,k, var=var, varnames=varn, W_all = W_all)
   }
@@ -2144,8 +2172,7 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #i
    # list(missing=missing_vals, matching=matching_vals)
    #self$weights = weights
   },
-  initialize_dist=function(dist,types, seed=42){
-    self$seed=seed
+  initialize_dist=function(dist,types){
     self$subset=NULL
     mem_dirp = getOption("fspls.mem_dir", NULL)
     if(!is.null(mem_dirp)){
@@ -2240,9 +2267,8 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #i
       self$norm_done = NULL
     }
     self$prev=list()
-    self$seed=seed
 #    self$family=if(!is.null(family)) family else .inferFamily(y)
-
+  self$looc=NULL
     self$subset = NULL
     #nrowy = nrow(data[[1]])
     #ncoly = 1
