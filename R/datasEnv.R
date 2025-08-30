@@ -283,15 +283,15 @@ datasEnv<-R6Class("datasEnv", public = list(
      self$datas[[k]]$updateWeights(subphens)
    } 
   },
-   getSigDB=function(nme1="",reload= F, clear=F){
+   getSigDB=function(nme1="",reload= F, clear=F, user=""){
      if(is.null(nme1)) return(NULL)
    if(reload || is.null(self$sigs[[nme1]])){
-     self$sigs[[nme1]]=   sigEnv$new(self$sigsdir,nme1, clear=clear)
+     self$sigs[[nme1]]=   sigEnv$new(self$sigsdir,nme1, clear=clear, user=user)
      self$sigs[[nme1]]$updateData(data_flags = self$flags, 
                                   data_names =names(self$datas), 
                                   data_types = names(self$datas[[1]]$data),
                                   dims = self$dims(),
-                                  phenos =self$datas[[1]]$pheno(), user="")
+                                  phenos =self$datas[[1]]$pheno())
      #self$sigs[[nme1]]$data_id
    }
    self$sigs[[nme1]]
@@ -322,8 +322,8 @@ datasEnv<-R6Class("datasEnv", public = list(
  cats = function(maxpheno = 1e9){
     lapply(self$datas, function(d) d$cats(maxpheno))
  },
-  pheno=function(maxpheno=1e9,sep=F, sep_group = F, exclude=NULL){
-   res = self$datas[[1]]$pheno(maxpheno=maxpheno, sep=sep, sep_group = sep_group);
+  pheno=function(maxpheno=1e9,sep=F, sep_group = F, exclude=NULL, code=NULL){
+   res = self$datas[[1]]$pheno(maxpheno=maxpheno, sep=sep, sep_group = sep_group, code = code);
   if(!is.null(exclude)){
     lapply(res, function(res2){
     lapply(res2, function(res1) res1[-grep(exclude,res1)])
@@ -350,9 +350,9 @@ datasEnv<-R6Class("datasEnv", public = list(
     angles_all
   },
   makeAllModels=function(vars_all, phens=vars_all$phens, flags=vars_all$flags, transform_y=vars_all$transform_y,verbose=F, max = 1e6,
+                         user="",
                          db=vars_all$db){
-    
-    sigDB = self$getSigDB(db)
+    sigDB = self$getSigDB(db, user=user)
     if(!is.null(sigDB) ){
       all_models =try( sigDB$loadModels(flags,phens, transform_y=transform_y))
       if(inherits(all_models,"try-error")) {
@@ -378,14 +378,21 @@ datasEnv<-R6Class("datasEnv", public = list(
       variables = vars$variables
       var_inds = vars$inds
     #  print(var_inds);stop("!!")
-      if(length(variables)==0) return(list())
+      rem_inds = 1:self$datas[[1]]$nreps()
+       names(rem_inds) = as.character(rem_inds)
+       names(rem_inds)[which(rem_inds==self$datas[[1]]$nreps())]="full"
+       #inds1 = 1:2
+       all_models = self$makeModels(list(),rem_inds , phens, func_str, flags)
+       
+      if(length(variables)==0) return(list(models=all_models, flags = flags, phens = phens, transform_y = transform_y, db=db))
+      
       ord = order(unlist(lapply(variables, length)),decreasing=T)
       variables = variables[ord]
       var_inds = var_inds[ord]
      #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
       
      for(v_nme in names(variables)){
-       #print(v_nme)
+       print(v_nme)
        if(verbose)print(v_nme)
        vars2 = variables[[v_nme]]
        vars2 = vars2[1:min(length(vars2), max)]
@@ -431,17 +438,13 @@ datasEnv<-R6Class("datasEnv", public = list(
                      
             }
           }else{
-            for(r_i in 1:length(names(inds))){ #[[p_i]]))){
-              r_nme = names(inds)[[r_i]] #[[p_i]])[r_i]
-              models3 = all_models[[nme_]][[r_nme]] #[[p_nme]][[r_nme]]  
-              if(is.null(models3)){
-                inds2 = lapply(inds#[p_i]
-                               , function(indsk)indsk[r_i])
-                models3 = self$makeModels( vars2, inds2,phens#[which(names(phens) %in% p_nme)]
-                                                ,func_str, flags)
-                for(k in 1:length(models3)){
-                  all_models[[names(models3)[[k]]]][[r_nme]]= models3[[k]][[r_nme]] #[[p_nme]][[r_nme]]#[[p_nme]][[r_nme]] 
-                        
+            subinds= inds[which(is.na(match(names(inds), names(all_models[[nme_]]))))]
+            if(length(subinds)>0){ ## missing inds
+              models3 = self$makeModels( vars2, subinds,phens#[which(names(phens) %in% p_nme)]
+                                         ,func_str, flags)
+              for(nme1_ in names(models3)){
+                for(r_i in names(models3[[nme1_]])){
+                  all_models[[nme1_]][[r_i]] = models3[[nme1_]][[r_i]]
                 }
               }
             }
@@ -467,6 +470,8 @@ datasEnv<-R6Class("datasEnv", public = list(
     train_nme = .readFlag(flags,'train', names(datas)[1])
     if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
     verbose=.readFlag(flags,"verbose",FALSE)
+    useglm=.readFlag(flags,"useglmnet",TRUE)
+  #  print(paste("useglm", useglm))
     #k = .readFlag(flags, 'rep',length(datas[[1]]$train))
    # nmes_inds = names(inds);names(nmes_inds)=nmes_inds
     #nmes_inds1 = nmes_inds[[1]];d =self$datas[[1]]
@@ -477,7 +482,7 @@ datasEnv<-R6Class("datasEnv", public = list(
         mods1 = lapply(inds1, function(k){
          # print(k)
             lapply(datas[names(datas) %in% train_nme], function(d){
-              mods = d$makeModels(phens1, vars2,k,logpthresh = logpthresh,project=project, func_str=func_str, useoffset=useoffset)
+              mods = d$makeModels(phens1, vars2,k,logpthresh = logpthresh,project=project, func_str=func_str,useglm=useglmnet, useoffset=useoffset)
             })
           #})
         })
@@ -576,29 +581,29 @@ datasEnv<-R6Class("datasEnv", public = list(
   func_str = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
   lapply(func_str, function(xx) result)
   },
-updateTrain=function( phens, flags, transform_y=c("function(y) y","function(y) y")){
+updateTrain=function( phens, flags, transform_y=c("function(y) y","function(y) y"), verbose=F){
   train_nme = .readFlag(flags,"train", names(self$datas))
   datas1 = self$datas
-  invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$updateTrain( phens,flags,transform_y))); ### update training object - updates all
+  invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$updateTrain( phens,flags,transform_y, verbose=verbose))); ### update training object - updates all
 },
-updateLOOC=function( phens, flags,varn=c()){
+updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
   train_nme = .readFlag(flags,"train", names(self$datas))
   datas1 = self$datas
-  invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$updateLOOC( phens,flags,varn=varn))); ### update training object - updates all
+  invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$updateLOOC( phens,flags,varn=varn,force=force, verbose=verbose))); ### update training object - updates all
   
 },
 
-  select=function(phens1,flags,transform_y=c("function(y) y","function(y) y"), verbose=F, db=NULL ){#c(y="function(y) y","function(y) y")
+  select=function(phens1,flags,transform_y=c("function(y) y","function(y) y"), verbose=F, db=NULL,user="" ){#c(y="function(y) y","function(y) y")
     
-    sigDB = self$getSigDB(db)
+    sigDB = self$getSigDB(db,user=user)
     if(!is.null(sigDB) ){
       vars_all = sigDB$loadVars(flags, phens1, transform_y = transform_y)
     
       if(!is.null(vars_all)) return(vars_all)
       vars_all$db=db
     }
-    self$updateLOOC(phens1, flags)
-    self$updateTrain(phens1, flags, transform_y)
+    self$updateLOOC(phens1, flags, verbose=verbose)
+    self$updateTrain(phens1, flags, transform_y, verbose=verbose)
     nreps1 =ncol(self$datas[[1]]$looc$incl)
     datas1 = self$datas
     project=.readFlag(flags,"project",T)
@@ -612,6 +617,7 @@ updateLOOC=function( phens, flags,varn=c()){
     if(length(train_nme)==0) train_nme = names(datas1)[[1]]
     names(train_nme) = train_nme
     maxsize=.readFlag(flags,'max',50)
+    minsize=.readFlag(flags,'min',0)
     num_pvals = min(topn, 10)
     incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
     if(length(incls) == 0 )incls = list("all"=names(datas1[[1]]$data))
@@ -634,7 +640,7 @@ updateLOOC=function( phens, flags,varn=c()){
     #invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(funcst, subphens,incls_all))); ### update training object - updates all
     
      variables=lapply(nreps, function(k){
-      print(paste("cv",k,"of",length(nreps)))
+      if(verbose) print(paste("cv",k,"of",length(nreps)))
       jj1=0
     
       #invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, phens,incls_all))); ### update training object
@@ -649,7 +655,7 @@ updateLOOC=function( phens, flags,varn=c()){
           if(verbose) print(incl)
         for(g_incl in genes_incls){
          for(qq in 1:length(quantiles)){
-         while(logpv<logpvthresh && length(vars_l[[1]][[1]]$var)<maxsize){
+         while( (length(vars_l[[1]][[1]]$var) < minsize || logpv<logpvthresh) && length(vars_l[[1]][[1]]$var)<maxsize){
           angles_all = lapply(vars_l, function(vars_l1){
             nxt_vars1 =  tryCatch({
               varnames = vars_l1[[1]]$var_names; type = self$type
@@ -694,7 +700,7 @@ updateLOOC=function( phens, flags,varn=c()){
           ord = order(unlist(lapply(angles_all1, function(nv)attr(nv,"cumpv"))))
           logpv = attr(angles_all1[[ord[1]]],"cumpv")
           #print(logpv)
-          if(logpv<=logpvthresh){
+          if(logpv<=logpvthresh || length(vars_l[[1]][[1]]$var) < minsize){
             vars_l = angles_all1[ord][1:beam]
           }
           if(verbose){
@@ -716,6 +722,7 @@ updateLOOC=function( phens, flags,varn=c()){
     })
     vars_all=self$post_process(variables)
     vars_all$flags = flags; vars_all$phens = phens1; vars_all$transform_y = transform_y ; vars_all$db=db
+    if(length(vars_all$variables)==0) return(vars_all)
     if(!is.null(sigDB) ){
 #      saveVars = function(vars_all,flags,phens,transform_y,user="", replace=T){
       sigDB$saveVars(vars_all,replace=T)
@@ -724,6 +731,7 @@ updateLOOC=function( phens, flags,varn=c()){
   },
   extractPredictions=function(all_models,phens=all_models$phens, flags=all_models$flags, CV = FALSE, liab=T, data_nme  = names(self$datas)){
     #datas = self$datas
+    self$updateLOOC(phens, flags)
     names(data_nme) = data_nme
     #nmes_p = names(phens); names(nmes_p) = nmes_p
     all_models_y = all_models$models
@@ -745,20 +753,21 @@ updateLOOC=function( phens, flags,varn=c()){
     res2[lapply(res2,length)>0]
     })
     predictions0=res3[unlist(lapply(res3, function(x) length(x[[1]][[1]])))>0]
-    predictions0
+    predictions0 # 
  },
   evaluateAllModels=function(all_models, phens=all_models$phens,flags=all_models$flags,
-                             transform_y=all_models$transform_y, db=all_models$db){ ## different folds with same variables
+                             transform_y=all_models$transform_y, db=all_models$db, user=""){ ## different folds with same variables
 ##                          inds = as.numeric(names(all_models))){
     #self = all_models
-    sigDB = self$getSigDB(db)
+    sigDB = self$getSigDB(db,user=user)
     
     if(!is.null(sigDB) ){
-      eval1 = sigDB$loadEval(flags,phens, transform_y,  user="")
+      eval1 = sigDB$loadEval(flags,phens, transform_y)
       if(!is.null(eval1) && nrow(eval1)>0){
         return(eval1)
       }
     }
+    self$updateLOOC(phens, flags)
     if(length(all_models$models)==0) return(NULL)
     nme_d = .readFlag(flags,"test",names(self$datas))
     names(nme_d) = nme_d
@@ -792,8 +801,8 @@ updateLOOC=function( phens, flags,varn=c()){
   #  isfull=eval2$model %in% full_model_nmes
   #  eval2%>%tibble::add_column(isfull=isfull)
     if(!is.null(sigDB) ){
-      sigDB$saveEval(eval2, flags,phens, transform_y = transform_y,user="")
-      eval1 = sigDB$loadEval(flags,phens,transform_y = transform_y,  user="")
+      sigDB$saveEval(eval2, flags,phens, transform_y = transform_y)
+      eval1 = sigDB$loadEval(flags,phens,transform_y = transform_y)
       return(eval1)
     }
     .calcEval1(eval2, rename=F)

@@ -3,18 +3,26 @@
 loocObj<-R6Class("loocObj", public = list(
   useAll="vector",
   nrep="numeric",
+  batch="numeric",
   incl="matrix",
+  seed="numeric",
   #reps="vector",
   rowsToDo="vector",
+  nrows = "numeric",
   initialize=function(data,   ## data can be null if nrows is not NULL
                       incl_full = T,
                       nrows = nrow(data$data[[1]]),
-                      rand = sample(nrows),  ## randomisation
+                       ## randomisation
                       nrep=getOption("fspls.nrep",1), 
                       batch=getOption("fspls.batch",0),
+                      seed = 42,
                       pheno_balance=NULL
                       ){
-   
+    self$nrep=nrep
+    self$batch=batch
+    self$seed = seed
+    self$nrows = nrows;
+    rand = sample(nrows)
     len_y = nrows #length(data$y[,1])
 #    nonNA = apply(data$y,c(1,2),function(x) !is.na(x))
 #    non_na_inds = which(apply(nonNA, 1,function(x) length(which(x))>0))

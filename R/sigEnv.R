@@ -10,6 +10,7 @@ toJSON1<-function(flags){
 
 ##converting to and from matrices.  can be either a matrix or an list of matrices
 toJSONM<-function(matr){
+  if(is.null(matr)) return(toJSON(c()))
   if(typeof(matr)=="list"){
     attr = lapply(matr, function(m1) attributes(m1))
     return(toJSON(list(attr=attr,m=matr)))
@@ -19,10 +20,11 @@ toJSONM<-function(matr){
     return(json)
   }else{
     stop("could not transform")
+    return(toJSON(matr))
   }
 }
 setAttr<-function(mat1, attr1){
-  if(typeof(mat1)=="list" && typeof(attr1)=="list" ){
+  if(typeof(mat1)=="list" && typeof(attr1)=="list"  && is.null(attr1$names)){
    res= lapply(1:length(attr1), function(k){
       setAttr(mat1[[k]], attr1[[k]])
     })
@@ -82,10 +84,12 @@ sigEnv<-R6Class("sigEnv", public = list(
  data_types = "list",
  phenos = "list",
  data_id="character",
-  initialize=function(dbDir,subnme,
+ user="", ## default user
+  initialize=function(dbDir,subnme,user="",
                       clear=FALSE){ #there is duplication in phenosdir and dbDir .. fix later
     if(!file.exists(dbDir)) dir.create(dbDir,recursive=T)
     self$subnme = subnme
+    self$user=user
     self$sigsdir=paste(dbDir,subnme, sep="/")
     dir.create(self$sigsdir,recursive=T)
     self$dbfile=paste(self$sigsdir,paste("signatures",subnme,"sqlite",sep="."),sep="/")
@@ -93,7 +97,7 @@ sigEnv<-R6Class("sigEnv", public = list(
     if(clear) self$drop_all();
     self$data_id=NULL
   },
-  updateFlags=function(flags, flags1,phens = NULL, transform_y=NULL,  user=""){
+  updateFlags=function(flags, flags1,phens = NULL, transform_y=NULL,  user=self$user){
     expt_id = self$getExpt(flags=flags1, phens = phens, transform_y = transform_y, user=user,add_new=F)
     if(length(expt_id)>0){
       for(expt in expt_id){
@@ -101,7 +105,7 @@ sigEnv<-R6Class("sigEnv", public = list(
       }
     }
   },
-  updateData=function( user="",data_flags = list(), data_names = list(), data_types = list(),phenos = list(), dims=list()){
+  updateData=function(  user=self$user,data_flags = list(), data_names = list(), data_types = list(),phenos = list(), dims=list()){
     self$data_flags = data_flags
     self$data_names = data_names
     self$data_types = data_types
@@ -124,7 +128,7 @@ sigEnv<-R6Class("sigEnv", public = list(
       }
     }
  },
- saveEval=function(eval2,flags,phens,transform_y, user="",replace=T){
+ saveEval=function(eval2,flags,phens,transform_y,  user=self$user,replace=T){
    expt_id = self$getExpt(flags, phens, transform_y, user,add_new=T)
    hasEval="eval" %in% self$tbls()
    if(replace & hasEval){
@@ -136,7 +140,7 @@ sigEnv<-R6Class("sigEnv", public = list(
    try(dbWriteTable(self$mydb, "eval", eval31,overwrite=!hasEval,append=hasEval))
    return(list(msg="success"))
  },
- loadEval=function(flags=NULL, phens=NULL, transform_y = NULL, user=""){
+ loadEval=function(flags=NULL, phens=NULL, transform_y = NULL,  user=self$user){
    hasEval="eval" %in% self$tbls()
    if(!hasEval) return(NULL)
    expt_id = self$getExpt(flags, phens, user,transform_y = transform_y, add_new=F)
@@ -145,7 +149,7 @@ sigEnv<-R6Class("sigEnv", public = list(
    #vn[,names(vn)!="experiment_id"]
    eval1
  },
- loadModels = function(flags, phens,transform_y,  user=""){
+ loadModels = function(flags, phens,transform_y,   user=self$user){
    if(!("models" %in% self$tbls())) return(NULL)
    expt_id = self$getExpt(flags, phens, user,transform_y = transform_y, add_new=F)
    if(is.null(expt_id)) return(NULL)
@@ -184,7 +188,8 @@ sigEnv<-R6Class("sigEnv", public = list(
    list(models=all_models1, flags = flags, phens = phens, transform_y=transform_y, db=self$subnme)
  },
  saveModels=function(all_models, 
-                     flags=all_models$flags, phens=all_models$phens,transform_y=all_models$transform_y, user="",replace=T){
+                     flags=all_models$flags, phens=all_models$phens,transform_y=all_models$transform_y,  user=self$user,replace=T){
+   debug=getOption("fspls.debug",FALSE)
    all_models1 = all_models$models
    tbls = dbListTables(self$mydb)
    hasModel = "models" %in% tbls
@@ -192,11 +197,6 @@ sigEnv<-R6Class("sigEnv", public = list(
    if(replace && hasModel){
      dbExecute(self$mydb, 'DELETE FROM models where experiment_id =:expt_id',list(expt_id=expt_id))
    }
-  # t_y = names(all_models)[[1]]; nme1 = names(all_models[[1]]); nme2 = names(all_models[[1]][[1]]); nme3 = names(all_models[[1]][[1]][[1]]); nme4 = names(all_models[[1]][[1]][[1]][[1]])
-  # all_models5 = all_models[[1]][[1]][[1]][[1]][[1]]
-  # all_models4 = all_models[[1]][[1]][[1]][[1]]
-  #combined=.merge1_new(lapply(names(all_models), function(t_y){
-     #all_models1 = all_models[[t_y]]
     combined= .merge1_new(lapply(names(all_models1), function(nme1){
         all_models2 = all_models1[[nme1]]
         .merge1_new(lapply(names(all_models2), function(nme2){
@@ -205,6 +205,7 @@ sigEnv<-R6Class("sigEnv", public = list(
               all_models5 = all_models3[[nme3]]
               #.merge1_new(lapply(names(all_models4), function(nme4){
               #  all_models5 = all_models4[[nme4]]
+              if(debug) print(paste(nme1,nme2,nme3))
                data.frame(list(experiment_id = expt_id, nvar = length(all_models5$var_names),
                                         var_names = toJSON(all_models5$var_names),
                                         constants_proj = toJSONM(all_models5$constants_proj),
@@ -218,7 +219,7 @@ sigEnv<-R6Class("sigEnv", public = list(
   try(dbWriteTable(self$mydb, "models", combined,overwrite=!hasModel,append=hasModel))
    return(list(msg="success"))
  },
- getExpt=function(flags=NULL,phens=NULL,transform_y=NULL, user="", select="experiment_id",
+ getExpt=function(flags=NULL,phens=NULL,transform_y=NULL,  user=self$user, select="experiment_id",
                   add_new =F){  #check c
    if(is.null(self$data_id)) stop("no data_id")
    expt_new = NULL; 
@@ -248,7 +249,7 @@ sigEnv<-R6Class("sigEnv", public = list(
   if(nrow(vn)==0) return(NULL)
    vn[[1]]
  },
-  loadVars = function(flags,phens,transform_y, user=""){ ##extracts variables
+  loadVars = function(flags,phens,transform_y,  user=self$user){ ##extracts variables
     expt_id = self$getExpt(flags, phens, transform_y = transform_y, user=user,add_new=F)
     if(is.null(expt_id)) return(NULL)
     vn1 =  dbGetQuery(self$mydb, 'SELECT * from vars where experiment_id=:exptid',list(exptid=expt_id))
@@ -268,15 +269,15 @@ sigEnv<-R6Class("sigEnv", public = list(
       )
       res2
   },
- phens=function(user="", flags =NULL, transform_y = NULL){
+ phens=function( user=self$user, flags =NULL, transform_y = NULL){
    transform_y1  = self$getExpt(flags=NULL, phens=phens, transform_y = NULL, user=user,add_new=F, select="phens")
    lapply(transform_y1, fromJSON)
  },
- transform_y=function(user="", flags =NULL, phens = NULL){
+ transform_y=function( user=self$user, flags =NULL, phens = NULL){
    transform_y1  = self$getExpt(flags=NULL, phens=phens, transform_y = NULL, user=user,add_new=F, select="transform_y")
    lapply(transform_y1, fromJSON)
  },
- flags=function(user="", flags1 =NULL, phens = NULL, transform_y = NULL){
+ flags=function( user=self$user, flags1 =NULL, phens = NULL, transform_y = NULL){
    flags_all1 = self$getExpt(flags=NULL, phens=phens, transform_y = transform_y, user=user,add_new=F, select="flags")
    if(is.null(flags_all1)) return(NULL)
    flags_all=lapply(flags_all1, fromJSON)
@@ -288,7 +289,7 @@ sigEnv<-R6Class("sigEnv", public = list(
      flags2=flags_all[[o[[1]]]]
      flags2
  },
- clear_results=function(flags,phens, transform_y,user=""){
+ clear_results=function(flags,phens, transform_y, user=self$user){
    expt_id = self$getExpt(flags=flags, phens=phens, transform_y = transform_y, user=user,add_new=F)
    tbls = self$tbls()
    if(length(expt_id)==0) return(NULL)
@@ -299,7 +300,7 @@ sigEnv<-R6Class("sigEnv", public = list(
    if ("experiment" %in% tbls) dbExecute(self$mydb, 'DELETE FROM experiment where experiment_id =:expt_id',list(expt_id=expt_id))   
  },
  saveVars = function(vars_all,flags=vars_all$flags,phens=vars_all$phens,transform_y=vars_all$transform_y,
-                      user="", replace=T){
+                       user=self$user, replace=T){
    tbls = self$tbls()
    hasVars = "vars" %in% tbls
    expt_id = self$getExpt(flags=flags, phens=phens, transform_y = transform_y, user=user,add_new=T)
@@ -410,11 +411,13 @@ sigEnv<-R6Class("sigEnv", public = list(
    vn =  dbGetQuery(self$mydb, 'SELECT * from vars')
    vn
  },
- evals = function(){
+ evals = function(flags = NULL, transform_y=NULL, phens = NULL){
    hasEval="eval" %in% self$tbls()
    if(!hasEval) return(NULL)
+   expt=self$getExpt(flags=flags, transform_y = transform_y, phens = phens)
    vn =  dbGetQuery(self$mydb, 'SELECT * from eval')
-   vn
+   evals=subset(vn, experiment_id %in% expt)
+   evals
  }
  
 ))

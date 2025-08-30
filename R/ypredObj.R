@@ -181,6 +181,7 @@ liability<-function(xM){ ## use with glmnet output
   vars1 = prev_kj$var
   #  yp = .rep(zeros, length(which(ind_1)))
 #  yp = .rep(constants, length(which(ind_1)))
+  yp = .rep(constants, length(which(ind_1)))
   
   if(length(vars1)==0 ){
     #print(dim(yp)); print(constants)
@@ -198,7 +199,6 @@ liability<-function(xM){ ## use with glmnet output
   
 #  yp = .rep(constants+y1_off[1,1], length(which(ind_1)))
   
-  yp = .rep(constants, length(which(ind_1)))
   
   
   incl1 = unlist(lapply(vars1, length))==2
@@ -679,7 +679,7 @@ updateYP=function(d,full_model,  nonNA, flip=T, ignore.na=F, liab=T){
         self$ypreds[[kk1]][ind_1,] = ab
   #    }
     }
-    if(length(which(na_x))>0){
+    if(!is.null(na_x) && length(which(na_x))>0){
       self$ypreds[[kk1]][na_x,] = rep(NA, ncol(self$ypreds[[kk1]]))
     }
     

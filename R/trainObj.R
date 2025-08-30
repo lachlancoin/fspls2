@@ -19,11 +19,13 @@ trainObj<-R6Class("trainObj",
                     products="list",
                     func_str="character",
                     phens1 = "list",
+                    incl="list",
+                    subphens ="list",
                   #  funcs="closure",
                   #  func_str = "character",
                   #  ifuncs="list",
                     
-                    initialize = function(y, looc, family=names(y)
+                    initialize = function(y, looc, incl, family=names(y)
                                           ){  #y is a list of sparse matrices
                     #  types_ =     getOption("fspls.types", fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC"}'))
                       self$family=family
@@ -35,6 +37,7 @@ trainObj<-R6Class("trainObj",
                             y12 = t(y11)
                           })
                       self$k=NA
+                      self$incl = incl
                       
                     },
                     product=function(ik,ii, phensi1){ #  self$train$products[[ik]][[ii]][phensi1,,drop=F]  #[,self$cols_incl[[ik]],drop=F]
@@ -84,7 +87,12 @@ trainObj<-R6Class("trainObj",
                   #    })
                   #    nonNA
                   #  },
-                    update=function(data,k,funcst,subphens,incl=names(data$data)){
+                    update=function(data,k,funcst,subphens){
+                      if(toJSON(subphens)==toJSON(self$subphens) && k == self$k && funcst == self$func_str){
+                        print("not updating"); return(NULL)
+                      }
+                      self$subphens = subphens
+                      incl = self$incl
                       phen_fams = names(subphens) #unlist(lapply(phens, function(ph) names(ph)))
                       phen_fam = unique(phen_fams)
                       names(phen_fam) = phen_fam

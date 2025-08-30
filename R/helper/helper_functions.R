@@ -340,6 +340,7 @@ isbigmatrix<-function(x){
 }
 
 .merge1_new<-function(t,num_cols = c(), addName=NULL){
+  if(length(t)==0) return(NULL)
   t = t[!unlist(lapply(t, is.null))]
   t = t[unlist(lapply(t,nrow))>0]
   
@@ -746,6 +747,8 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
 .getAreaPlot1<-function(predictions0, families="binomial"){
   if(is.null(families)) families = names(predictions0[[1]][[1]][[1]])
   names(families)=families
+ #j=1; model = predictions0[[2]]; train = model[[1]]; test = train[[1]]; famnme = families[[1]]; fam =test[[famnme]]; family = strsplit(famnme,"\\.")[[1]][1];  phens = dimnames(fam$y)[[2]]; names(phens)=phens
+  
   area_p=.merge1_new(lapply(predictions0, function(model){  
     .merge1_new(lapply(model, function(train){
       .merge1_new(lapply(train, function(test){
@@ -764,7 +767,9 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
             if(family=="gaussian"){
                ap  = data.frame(list(knots = fam$y[,j],value=fam$ypred[,j]), counts=0, subpheno="", type="points")
                names(ap)=c("knots","value","counts","subpheno", "type")
-            }else if(family=="ordinal" || family=="gaussian"){
+               ap = ap %>% tibble::add_column(sample=dimnames(fam$y)[[1]])
+              
+            }else if(family=="ordinal"){
               ap = getAreaPlot(fam$ypred, fam$y[,j])
         }else{
             ap = getAreaPlot(fam$ypred[,j], fam$y[,j])
@@ -778,7 +783,9 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
     }), addName="train")
     }), addName="model")
   #attr(area_p,"family")=family
-  area_p
+  lens = unlist(vapply(area_p$model, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]]), FUN.VALUE = c(1)))
+ 
+   area_p%>% tibble::add_column(lens = lens)
 }
 .plotAreaSep=function(area_p, sep="pheno",...){
   phens=unique(area_p[[sep]]);names(phens)=phens
@@ -788,11 +795,135 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   .plotArea(area_p1, ...)
  })  
 }
-.plotArea<-function(area_p, rename=T, len = 1,grid="model~pheno",  max_vars = 100,title=""){
+.takeMax1<-function(a1, max_vars=100){
+  ab=unite(subset(a1, lens<=max_vars),"comb","sample","CV",remove=F)
+  levs = unique(ab$comb); names(levs)=levs
+  ab2=.merge1_new(lapply(levs, function(l1){
+    sub1 = subset(ab, comb==l1 & !is.na(knots))
+    sub1[which.max(sub1$lens),,drop=F]
+  }))
+  #ab2$pheno = factor(ab2$pheno, labels=levels(ab$pheno))
+  ab2
+}
+
+.takeMax<-function(area_p1){
+  ab=unite(area_p1,"comb","sample","pheno","CV",remove=F)
+  ab$pheno = factor(ab$pheno)
+  levs = unique(ab$comb); names(levs)=levs
+  ab2=.merge1_new(lapply(levs, function(l1){
+    sub1 = subset(ab, comb==l1 & !is.na(knots))
+    sub1[which.max(sub1$lens),,drop=F]
+  }))
+  ab2$pheno = factor(ab2$pheno, labels=levels(ab$pheno))
+  ab2
+}
+.getTextLayer<-function(area_p1,p = c(0.1,0.9),r2=F, arrange_by_sample=F, reorder=F){
+  ab = if(arrange_by_sample) unite(area_p1,"comb","sample","CV",remove=F) else unite(area_p1,"comb","lens","pheno","CV",remove=F)
+  ab$pheno = factor(ab$pheno)
+  ab$CV = factor(ab$CV)
+  ab$sample=factor(ab$sample)
+  levs = unique(ab$comb); names(levs)=levs
+  ab2=.merge1_new(lapply(levs, function(l1){
+    sub1 = subset(ab, comb==l1 & !is.na(knots))
+    model = unique(sub1$model)
+    pheno1 = unique(as.character(sub1$pheno))
+    sample = unique(as.character(sub1$sample))
+    if(length(model)>1)model="avg"
+    if(length(sample)>1)sample="avg"
+    if(length(pheno1)>1)pheno1="avg"
+    corr = if(nrow(sub1)<2) NA else cor(sub1$knots, sub1$value, method="pearson", use="pairwise.complete.obs")
+    label = if(r2)   paste0("r2=",round(corr^2,digits=3))   else paste0("cor=",round(corr,digits=3))
+    data.frame(list(lens = sub1$lens[1],
+                    model=model,
+                    CV = as.character(sub1$CV[1]),
+                    corr=corr,
+                    sign=if(is.na(corr) || sign(corr)<0) "italic" else "bold",
+                    sample=sample,
+                    pheno = pheno1, knots=quantile(sub1$knots,na.rm=T, probs = p[1]), value=quantile(sub1$value, na.rm=T, probs =p[2]), 
+                    label= label))
+  }))
+    ab2$CV = factor(ab2$CV, levels = levels(ab$CV))
+   ab2$pheno = factor(ab2$pheno, levels = levels(ab$pheno))
+   ab2$sample = factor(ab2$sample, levels = levels(ab$sample))
+  if(arrange_by_sample){
+    phens2=levels(ab2$sample);names(phens2)=phens2
+    
+    levs1 = names(sort(unlist(lapply(phens2, function(p2){
+      sb1=subset(ab2, sample==p2)
+      max(sb1$cor,na.rm=T)
+    })),decr=T))
+    if(reorder)ab2$sample = factor(ab2$sample, levels=levs1)
+  }else{
+    phens2=levels(ab2$pheno);names(phens2)=phens2
+    
+  levs1 = names(sort(unlist(lapply(phens2, function(p2){
+    sb1=subset(ab2, pheno==p2 & CV!="No CV")
+    max(sb1$cor)
+  })),decr=T))
+  if(reorder)ab2$pheno = factor(ab2$pheno, levels=levs1)
+  }
+  ab2
+}
+.plotArea<-function(area_p0, CV=F,alpha =0.8, maxphens = 50,p=c(0.1,0.9),
+                    arrange_by_sample=F,takeMax=F,
+                    rename=T, len = 1,shapes=F,code_len=3,showText=F,
+                    max_samps=100,reorder=F,
+                    grid=if(!CV) "model~pheno" else "lens ~pheno",  max_vars = 10,scales="free",title="", addText=F,r2=F){
   print("now plotting")
-  family = area_p$family[[1]]
-  area_p1=if(rename) .renameModels(area_p, len=len) else area_p
+  if(!is.null(area_p0$sample) && !arrange_by_sample){
+    area_p0$sample = as.character(as.numeric(factor(area_p0$sample)))
+  }
+  family = area_p0$family[[1]]
+  area_p1=if(rename) .renameModels(area_p0, len=len) else area_p0
+ 
+  area_p1 = subset(area_p1, lens<=max_vars)
+  if(arrange_by_sample){
+  # if(takeMax) area_p1 = .takeMax(area_p1) 
+   if(!showText){
+     pheno_code = as.numeric(area_p1$pheno) 
+   }else{
+    pheno_code= unlist(lapply(area_p1$pheno, substr, 1,code_len)  )
+   }
+   area_p1 = area_p1%>%tibble::add_column(pheno_code=pheno_code)
+  }
+  textLayer=NULL
+  if(addText){
+    textLayer=.getTextLayer(area_p1,r2=r2,p=p, arrange_by_sample=arrange_by_sample, reorder=reorder)
+    if(arrange_by_sample){
+      levs = levels(textLayer$sample)
+      
+      if(length(levs)> max_samps){
+        
+        textLayer=subset(textLayer, sample %in% levs[1:max_samps])
+        area_p1 = subset(area_p1, sample %in% levs[1:max_samps])
+        levs = levs[1:max_samps]
+      }
+      
+      area_p1$sample = factor(area_p1$sample, levels = levs)
+    }else{
+      levs = levels(textLayer$pheno)
+      
+      if(length(levs)>maxphens ){
+        
+        textLayer=subset(textLayer, pheno %in% levs[1:maxphens])
+        area_p1 = subset(area_p1, pheno %in% levs[1:maxphens])
+        levs = levs[1:maxphens]
+      }
+      
+      area_p1$pheno = factor(area_p1$pheno, levels = levs)
+    }
+    if(scales=="fixed"){
+      textLayer$knots = mean(textLayer$knots);
+      textLayer$value = mean(textLayer$value)
+    }
+    #print(levels(textLayer$sample))
+    #textLayer$sign = factor(textLayer$sign)
+  }
+  
+  
+  
   #print(area_p1$subpheno)
+  #if(length(unique(area_p1$subpheno))==0) area_p = area_p[,!(names(area_p) %in% "subpheno")]
   if(!is.null(area_p1[['subpheno']])){
     if(family!="multinomial"){
     area_p1$subpheno = factor(area_p1$subpheno, levels = sort(as.numeric(unique(area_p1$subpheno))))
@@ -801,22 +932,63 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
       
     }
   }
-  lens = vapply(area_p1$model, function(x) length(strsplit(x,";")[[1]]), FUN.VALUE = c(1))
-  area_p1 = area_p1%>% tibble::add_column(lens = factor(lens))
-    area_p1 = area_p1[lens<=max_vars,,drop=F ]
-  if(is.null(area_p1[['subpheno']])){
-    ggp<-ggplot(area_p1, aes(x=knots, y=value, color=pheno, linetype=lens))
+   
+   # if(!is.null(textLayer)) textLayer = subset(textLayer, lens<=max_vars)
+    #area_p1$lens = factor(area_p1$lens)
+  #  area_p1$CV = factor(area_p1$CV)
+    if(arrange_by_sample){
+      
+      if(!takeMax){
+        ggp<-ggplot(area_p1, aes(x=knots, y=value, color=lens))
+        
+      }else if(shapes ){
+        area_p1$lens = factor(area_p1$lens)
+      ggp<-ggplot(area_p1, aes(x=knots, y=value, color=pheno, shape=lens))
+      }else{
+        if(length(unique(area_p1$pheno))>30){
+          area_p1$pheno=as.numeric(factor(area_p1$pheno))
+          }
+        ggp<-ggplot(area_p1, aes(x=knots, y=value, color=pheno))
+        
+      }
+    }else if(is.null(area_p1[['subpheno']]) ||  length(unique(area_p1$subpheno))<=1){
+    ggp<-ggplot(area_p1, aes(x=knots, y=value, color=model))
     
   }else{
-  ggp<-ggplot(area_p1, aes(x=knots, y=value, color=subpheno, linetype=lens))
+  ggp<-ggplot(area_p1, aes(x=knots, y=value, color=subpheno))
   }
   if(family!="gaussian") ggp<-ggp+geom_line()
-  if(length(grep("~",grid))>0){
-    ggp<-ggp+facet_grid(grid,scales="free")
-  }else{
-    ggp<-ggp+facet_wrap(grid)
+  
+  if(family=="gaussian")ggp<-ggp+geom_abline(slope=1, intercept=0, alpha = 0.5, linetype="dashed")
+  if(!is.null(area_p1$sample) ){
+    if(arrange_by_sample){
+    
+    #if(!is.null(textLayer))    textLayer =textLayer%>%tibble::add_column(pheno_code= "avg" )
+    #area_p1$pheno_code
+      if(length(unique(area_p1$pheno))>30){
+        ggp=ggp+geom_point( size=1,alpha = alpha)
+      }else{
+        ggp=ggp+geom_text_repel(aes(label=pheno_code), alpha = alpha) 
+      }
+    }else{
+    ggp=ggp+geom_text(aes(label=sample), alpha = alpha) 
+    }
+  }else if(max(area_p1$counts,na.rm=T)>5) {
+    ggp=ggp+geom_point(aes(size=counts), alpha = alpha) 
+  }else {
+    ggp=ggp+geom_point( size=2,alpha = alpha)
   }
-  if(max(area_p1$counts)>5) ggp=ggp+geom_point(aes(size=counts, shape=lens), alpha = 0.5) else ggp=ggp+geom_point(aes(shape=lens), size=2,alpha = 0.5)
+    
+    if(addText){
+      ggp<-ggp+geom_text(data=textLayer, aes(x=knots, y=value, label=label, fontface=sign), inherit.aes = FALSE)
+      
+    }
+    if(length(grep("~",grid))>0){
+      ggp<-ggp+facet_grid(grid,scales=scales)
+    }else{
+      ggp<-ggp+facet_wrap(grid, scales=scales)
+    }
+  
   ggp+ggtitle(title)
 }
 

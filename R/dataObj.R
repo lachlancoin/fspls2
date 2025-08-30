@@ -516,8 +516,16 @@ cats = function(maxpheno = 1e9){
   })
   names(phens) = names(self$y)
 },
-pheno = function(maxpheno=1e9,sep=F, sep_group=F){ 
+pheno = function(maxpheno=1e9,sep=F, sep_group=F,code = NULL){ 
  phens =  lapply(self$y, function(y1) colnames(y1)[1:min(maxpheno, ncol(y1))])
+ if(!is.null(code)){
+   phens =  lapply(phens, function(p){
+    mi2=match(code,p)
+    p2 = p[mi2]
+    names(p2) = names(code)
+    p2
+   })
+ }
  nmes = names(phens)
  names(nmes)=nmes
  if(sep_group){
@@ -621,12 +629,20 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
   j = length(vars1)
   #UDV = UDVP_h[[i]]
   #     x = d$x[,vars1[j]]
-  
-  non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(T,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
-  x1 = data$data[[vars1[[j]][1]]][, vars1[[j]][2]] 
+  if(length(vars1[[j]])==0){
+    non_na_x = rep(T, self$nrow)
+    useglm=F
+  }else{
+    non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(T,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
+  }
+  if(length(vars1[[j]])==0){
+    x_=rep(1, self$nrow)
+    }else{
+  x1 =  data$data[[vars1[[j]][1]]][, vars1[[j]][2]] 
   mean_adj = data$mean_x[[vars1[[j]][1]]][vars1[[j]][2]]
   
   x_ = x1- mean_adj
+    }
   UDV = data$UDVP ## should check it corresponds to prev_i
   if(!is.null(UDV$VDU)){
     if(!is.null(UDV$P2)) {
@@ -782,7 +798,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
           #print(var(x))
           if(nrow(sm$coeff)<2){
             coeff = rep(0,4)
-            const_term=0
+            const_term=sm$coefficients[1,1]
             pv1=1
             beta_new1 = 0
           }else{
@@ -1149,13 +1165,13 @@ makeModels=function(phens1, vars2, k,
   ypred=self$ypred(phen2)
   transform_func = eval(str2lang(func_str))
   #if(length(phen2)>1) stop("just one group .. need to fix for multiple types")
-  if(length(vars2)==0){
-    return(list(prev_is$simplify()))
-  }
+ # if(length(vars2)==0){
+#    return(list(prev_is$simplify()))
+#  }
   phensi = self$phensi(phen2)
   subphens = phensi
  # prev_is = lapply(fold_inds, function(k) stateObj$new(phensi,self,self$train[[k]], k))
- prev_i= self$prev[[k]]  #lapply(fold_inds, function(k) self$train$prev[[k]])
+ prev_i= NULL; #self$prev[[k]]  #lapply(fold_inds, function(k) self$train$prev[[k]])
   #if(length(prev_i$var)>0) stop("problem")
   nmes = c()
   #mean_y = self$train$means_y[[k]]
@@ -1168,6 +1184,10 @@ makeModels=function(phens1, vars2, k,
   family = getOption("fspls.family",fams1) #ypred$family[[1]]
   if(family[[1]]=="multinomial") useoffset=F
   nme1 = ""
+  b_i_name=c()
+  prev_i = self$makeNextModel(prev_i,b_i_name,subphens,k, transform_func,family, ypred=ypred, project=project, useglm=F, logpthresh =logpthresh,useoffset=useoffset)
+  models[[1]] = prev_i$simplify()
+  nmes[[1]] = "empty"
   jk=1
   while(jk<=len){
     b_i_name = vars2[[jk]]
@@ -1175,8 +1195,8 @@ makeModels=function(phens1, vars2, k,
     if(is.null(prev_i1)) break;
     nme2 = paste(vars2[[jk]], collapse=".")
     nme1 = if(jk==1)  nme2 else paste(nme1, nme2,sep=";")
-    nmes[[jk]] = nme1
-    models[[jk]] =prev_i1$simplify()
+    nmes[[jk+1]] = nme1
+    models[[jk+1]] =prev_i1$simplify()
     prev_i = prev_i1
     jk = jk+1
   }
@@ -1217,11 +1237,11 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
                         CHECK=getOption("fspls.check",F),
                         verbose=getOption("fspls.verbose1",F)) {
    data =self
-   nonNA=self$looc$incl[,k]
-    b_i = self$convert(b_i_name)
-    if(is.null(b_i)) return(NULL)
-    mean_x = self$mean_x [[b_i[[1]]]][b_i[2]]
-    prev_var = prev_i$var
+   
+    b_i = if(length(b_i_name)==0) c() else self$convert(b_i_name)
+    #if(is.null(b_i)) return(NULL)
+    mean_x =if(length(b_i_name)==0) c() else  self$mean_x [[b_i[[1]]]][b_i[2]]
+    prev_var = if(is.null(prev_i)) list() else prev_i$var
     self$updateUDVP(prev_var)
     #W_all = data$calcWall(b_i, prev_i$var, prev_i$W_all) ## WALL not important, we can get rid of it later
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
@@ -1240,6 +1260,7 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
     tbls = if(family[[1]]=="multinomial") b_new_proj$tbls[[1]]  else b_new_proj$tbls
     prev_i1=stateObj$new(subphens,data, betas_new,constants_proj, tbls, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = NULL,pvs =pvs, useoffset=useoffset)
   #  prev_i1$setOffset() 
+    if(is.null(prev_i)) return(prev_i1)
     prev_i1$setOffset()
     if(FALSE){ ##JUST TO CHECK WHAT GLM VARIABLES  WOULD BE IF WE JUST FIT ALL
       extractd0 = self$extractData(c(prev_i$var, list(b_i)), adjust=F)
@@ -1462,10 +1483,11 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
   
 #  ypred = self$ypred(phens)
   group_names= names(all_models_y); names(group_names)=group_names
-  numvars = unlist(lapply(group_names, function(x) length(strsplit(x,";")[[1]])))
+  numvars = unlist(lapply(group_names, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]])))
   numvars1 = sort(unique(numvars))
   names(numvars1) = numvars1
   #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
+  if(length(all_models_y)==0) return(NULL)
   nmes_models = names(all_models_y[[1]][[1]]) #[[1]]);
   names(nmes_models) = nmes_models
   #numvar = numvars[[1]]; nmes1 = nmes_models[[1]];group_name = group_names[[1]]
@@ -1533,7 +1555,9 @@ evaluateAllModels=function(all_models_y,phens,inverse_func_str, flags,
       }),addName="trainedOn")
    # }),addName="pheno_group")
   }),addName="numvars")
+  if(!is.null(evals_all$numvars)){
   evals_all$numvars = as.numeric(evals_all$numvars)
+  }
   evals_all
 },
 
@@ -2021,44 +2045,37 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
   },
 
 ## gets ready for training - updates train, prev looc
-updateTrain=function(phens,flags, transform_y){ ## this updates the reps and train
+updateTrain=function(phens,flags, transform_y, verbose=F){ ## this updates the reps and train  ## called after updateLOOC
   funcst = transform_y[[1]]
- 
   if(!is.null(self$subset)){
     ## apply subset via the looc object to avoid subsetting big matrix
     self$looc$incl[!self$subset,] = rep(FALSE, ncol(self$looc$incl))
   }
   within=T
-  nrep = ncol(self$looc$incl)
-  self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$looc , self$family)) #lapply(1:ncol,function(k)
-  incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
-  if(length(incls) == 0 )incls = list("all"=names(self$data))
-  incls_all = unique(unlist(incls))
   for(k in 1:length(self$train)){
-    print(paste("update",k))
-    self$train[[k]]$update(self,k,funcst, phens, incls_all)
+    if(verbose) print(paste("update",k))
+    self$train[[k]]$update(self,k,funcst, phens)
   }
   reweight=.readFlag(flags,"reweight",FALSE)
   if(reweight){
     self$updateWeights(phens)
   }
 },
-updateLOOC=function(phens,flags,varn=c()){
-  set.seed(.readFlag(flags,"seed",42))
- 
- 
+updateLOOC=function(phens,flags,varn=c(), force=F, verbose=F){
+  seed=.readFlag(flags,"seed",42)
   #incl = incls_all
   batch=.readFlag(flags, "batch",0)
   nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
-  if(!is.null(self$looc) && nrep == ncol(self$looc$incl)){
-    print("no need to update, although we should probably check if the phens changed")
+  nrows=nrow(self$data[[1]])
+  if(!force && !is.null(self$looc) && nrep ==self$looc$nrep && batch == self$looc$batch && seed == self$looc$seed && nrows ==self$looc$nrows){
+    if(verbose)print("no need to update, although we should probably check if the phens changed")
     return(NULL)
   }
   pheno_balance = if(.readFlag(flags,"pheno_balance",FALSE)) unlist(phens) else NULL
-  rand = sample(nrow(self$data[[1]]))
   self$looc=loocObj$new(self, nrep = nrep, batch = batch,
                         incl_full = T,
-                        rand = rand,
+                        seed = seed,
+                        nrow = nrows,
                         pheno_balance = pheno_balance)
   if(nrep==1){
     #should really do this inside looc obj
@@ -2074,6 +2091,11 @@ updateLOOC=function(phens,flags,varn=c()){
     #    phensi,data, betas_new, constants_proj,  k, #mean_y,
     self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,NULL,k, var=var, varnames=varn, W_all = W_all)
   }
+  nrep = ncol(self$looc$incl)
+  incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
+  if(length(incls) == 0 )incls = list("all"=names(self$data))
+  incls_all = unique(unlist(incls))
+  self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$looc , incls_all, self$family)) #lapply(1:ncol,function(k)
 },
 randomise=function(n= nrow(self$y[[1]]),
                    indices=sample.int(n,n)){
