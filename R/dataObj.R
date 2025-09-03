@@ -2093,6 +2093,7 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
 ## gets ready for training - updates train, prev looc
 updateTrain=function(phens,flags, transform_y, verbose=F){ ## this updates the reps and train  ## called after updateLOOC
   nrep = ncol(self$looc$incl)
+  
   incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
   if(length(incls) == 0 )incls = list("all"=names(self$data))
   incls_all = unique(unlist(incls))
