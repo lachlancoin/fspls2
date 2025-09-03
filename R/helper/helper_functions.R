@@ -139,21 +139,42 @@ length(unique(eval1$`data:family`))
   y[sample.int(length(y))]
 }
 
-.getRandomFuncs<-function(n){ ## although these are same, every invocation will give different results
+.getRandomFuncs<-function(n, include_inverse=T){ ## although these are same, every invocation will give different results
+  if(n==0) return(list())
   inds = 1:n
-  names(inds)=paste0("rand_",inds);
+  str="function(y) .randomize(y)"
+  names(inds)=paste0("rand",inds);
   lapply(inds, function(i){
-   c( "function(y) .randomize(y)","function(y) .randomize(y)")
+    if(!include_inverse) return(str)
+    c(str,str)
   })
 }
 
+getYTransform<-function(pows = c(1), n_random=0){
+  c(.getTransformFuncs(pows, include_inverse=T),.getRandomFuncs(n_random,include_inverse=T))
+}
+getXTransform<-function(pows= c(1),offset=1e-10){
+  .getTransformFuncs(pows, offset=offset, include_inverse=F)
+}
+
+#.getRandomFuncs(3)
+#c(list(x=c("function(y) y","function(y) y")), random_funcs)
+
 ##this gets transformations for x variable
-.getTransformFuncs<-function(pows,offset=1e-10){
-  names(pows) = paste("pow", round(pows,2),sep="_")
+.getTransformFuncs<-function(pows,offset=1e-10, include_inverse=F){
+  names(pows) = paste0("pow", round(pows,2))
+  if(include_inverse){
+    transf=lapply(pows, function(pow){ ## 1e-10 avoids problems with zeros
+      if(pow==1) return(c("function(x) x", "function(x) x"))
+      c( paste0("function(x) sign(x) * abs(x)^",pow),paste0("function(x) sign(x) * abs(x)^",1/pow))
+    })
+  }else{
   transf=lapply(pows, function(pow){ ## 1e-10 avoids problems with zeros
+    if(pow==1) return("function(x) x")
     paste0("function(x) sign(x+",offset,") * abs(x+",offset,")^",pow)#,paste0("function(x) sign(x) * abs(x)^",1/pow))
   })
-  toJSON(transf)
+  }
+ transf
 }
 
 mergeSparseMatrices<-function(m1,m2, by="row"){
