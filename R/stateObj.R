@@ -41,6 +41,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     varnames="list",
                     name="character",
                     name_prev="character",
+                    funcst= "list",
                     betas_proj="vector", #list of vector
                     W_all="matrix",  ##list of matrix,
                     constants_proj="list",
@@ -59,10 +60,11 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                                           b_i = NULL,b_i_name=NULL,
                                           var = list(), varnames = list(),
                                           W_all = matrix(nrow=0, ncol=0),
-                                         mean_x = NULL, pvs = c(),
+                                         mean_x = NULL, pvs = c(),funcst="function(y) y",
                                          useoffset=T
                                          ){
                       self$pvs = pvs
+                      self$funcst = funcst
                       self$sumPv = .sumChisq(unlist(pvs))
                       self$constants_proj=constants_proj
                       self$nonNA = data$looc$incl[,k];
@@ -153,6 +155,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj,
                          mean_x = self$mean_x,tbls = self$tbls,
+                         transf=names(self$funcst)[1],
                          var_names = self$var_names) #, pvs = self$pvs_proj)
                   },
                   updateConst=function(phensi,ypred, data,  k, transform_func, useglm=F, verbose=F,update=F

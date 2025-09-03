@@ -87,12 +87,13 @@ liability<-function(xM){ ## use with glmnet output
   #  if(getOption("fspls.DRS",F)){
   #    betas1 = apply(betas1,c(1,2), function(b) if(b>DRS_thresh) 1 else if(b<-1*DRS_thresh) -1 else 0)
   #  }
+  yp = .rep(constants, length(which(ind_1)))
   
   if(length(vars1)==0 ){ 
-    yp = .rep(rep(1/length(levs), length(levs)), length(which(ind_1)))
-    return (yp)
+    return( liability(yp))
+#    yp = .rep(rep(1/length(levs), length(levs)), length(which(ind_1)))
+#    return (yp)
   }
-  yp = .rep(constants, length(which(ind_1)))
   beta1 = betas[[kk]]
   incl1 = unlist(lapply(vars1, length))==2
   df1 = as.matrix(data.frame(vars1[incl1]))
@@ -136,7 +137,7 @@ liability<-function(xM){ ## use with glmnet output
   
   if(length(vars1)==0){
     attr(yp, "levs") =levs
-    return(liability1(yp, constants, liab=liab))
+    return(liability1(yp, const, liab=liab))
 #    return(if(liab) liability1(yp, constants) else yp)
   }
   
@@ -598,7 +599,7 @@ ypredObj<-R6Class("ypredObj", public = list(
 #  ypred$updateYP(data, prev, nonNA, !within)  
 #},
 
-updateYP=function(d,full_model,  nonNA, flip=T, ignore.na=F, liab=T){
+updateYP=function(d,full_model,  nonNA,inv_func=NULL, flip=T, ignore.na=F, liab=T){
   prev_i1=full_model
   ypred = self
   prev_kj = prev_i1 
@@ -617,7 +618,8 @@ updateYP=function(d,full_model,  nonNA, flip=T, ignore.na=F, liab=T){
     family =getOption("fspls.family",strsplit(kk1,"\\.")[[1]][1])
     # if(family=="multinomial") levs1=dimnames(self$y[[kk1]])[[2]]
     #  if(family=="ordinal")levs1 = min(self$y[[kk1]][,kk], na.rm=T):max(self$y[[kk1]][,kk],na.rm=T) 
-    self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, family=family, liab=liab)
+    self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, inv_func,family=family, liab=liab)
+   
   }
   #   names(ypred$ypreds) = names(self$y)
   
@@ -625,7 +627,7 @@ updateYP=function(d,full_model,  nonNA, flip=T, ignore.na=F, liab=T){
 },
 
 #calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, kk)
-  calcYpred=function(prev_kj, d, ind_1,  kk1, kk,na_x,   family = self$family[[kk]],liab=T){  ## kk1 in model space 
+  calcYpred=function(prev_kj, d, ind_1,  kk1, kk,na_x,  inv_func,family = self$family[[kk]],liab=T){  ## kk1 in model space 
     data =  d$data
     #      ypred$ypreds[[kk]]$calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, self$family[[kk]])
     if(family=="multinomial"){
@@ -676,15 +678,19 @@ updateYP=function(d,full_model,  nonNA, flip=T, ignore.na=F, liab=T){
         ab = .calcYpred_1(prev_kj,  data, ind_1,kk=kk_1, kk1 = kk1,
                           betas1 = prev_kj$betas[[kk1]],
                           constants=constants) 
+        if(!is.null(inv_func)){
+          ab=apply(ab,2,inv_func)
+        }
         self$ypreds[[kk1]][ind_1,] = ab
   #    }
     }
+    
     if(!is.null(na_x) && length(which(na_x))>0){
       self$ypreds[[kk1]][na_x,] = rep(NA, ncol(self$ypreds[[kk1]]))
     }
     
   },
-calcRMSV=function(y, nonNA, inverse_func = function(y) y,      flip=F){
+calcRMSV=function(y, nonNA,      flip=F){
   phensi = self$phensi
   ypreds = self$ypreds
   types_ =self$types_
@@ -715,7 +721,7 @@ calcRMSV=function(y, nonNA, inverse_func = function(y) y,      flip=F){
       ycol = ycols[ycol_ind]
       y1 =  y2[,ycol]
       yp =if(fam=="ordinal") yp2 else yp2[,ycol_ind,drop=F] 
-      yp = inverse_func(yp)
+    #  yp = inverse_func(yp)
       nonNA = !is.na(y1)
       nonNA = nonNA & !is.na(yp[,1]) 
       .merge1_new(

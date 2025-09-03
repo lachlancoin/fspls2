@@ -135,6 +135,26 @@ length(unique(eval1$`data:family`))
   })
   ggps
 }
+.randomize<-function(y){
+  y[sample.int(length(y))]
+}
+
+.getRandomFuncs<-function(n){ ## although these are same, every invocation will give different results
+  inds = 1:n
+  names(inds)=paste0("rand_",inds);
+  lapply(inds, function(i){
+   c( "function(y) .randomize(y)","function(y) .randomize(y)")
+  })
+}
+
+##this gets transformations for x variable
+.getTransformFuncs<-function(pows,offset=1e-10){
+  names(pows) = paste("pow", round(pows,2),sep="_")
+  transf=lapply(pows, function(pow){ ## 1e-10 avoids problems with zeros
+    paste0("function(x) sign(x+",offset,") * abs(x+",offset,")^",pow)#,paste0("function(x) sign(x) * abs(x)^",1/pow))
+  })
+  toJSON(transf)
+}
 
 mergeSparseMatrices<-function(m1,m2, by="row"){
   m1 <- as(m1, "TsparseMatrix")
