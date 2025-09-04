@@ -20,11 +20,15 @@ library(DBI);
 library(RSQLite);
 
 library(cowplot)
+
+library(bigmemory)
+
 #library(wCorr)
 ##LOAD CODE
 ##SHOULD RUN FROM FSPLS2 directory
 if(rev(strsplit(getwd(),"/")[[1]])[1]!="fspls2")stop("not in right directory")
 src1=grep(".R$",dir("./R",rec=T),v=T)
+
 invisible(try(lapply(paste("./R",src1,sep="/"), function(x) {print(x);source(x)})))
 
 if(FALSE){
@@ -40,18 +44,22 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[1]; pthresh = 0.001 ; randomise=F; duplicate=F
+datasets =examples[1]; pthresh = 0.05 ; randomise=F; duplicate=F
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation","rms"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
-
-transform_y=c("function(y) y","function(y) y")
+random_funcs=.getRandomFuncs(10)
+transform_y=getYTransform(n_random=5)
+#transform_y=list(x=c("function(y) y","function(y) y"),exp= c("function(y) sign(y)*y^2", "function(y) sign(y)*abs(y)^(1/2)"))
 
 runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
-                 transform_y = c("function(y) y","function(y) y")){
+                 transform_y = list(x=c("function(y) y","function(y) y"), rand=c("function(y) randomize(y)", "function(y) randomize(y)"))){
   y = datasets[[1]]$y
   flags = list(pthresh = pthresh, max=10,nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  project=T,
+               stop_y="rand",
                useoffset=T,useglm=T#quantiles = toJSON(c(0,0.1))
               )
+  flags[['transform']] =toJSON(getXTransform(c(seq(-1,-0.2,by=0.2),seq(0.1,0.9,by=.1), seq(1,2,by=.5))))#  '{"x" :"function(x) x", "log":"function(x) log1p(x)"}'
+  
   ## MAKE THE FSPLS DATA OBJECT
   if(duplicate){
   y2 = do.call(cbind,replicate(2,datasets[[1]]$y,simplify=F))
@@ -60,7 +68,7 @@ runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
   datasets[[1]]$y = y2
   }
   datasAll =datasEnv$new(datasets,flags=flags) 
-  sigs = datasAll$getSigDB(nme1="combined",reload=T)
+  #sigs = datasAll$getSigDB(nme1="combined",reload=T)
   
   #sigs$clear_all()
   if(randomise) datasAll$randomise()
@@ -69,27 +77,34 @@ runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
   ## FIND VARIABLES
   vars_all = datasAll$select(phens, flags,transform_y = transform_y, verbose=T)
   
-  sigs$saveVars(vars_all)
-  sigs$experiments()
+  vars_all1=.extractFullVars(vars_all)
+  #sigs$saveVars(vars_all)
+ # sigs$experiments()
   
 #  options("fspls.verbose1"=T)
   
   all_models = datasAll$makeAllModels(vars_all)
-  sigs$saveModels(all_models)
+#  sigs$saveModels(all_models)
   #all_models1 = sigs$loadModels(flags, phens ,"")
   eval1 = datasAll$evaluateAllModels(all_models)
   
-  sigs$saveEval(eval0, flags, phens, "")
-  eval1 = sigs$loadEval(flags,phens,"")
+ # sigs$saveEval(eval0, flags, phens, "")
+  #eval1 = sigs$loadEval(flags,phens,"")
   #eval = subset(eval, model!="avg")
-  ggps1=.plotEval2(eval1,legend=T, grid1="subpheno", grid0="measure",shape_color=c("data"),sep_by=c("cv_full"), showranges=T, scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
-  
+  ggps1=.plotEval2(eval1,legend=T, grid1="subpheno", grid0="measure",
+                   shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
+                   scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
+  if(TRUE) return(ggps1)
+  ggps1$`CV=avg`
+  ggps1$`CV= FALSE FULL= TRUE`
   if(FALSE){ ## show cum plots
     predictions0 =datasAll$extractPredictions(all_models, CV = F, liab=F, data_nme = names(datasAll$datas)[[1]]);
-    area_p = .getAreaPlot1(predictions0)
+    fam=datasAll$datas[[1]]$family[[1]]
+    area_p = .getAreaPlot1(predictions0,families=fam)
+    ###area_p0$value= funcstr1(area_p0$value) only for transformed values, should put this in extractPredictions
     #aa=roc(predictions[[2]]$y, predictions[[2]]$X0)
     ggp_pred0=.plotArea(area_p, rename=F)
-    
+    ggp_pred0
      # predictions0 =datasAll$extractPredictions(all_models,phens, flags, CV = F, liab=F, data_nme = names(datasAll$datas)[[1]]);
     #  ggp_pred0=.plotArea1(predictions0, rename=T,max_vars=44)
     #  ggp_pred0
@@ -135,7 +150,7 @@ for(j in 1:length(datasAll$datas)){
 
 ggp_all =list()
 #examples = examples[grep("multinomial", names(examples), inv=T)] # broken for multinomail
-for(i in 1:length(examples)){  
+for(i in 3:length(examples)){  
   print(i)
   ggp_all[[i]] = runAll(examples[i], randomise=F, pthresh = 0.0001)
 }
