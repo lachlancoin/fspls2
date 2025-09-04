@@ -695,13 +695,10 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
             res_inner=lapply(nme_comb, function(nme_c1){
                #print(nme_c1)
                 comb = comb_[[nme_c1]]
-               # transform_func = eval(str2lang(funcst1[[nme_c1]]))
-                
                 if(nrow(comb)==0) return(NULL)
                 num_pvals1 = min(num_pvals, nrow(comb))
                 inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
                 nxt_vars = lapply(inds1p, function(ik){
-                #  print(ik)
                    b_i_name = c(comb$data_type[[ik]], comb$names[[ik]])
                    nv = .getPvsAll(phens1,datas1[names(datas1) %in% train_nme], vars_l1, b_i_name,k, funcst1[[nme_c1]], project = project, useoffset=useoffset)
                   attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){

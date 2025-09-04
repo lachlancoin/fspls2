@@ -815,7 +815,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
             #       pv1 = pchisq(-1*(dev-nulldev),df=1,low=F)
           }
           list(const_term = const_term, beta_new1 = beta_new1)
-          }, error=function(w) {
+          }, error=function(errw) {
             m1=glm(y~x, family=family, weights=w) ## including weights lead to non-convergence
             sm  = summary(m1)
             #print(var(x))
@@ -861,7 +861,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
           # print(pv1)
           #pchisq((2*(ll1 - ll2)),attr(ll1,"df")[1]-attr(ll2,"df")[1],lower.tail=FALSE,log.p=F)
           list(const_term = const_term, beta_new1 = beta_new1, pv1=pv1)
-        }, warning=function(w) {
+        }, warning=function(errw) {
           print("using glmnet 1")
           ones = rep(1, length(x))
           x_mod = cbind(ones,x)
@@ -1071,7 +1071,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
                  beta_new1 =  rbeta[-1,1]
          
             list(const_term = const_term, beta_new1 = beta_new1)
-          }, error=function(w) {
+          }, error=function(errw) {
             
                 m1=glm(y~as.matrix(x), family=family, weights=w) ## including weights lead to non-convergence
             sm  = summary(m1)
@@ -1122,7 +1122,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
             }
             
             list(const_term = const_term, beta_new1 = beta_new1)
-          }, warning=function(w) {
+          }, warning=function(errw) {
             print("using glmnet 1")
             #ones = rep(1, nrow(x))
             #x_mod = cbind(ones,x)
@@ -1297,7 +1297,8 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
     betas = prev_i$betas
   
-    b_new_proj = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=project,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
+    b_new_proj = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=project,convert=F,  
+                                    strict=T, useglm=useglm, useoffset=useoffset) 
    # b_new_proj1 = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=!project,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
     
     betas_new = b_new_proj$betas
@@ -2009,7 +2010,7 @@ getAngles1=function(subphens,varnames,incl=names(self$data), k=1,type="slow1"){
         }else{
           angles_d[[ik]] =  tryCatch({
             self$getAngleInnerOld(phensi,ik, k,var,type)
-          },error=function(w){
+          },error=function(errw){
             print(w)
             NULL
           })
