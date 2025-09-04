@@ -1,10 +1,35 @@
 default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC"}')
 
-.mkBinary<-function(y){
-  yn = rep(NA, length(y))
-  yn[y<=median(y,na.rm=T)]=0
-  yn[y>median(y,na.rm=T)]=1
+.getZetaBinary<-function(x,y, w){
+  levsy =sort(unique(y[!is.na(y)]))
+  yn = .mkBinary(y)
+  m1=glm(yn~x,  family="binomial", weights=w)
+  ll1 = logLik(m1)
+  ll2 =  logLik(update(m1, ~1))
+  pv = pchisq((2*(ll1 - ll2)),attr(ll1,"df")[1]-attr(ll2,"df")[1],lower.tail=FALSE,log.p=F)
+  beta_new1 = m1$coefficients[-1]
+  inds = 1:(length(levsy)-1); 
+  names(inds) = unlist(lapply(inds, function(kk) paste(levsy[inds[kk]], levsy[inds[kk]+1],sep="|")))
+  levsy1=levsy[inds]; names(levsy1)= names(inds)
+  if(is.vector(x)) {
+    prod= x *beta_new1 
+    }else{
+     prod =  x%*% beta_new1
+     prod = prod[,1]
+    }
+  const_term=unlist(lapply(levsy1, function(l1){
+    y2 = .mkBinary(y, thresh = l1)
   
+    m1=glm(y2~1, offset=prod, family="binomial", weights=w)
+    -m1$coefficients[[1]]
+  }))
+  list(beta_new1 = beta_new1, const_term = const_term, pv = pv)
+}
+
+.mkBinary<-function(y, thresh=mean(y,na.rm=T)){
+  yn = rep(NA, length(y))
+  yn[y<=thresh]=0
+  yn[y>thresh]=1
   yn
 }
 .calcPvalue<-function(x,y, beta_new1, yp1,w, family){   ## this seems to not work anymore for multinomial
@@ -696,7 +721,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
   for(kk in 1:ncoly){
     nonNAk = nonNA & non_na_x
     x = x_[nonNAk ]
-    y = transform_func(ys[,kk][nonNAk])
+    y = transform_func(ys[,kk])[nonNAk]
     w = data$weights[nonNAk]
     beta_new1=0;
     
@@ -710,30 +735,21 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
     }else if(family=="ordinal" ){
       ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
-      use_bin = length(unique(y))<=2
+      use_bin = length(unique(y,na.rm=T))<=2
       if(!use_bin){
         df = data.frame(cbind(y,x ))
-        df$y = factor(y, levels = sort(unique(y)))  
-        # print("using polr")
+        df$y = factor(y, levels = sort(unique(y,na.rm=T)))  
+        # print("using polr") 
         m1=try(polr(y~x,  data=df,weights=w,Hess=T, method="logistic"),silent=T)
         #predict(m1, df, type = "p")
         
         if(inherits(m1,"try-error")){
           if(strict) warning("!!!")
-          #  print(df)
-          # print(m1)
-          yn = y
-          yn[y<=median(y)]=0
-          yn[y>median(y)]=1
-          m1=glm(yn~x, family="binomial", weights=w)
-          #warning("polr error .. using gaussian!!")
-          #m1=glm(y~x, family="gaussian", weights=w)
-          sm  = summary(m1)
-          coeff = sm$coeff[2,]
-          pv1 = coeff[4];
-          pv1 = 1.0;
-          beta_new1=coeff[1]
-          const_term = -1*sm$coefficients[1,1]
+          resz = .getZetaBinary(x,y, w)
+          beta_new1=resz$beta_new1
+          const_term =resz$const_term
+          pv1 = resz$pv1
+          #const_term = -1*sm$coefficients[1,1]
         }else{
           ll1 = logLik(m1)
           ll2 =  logLik(update(m1, ~1))
@@ -943,7 +959,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
   non_na_x = apply(x_,1,function(v) length(which(is.na(v))))==0
   for(kk in 1:ncoly){
     nonNAk = nonNA & non_na_x
-    y = transform_func(ys[,kk][nonNAk])
+    y = transform_func(ys[,kk])[nonNAk]
     w = data$weights[nonNAk]
     beta_new1=0;
     const_term=0
@@ -987,16 +1003,20 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, transform_func,beta
         
         if(inherits(m1,"try-error")){
           if(strict) warning("polr!!!")
+          resz = .getZetaBinary(x,y, w)  ##need as.matrix(x) ??
+          beta_new1=resz$beta_new1
+          const_term =resz$const_term
+   #       pv1 = resz$pv1
           #  print(df)
           # print(m1)
-          yn = .mkBinary(y)
+#          yn = .mkBinary(y)
          
-          m1=glm(yn~as.matrix(x), family="binomial", weights=w)
+ #         m1=glm(yn~as.matrix(x), family="binomial", weights=w)
           #warning("polr error .. using gaussian!!")
           #m1=glm(y~x, family="gaussian", weights=w)
-          sm  = summary(m1)
-          beta_new1=sm$coefficients[-1,1]
-          const_term = -1*sm$coefficients[1,1]
+  #        sm  = summary(m1)
+  #        beta_new1=sm$coefficients[-1,1]
+  #        const_term = -1*sm$coefficients[1,1]
         }else{
           coeff = m1$coefficients
           const_term = m1$zeta
@@ -1184,7 +1204,7 @@ extractData=function(var, adjust=T,convert=F){
 #vars2 = vars_all[[1]]$variables[[1]];phens1 = phens[[1]]; k=1; useoffset=T
 makeModels=function(phens1, vars2,var_transf, k, 
                     project=T,logpthresh = -5,useglm=T,useoffset=T,
-                   func_str="function(y) y"
+                  func_str1="function(y) y"
                   ){
   phen2 = phens1
   #if(length(phens1)>1) stop("assuming just one phenotype here")
@@ -1206,21 +1226,26 @@ makeModels=function(phens1, vars2,var_transf, k,
   if(family[[1]]=="multinomial") useoffset=F
   nme1 = ""
   b_i_name=c()
-  func_str1=func_str[1]## could think about updating this for new iteration, but for moment stick
-  prev_i = self$makeNextModel(prev_i,b_i_name,subphens,k, func_str1,family, ypred=ypred, project=project, useglm=F, logpthresh =logpthresh,useoffset=useoffset)
-  models[[1]] = prev_i$simplify()
+#  func_str1=func_str[1]## could think about updating this for new iteration, but for moment stick
+  #transform_func = eval(str2lang(func_str[[1]]))
+  
+  prev_i = self$makeNextModel(prev_i,b_i_name,subphens,k, func_str1[[1]],
+                              family, ypred=ypred, project=project, useglm=F, logpthresh =logpthresh,useoffset=useoffset)
+  models[[1]] = prev_i$simplify(names(func_str1)[[1]])
   nmes[[1]] = "empty"
   jk=1
   while(jk<=len){
-    func_str1=(func_str[var_transf[[jk]]]) ## could think about updating this for new iteration, but for moment stick
+    func_str1=(func_str1[var_transf[[jk]]]) ## could think about updating this for new iteration, but for moment stick
    # print(func_str1)
     b_i_name = vars2[[jk]]
-    prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k, func_str1,family, ypred=ypred, project=project, useglm=useglm, logpthresh =logpthresh,useoffset=useoffset)
+#    transform_func=eval(str2lang(func_str1[var_transf[[jk]]]))
+    prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k,func_str1[[var_transf[[jk]]]],
+                                 family, ypred=ypred, project=project, useglm=useglm, logpthresh =logpthresh,useoffset=useoffset)
     if(is.null(prev_i1)) break;
     nme2 = paste(vars2[[jk]], collapse=".")
     nme1 = if(jk==1)  nme2 else paste(nme1, nme2,sep=";")
     nmes[[jk+1]] = nme1
-    models[[jk+1]] =prev_i1$simplify()
+    models[[jk+1]] =prev_i1$simplify(var_transf[[jk]])
     prev_i = prev_i1
     jk = jk+1
   }
@@ -1256,12 +1281,13 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
     self$weights[naInds] = min(w1)
   }
 },
- makeNextModel=function(prev_i, b_i_name, subphens, k, funcst, family, ypred=NULL, project=T, useglm=T,    logpthresh = -5,
-                        useoffset=T,inverse_funcstr=NULL,
+ makeNextModel=function(prev_i, b_i_name, subphens, k,funcst, family, ypred=NULL, project=T, useglm=T,    logpthresh = -5,
+                        useoffset=T,inv_funcst=NULL,
                         CHECK=getOption("fspls.check",F),
                         verbose=getOption("fspls.verbose1",F)) {
    data =self
-   transform_func = eval(str2lang(funcst[[1]]))
+   
+   transform_func = eval(str2lang(funcst))
     b_i = if(length(b_i_name)==0) c() else self$convert(b_i_name)
     #if(is.null(b_i)) return(NULL)
     mean_x =if(length(b_i_name)==0) c() else  self$mean_x [[b_i[[1]]]][b_i[2]]
@@ -1270,6 +1296,7 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
     #W_all = data$calcWall(b_i, prev_i$var, prev_i$W_all) ## WALL not important, we can get rid of it later
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
     betas = prev_i$betas
+  
     b_new_proj = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=project,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
    # b_new_proj1 = self$calcBetaProj1(subphens,k,b_i,prev_var, transform_func, betas = betas, project=!project,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
     
@@ -1282,7 +1309,7 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
      # return(NULL)
     #  }
     tbls = if(family[[1]]=="multinomial") b_new_proj$tbls[[1]]  else b_new_proj$tbls
-    prev_i1=stateObj$new(subphens,data, betas_new,constants_proj, tbls, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = NULL,pvs =pvs, useoffset=useoffset, funcst = funcst)
+    prev_i1=stateObj$new(subphens,data, betas_new,constants_proj, tbls, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = NULL,pvs =pvs, useoffset=useoffset)
   #  prev_i1$setOffset() 
     if(is.null(prev_i)) return(prev_i1)
     prev_i1$setOffset()
@@ -1329,9 +1356,9 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
 #      dimnames(df2)[[2]] = 1:ncol(self$y[[1]])
       }
   
-    if(verbose  && !is.null(ypred) && !is.null(inverse_funcstr)){
-      inv_transform_func = lapply(inverse_funcstr, function(str1) eval(str2lang(str1)))  ## should be inverse
-      inv_func = inv_transform_func[[prev_i1$transf]]
+    if(verbose  && !is.null(ypred) && !is.null(inv_funcst)){
+      inv_func = eval(str2lang(inv_funcst))
+#      inv_transform_func = lapply(inverse_funcstr, function(str1) eval(str2lang(str1)))  ## should be inverse
       ypred$updateYP(data, prev_i1, nonNA, inv_func=inv_func,flip=FALSE, liab=F)
       new_const = prev_i1$updateConst(subphens,ypred, data,k, transform_func, useglm=getOption("glmnet",T),verbose=verbose, update=F)
       
@@ -2093,7 +2120,7 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
 ## gets ready for training - updates train, prev looc
 updateTrain=function(phens,flags, transform_y, verbose=F){ ## this updates the reps and train  ## called after updateLOOC
   nrep = ncol(self$looc$incl)
-  
+  if(verbose) print("update train")
   incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
   if(length(incls) == 0 )incls = list("all"=names(self$data))
   incls_all = unique(unlist(incls))

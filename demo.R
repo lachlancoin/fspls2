@@ -44,17 +44,16 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[1]; pthresh = 0.05 ; randomise=F; duplicate=F
+datasets =examples[4]; pthresh = 0.05 ; randomise=F; duplicate=F
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation","rms"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
-random_funcs=.getRandomFuncs(10)
 transform_y=getYTransform(n_random=5)
 #transform_y=list(x=c("function(y) y","function(y) y"),exp= c("function(y) sign(y)*y^2", "function(y) sign(y)*abs(y)^(1/2)"))
 
 runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
                  transform_y = list(x=c("function(y) y","function(y) y"), rand=c("function(y) randomize(y)", "function(y) randomize(y)"))){
   y = datasets[[1]]$y
-  flags = list(pthresh = pthresh, max=10,nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  project=T,
+  flags = list(pthresh = pthresh, max=10,nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,all_v_all=F,  project=T,
                stop_y="rand",
                useoffset=T,useglm=T#quantiles = toJSON(c(0,0.1))
               )

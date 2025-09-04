@@ -177,6 +177,7 @@ sigEnv<-R6Class("sigEnv", public = list(
             res2 = list(
               betas = fromJSONM(vn5$betas[[1]]),
             var_names = fromJSON(vn5$var_names[[1]]),
+            transf = fromJSON(vn5$transf[[1]]),
             constants_proj=fromJSONM(vn5$constants_proj[[1]])
             )
             res2
@@ -209,6 +210,7 @@ sigEnv<-R6Class("sigEnv", public = list(
                data.frame(list(experiment_id = expt_id, nvar = length(all_models5$var_names),
                                         var_names = toJSON(all_models5$var_names),
                                         constants_proj = toJSONM(all_models5$constants_proj),
+                                      transf= toJSON(all_models5$transf),
                                         betas = toJSONM(all_models5$betas), 
                   model_nme=nme1, rep=nme2,trainedOn=nme3)  ) 
               #}))
@@ -260,6 +262,7 @@ sigEnv<-R6Class("sigEnv", public = list(
       res2 = list(
       variables = lapply(models, function(mod)  fromJSON(vn1$variables[vn1$model==mod])) ,# lapply(vn1$variables[vn1$model==mod], function(x) fromJSON(x))),
       inds = lapply(models, function(mod) fromJSON(vn1$inds[vn1$model==mod])), #lapply(vn1$inds[vn1$model==mod], function(x) fromJSON(x))),
+      transf=lapply(models, function(mod) fromJSON(vn1$transf[vn1$model==mod])),
       cumpv = lapply(models, function(mod) fromJSON(vn1$cumpv[vn1$model==mod])#,lapply(vn1$cumpv[vn1$model==mod], function(x) fromJSON(x))) function(x) fromJSON(x)))
       ),
       flags=flags,
@@ -314,6 +317,7 @@ sigEnv<-R6Class("sigEnv", public = list(
                                model = nme1,
                                              variables=toJSON(vars_all1$variables[[nme1]]), 
                                inds = toJSON(vars_all1$inds[[nme1]]), 
+                               transf=toJSON(vars_all1$transf[[nme1]]),
                                cumpv = toJSON(vars_all1$cumpv[[nme1]])))
       }))
    #}))
