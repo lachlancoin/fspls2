@@ -222,7 +222,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       y1 = ys[[ik]] #dists[[ik]]$updateYdb(cats[['cats']])
       family = families[[ik]]
      
-      
+      ##need to work on all_v_all
       datas[[ik]]$updateY(y1, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
   #    datas[[ik]]$updateYdb(dists[[ik]]$mydb, cats[['cats']])
   #    missing_vals = self$updateY(y1, family=family, CHECK=T)
