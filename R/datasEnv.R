@@ -379,7 +379,7 @@ datasEnv<-R6Class("datasEnv", public = list(
    # combined_models=lapply(nmes_vars_all, function(nme_v_all){
     #  if(verbose) print(nme_v_all)
       vars = vars_all#[[nme_v_all]]
-      func_str1 = lapply(transform_y, function(xx) xx[[1]]) #func_strs[[nme_v_all]]
+      func_str = lapply(transform_y, function(xx) xx[[1]]) #func_strs[[nme_v_all]]
       all_models = list()
       variables = vars$variables
       var_inds = vars$inds
@@ -389,7 +389,7 @@ datasEnv<-R6Class("datasEnv", public = list(
        names(rem_inds) = as.character(rem_inds)
        names(rem_inds)[which(rem_inds==self$datas[[1]]$nreps())]="full"
        #inds1 = 1:2
-       all_models = self$makeModels(list(),names(func_str1)[[1]],rem_inds , phens, func_str1, flags)
+       all_models = self$makeModels(list(),names(func_str)[[1]],rem_inds , phens, func_str, flags)
        
       if(length(variables)==0) return(list(models=all_models, flags = flags, phens = phens, transform_y = transform_y, db=db))
       ord = order(unlist(lapply(variables, length)),decreasing=T)
@@ -398,7 +398,7 @@ datasEnv<-R6Class("datasEnv", public = list(
      #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
       
      for(v_nme in names(variables)){
-       #print(v_nme)
+       print(v_nme)
        if(verbose)print(v_nme)
        vars2 = variables[[v_nme]]
        var_transf=strsplit(names(transf[[v_nme]])[[1]],"_")[[1]]
@@ -408,7 +408,7 @@ datasEnv<-R6Class("datasEnv", public = list(
        nme_ = paste(names(vars2),collapse=";")
        models1 = all_models[[nme_]]
        if(is.null(models1)){
-        models1 = self$makeModels( vars2, var_transf,inds,phens,func_str1,flags)
+        models1 = self$makeModels( vars2, var_transf,inds,phens,func_str,flags)
         for(k in 1:length(models1)){
           mod1 =   all_models[[names(models1)[[k]]]]
           if(is.null(mod1)){
