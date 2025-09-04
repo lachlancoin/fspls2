@@ -45,7 +45,7 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
     m2 = multinom_ridge(yp_new,y,w)
     ll2 = -0.5 * m2$dev  
     ll1 = -0.5 *m1$dev        
-    pv1 = .lrt(ll2,ll1,2,1, log.p=T)
+    pv1 = .lrt(ll2,ll1,length(levels(y)), 1, log.p=T)
   }else if(family=="ordinal"){
     pv1 =tryCatch({
       df1 = data.frame(cbind(y,as.matrix(yp1 )));
@@ -728,10 +728,17 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
     if(family=="multinomial"){
       ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
-      rdf = multinom_ridge(x,y,w)
+      
+      rdf = try(multinom_ridge(x,y,w))
+      if(inherits(rdf,"try-error")){  ## setting null values
+        levsy = levels(y)
+        beta_new1 = rep(0, length(levsy)); names(beta_new1) = levsy
+        const_term = beta_new1
+      }else{
       #logpv1 = pchisq(rdf$dev/2,df=1,low=F,log=T)
-      beta_new1=rdf$beta
-      const_term = rdf$const
+        beta_new1=rdf$beta
+        const_term = rdf$const
+      }
     }else if(family=="ordinal" ){
       ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
@@ -903,7 +910,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var, transform_func, strict
       m1=lm(x~y)
       ll1 = logLik(m1)
       ll2 =  logLik(update(m1, ~1))
-      pv1 = .lrt(ll1,ll2,2,1, log.p=T)
+      pv1 = .lrt(ll1,ll2,length(levels(y)),1, log.p=T)
     }else{
        pv1 = .calcPvalue(x,y, beta_new1, 1,w, family)
        
@@ -1286,7 +1293,6 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
                         CHECK=getOption("fspls.check",F),
                         verbose=getOption("fspls.verbose1",F)) {
    data =self
-   
    transform_func = eval(str2lang(funcst))
     b_i = if(length(b_i_name)==0) c() else self$convert(b_i_name)
     #if(is.null(b_i)) return(NULL)
