@@ -41,7 +41,10 @@ print(dir(path,full=T,rec=T))
 
 
 flags = list(pthresh = 5e-2, nrep=5,batch=0, max=50,topn=100,beam=1,all_v_all=T, one_v_rest=F)
-flags[['transform']] =toJSON(getXTransform(c(seq(-1,-0.2,by=0.2),seq(0.1,0.9,by=.1), seq(1,2,by=.5))))#  '{"x" :"function(x) x", "log":"function(x) log1p(x)"}'
+t_x=getXTransform(seq(-.2,2,by=.4))
+t_x=getXTransform(seq(-.2,2,by=.6))
+
+flags[['transform']] =toJSON(t_x)#  '{"x" :"function(x) x", "log":"function(x) log1p(x)"}'
 
 #flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)", "x3":"function(x) x^3","1x":"function(x) 1/x"}'
 #flags[['transform']] = '{"x" :"function(x) x","log" :"function(x) log1p(x)"}'
@@ -69,7 +72,7 @@ phens=datasAll$pheno(sep=F)
 phens = phens[1]
 #phens$all$binomial.multiway = phens$all$binomial.multiway[2]
 ## FIND VARIABLES
-transform_y=getYTransform(n_random=5)
+transform_y=getYTransform(n_random=1)
 
 vars_all = datasAll$select(phens$all, flags,transform_y,verbose=T)
 .extractFullVars(vars_all)$variables

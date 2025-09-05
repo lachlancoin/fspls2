@@ -71,20 +71,21 @@ if(!is.null(weights_old)){
 }
 datasets = list(pbmc=list(counts=counts1))
 mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1, hasNA=F)))
-flags = list(pthresh = 1e-10, max=100, nrep=10,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T,all_v_all=F)
+flags = list(pthresh = 1e-2, max=100, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T,all_v_all=T)
 
-
+ys$pbmc =ys$pbmc[,2,drop=F]
 
 datasAll =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
 
+transform_y=getYTransform(n_random=1)
 
 phens=datasAll$pheno()
-phens$all = phens$all[2]
+phens$all = phens$all[1]
 if(!is.null(weights_old)){
   #quicker to use existing variables if provided
-  vars_all = datasAll$convert(weights_old$var,phens)
+  vars_all = datasAll$convert(weights_old$var,phens, transform_y)
 }else{
-  vars_all = datasAll$select(phens, flags, verbose=T)
+  vars_all = datasAll$select(phens$all, flags,transform_y = transform_y, verbose=T)
 }
 
 ## FIT MODELS
@@ -92,7 +93,7 @@ options("fspls.verbose1"=F); options("fspls.check"=F)
 phens_ = phens
 #phens_[[1]][[1]] = phens[[1]][[1]][10]
 #all_models_ = datas$makeAllModels(vars_all, phens_, flags)
-all_models = datasAll$makeAllModels(vars_all, phens, flags,verbose=T)
+all_models = datasAll$makeAllModels(vars_all, verbose=T)
 
 #betas_save = all_models_[[1]]$`counts.CD74;counts.FTH1;counts.CCL5;counts.HLA-DRB1;counts.RPS12;counts.LYZ;counts.GNLY;counts.NIBAN1;counts.IGHM;counts.BANK1`$all$full$pbmc$betas$binomial
 #print(betas_save)
@@ -109,10 +110,7 @@ all_models = datasAll$makeAllModels(vars_all, phens, flags,verbose=T)
 
 options("diff_thresh"=0.1)
 
-eval = datasAll$evaluateAllModels(all_models, phens, flags)
-aa=subset(eval, pheno=="Non.classical.monocytes.cd8_Tm"  )
-grep("Naive.B", unique(eval$pheno),v=T)
-eval1 = subset(eval, numvars==100)
+eval1 = datasAll$evaluateAllModels(all_models)
 
 ## GET WEIGHTS FROM FULL MODEL
 final_models = .getFinalModel(all_models$y, target_size = "max")
