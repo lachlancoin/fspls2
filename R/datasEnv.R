@@ -398,7 +398,7 @@ datasEnv<-R6Class("datasEnv", public = list(
      #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
       
      for(v_nme in names(variables)){
-       print(v_nme)
+       #print(v_nme)
        if(verbose)print(v_nme)
        vars2 = variables[[v_nme]]
        var_transf=strsplit(names(transf[[v_nme]])[[1]],"_")[[1]]
@@ -837,7 +837,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     if(length(all_models$models)==0) return(NULL)
     nme_d2 = .readFlag(flags,"test",names(self$datas))
     names(nme_d2) = nme_d2
-    print(nme_d2)
+   # print(nme_d2)
    # func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
   #  inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
     #k=1

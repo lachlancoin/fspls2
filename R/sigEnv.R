@@ -32,7 +32,14 @@ setAttr<-function(mat1, attr1){
    
    return(res)
   }else{
-    if(is.list(mat1) && length(mat1)==1 ){
+    nme = attr1$names
+    dimn = attr1$dimnames
+    if(!is.null(dimn) && !is.list(dimn)){
+      attr1$dimnames=as.list(dimn)
+    }
+    if(!is.null(nme)  && length(nme)==length(mat1)){
+      
+    }else if(is.list(mat1) && length(mat1)==1 ){
       mat1 = mat1[[1]]
     }
     attributes(mat1) = attr1
@@ -157,7 +164,7 @@ sigEnv<-R6Class("sigEnv", public = list(
    vn1=combined
  #  trans_y = unique(vn$transform_y); names(trans_y)=trans_y
  ##debugging
-   #m_nme = vn$model_nme[[1]] ;p_g = vn$pheno_group[[1]]; rep1 = vn$rep[[1]]; ton = vn$trainedOn[[1]];
+   #vn=vn1;m_nme = vn$model_nme[[1]] ;p_g = vn$pheno_group[[1]]; rep1 = vn$rep[[1]]; ton = vn$trainedOn[[1]];
    #vn5 = subset(vn, model_nme==m_nme & pheno_group==p_g & rep==rep1 & trainedOn==ton)
    #all_models1 = lapply(trans_y, function(ty){
     # vn1 = subset(vn, transform_y ==ty)
@@ -169,7 +176,7 @@ sigEnv<-R6Class("sigEnv", public = list(
        #lapply(pheno_group, function(p_g){
          vn3 = vn2 #subset(vn2, pheno_group==p_g)
          reps = vn3$rep; names(reps) = reps
-         lapply(reps, function(rep1){
+         aa=lapply(reps, function(rep1){
            vn4 = subset(vn3,rep==rep1)
            trainedOn = vn4$trainedOn; names(trainedOn)=trainedOn
            lapply(trainedOn, function(ton){
@@ -184,6 +191,7 @@ sigEnv<-R6Class("sigEnv", public = list(
            })
            
          })
+         aa
      })
    #})
    list(models=all_models1, flags = flags, phens = phens, transform_y=transform_y, db=self$subnme)

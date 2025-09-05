@@ -380,7 +380,14 @@ isbigmatrix<-function(x){
   })
 }
 
-.merge1_new<-function(t,num_cols = c(), addName=NULL){
+.merge1_new<-function(t,num_cols = c(), addName=NULL, checkNames=T){
+  if(checkNames && length(t)>0){
+    nme_aa = names(t[[1]])
+    t1 = lapply(t, function(aa1){
+      aa1[,match(nme_aa,names(aa1)),drop=F]
+    })
+    t = t1
+  }
   if(length(t)==0) return(NULL)
   t = t[!unlist(lapply(t, is.null))]
   t = t[unlist(lapply(t,nrow))>0]

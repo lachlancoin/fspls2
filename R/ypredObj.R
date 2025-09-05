@@ -519,12 +519,14 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
   #names(inds1)=inds1
   nmey =names(phensi)
   names(nmey) = nmey
+  indsy = 1:length(nmey); names(indsy)=nmey
   #family = unlist(lapply(nmey, function(x) strsplit(x,"\\.")[[1]][1]))
   
   #lapply(inds1, function(x)  {
-    res = lapply(nmey, function(i){
-      yi = y[[i]]
-      if(family[[1]]=="multinomial"){
+    res = lapply(indsy, function(i){
+      i1 = nmey[[i]]
+      yi = y[[i1]]
+      if(family[[i]]=="multinomial"){
         yi = attr(yi,"factor")
          levs1 = levels(yi)
          names(levs1) = levs1
@@ -535,7 +537,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
          }))
          rr = do.call(rbind, replicate(length(yi),rr1, simplify=FALSE))
          dimnames(rr) = list(dimnames(y)[[1]],levs1)
-       }else if(family[[1]]=="ordinal"){
+       }else if(family[[i]]=="ordinal"){
            levs1 = min(yi,na.rm=T):max(yi,na.rm=T)
            names(levs1) = levs1
           rr0= unlist(lapply(levs1[-length(levs1)], function(l1){
@@ -699,7 +701,8 @@ calcRMSV=function(y, nonNA,      flip=F){
   ind_1 = if(flip) !nonNA else nonNA
   w1= if(is.null(ind_1)) self$weights else self$weights[ind_1]
   nsamps = length(which(ind_1))
-  .merge1_new(lapply(nme_phens, function(nme_p1){
+  #nme_p1 = nme_phens[[1]]
+  aa=lapply(nme_phens, function(nme_p1){
     family=  getOption("fspls.family",strsplit(nme_p1,"\\.")[[1]][1])
     
     fam = family
@@ -748,7 +751,15 @@ calcRMSV=function(y, nonNA,      flip=F){
       df3 = df3 %>% tibble::add_column(subpheno="")
     }
     df3    
-  }),addName="family")
+  })
+  #aa=readRDS("aa.rds")
+ # nme_aa = names(aa[[1]])
+#  aa_new = lapply(aa, function(aa1){
+#     aa1[,match(nme_aa,names(aa1))]
+#  })
+  res_aa = .merge1_new(aa,addName="family")
+  
+  res_aa
   #.merge1_new(rms_3, num_cols = "value", addName="beam")
   # dimnames(res_df)[[1]] = names(rms_3)
   # as.matrix(res_df)
