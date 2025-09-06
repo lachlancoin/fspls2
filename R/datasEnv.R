@@ -398,7 +398,7 @@ datasEnv<-R6Class("datasEnv", public = list(
      #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
       
      for(v_nme in names(variables)){
-       #print(v_nme)
+      # print(v_nme)
        if(verbose)print(v_nme)
        vars2 = variables[[v_nme]]
        var_transf=strsplit(names(transf[[v_nme]])[[1]],"_")[[1]]

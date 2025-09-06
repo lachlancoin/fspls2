@@ -1242,8 +1242,6 @@ makeModels=function(phens1, vars2,var_transf, k,
   nmes[[1]] = "empty"
   jk=1
   while(jk<=len){
-    func_str1=(func_str1[var_transf[[jk]]]) ## could think about updating this for new iteration, but for moment stick
-   # print(func_str1)
     b_i_name = vars2[[jk]]
 #    transform_func=eval(str2lang(func_str1[var_transf[[jk]]]))
     prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k,func_str1[[var_transf[[jk]]]],
