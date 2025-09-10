@@ -324,13 +324,14 @@ datasEnv<-R6Class("datasEnv", public = list(
  cats = function(maxpheno = 1e9){
     lapply(self$datas, function(d) d$cats(maxpheno))
  },
-  pheno=function(maxpheno=1e9,sep=F, sep_group = F, exclude=NULL, code=NULL){
-   res = self$datas[[1]]$pheno(maxpheno=maxpheno, sep=sep, sep_group = sep_group, code = code);
+  pheno=function(maxpheno=1e9,sep=F, sep_group = F, exclude=NULL, code=NULL, memb=NULL){
+   res = self$datas[[1]]$pheno(maxpheno=maxpheno, sep=sep, sep_group = sep_group, code = code,memb=memb);
   if(!is.null(exclude)){
     lapply(res, function(res2){
     lapply(res2, function(res1) res1[-grep(exclude,res1)])
     })
   }
+   
    res
   },
 
@@ -741,12 +742,22 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
             list(vars_l = vars_l_nxt, logpv = logpv1)
           })
           logpvs=unlist(lapply(angles_all2, function(xx) xx$logpv))
-          min_ind=which.min(logpvs)
+        
+          if(length(func_ind)>0){ ## if we start with one y transform we need to continue, unless random
+            avail = rep(F, length(logpvs)); names(avail) = names(logpvs)
+            first_func_name = names(func_ind)[[1]]
+            avail[grep(stop_y, names(angles_all2))]=T
+            avail[names(angles_all2)==first_func_name]=T
+          }else{
+            avail = rep(T, length(logpvs)); names(avail) = names(logpvs)
+          }
+          min_ind=which(logpvs==min(logpvs[avail]))
          
           logpv =min(logpvs)
           if(!is.null(stop_y)){
             stop_random = length(grep(stop_y,names(angles_all2)[[min_ind]]))>0
           }
+          print(logpvs)
           if(stop_random){
             print(exp(logpvs))
             print(paste("stopping due to random", exp(logpv)))

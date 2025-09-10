@@ -116,7 +116,7 @@ length(unique(eval1$`data:family`))
     ph3 = paste(sort(unique(apply(eval5[,names(eval5) %in% title1, drop=F],1,paste,collapse=","))), collapse=" ")
   ggp<-ggplot(eval5);
   if(point) ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_color_nme,size="nsamps", color=shape_color_nme))
-  if(line)  ggp<-ggp+geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=shape_color_nme)) +ggtitle(paste(title,ph, ph3))
+  if(line)  ggp<-ggp+geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=shape_color_nme)) #+ggtitle(paste(title,ph, ph3))
   if(showranges){ ## geom_ribbon vs geom_errorbar
     
    ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype_nme,color=shape_color_nme, fill = shape_color_nme ), alpha = 0.1)
@@ -150,8 +150,8 @@ length(unique(eval1$`data:family`))
   })
 }
 
-getYTransform<-function(pows = c(1), n_random=0){
-  c(.getTransformFuncs(pows, include_inverse=T),.getRandomFuncs(n_random,include_inverse=T))
+getYTransform<-function(pows = c(1), n_random=0, incl = list()){
+  c(.getTransformFuncs(pows, include_inverse=T),.getRandomFuncs(n_random,include_inverse=T),incl)
 }
 getXTransform<-function(pows= c(1),offset=1e-10){
   .getTransformFuncs(pows, offset=offset, include_inverse=F)
@@ -843,8 +843,18 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   .plotArea(area_p1, ...)
  })  
 }
+
+.takeAvg<-function(eval1){
+  #does not deal with subpheno if different
+  nme_cols = c("cv_full","measure","numvars","data","cv","isfull","experiment_id","fullmodel","model","transform_y","transf","subpheno")
+  ev2=pivot_wider(eval1,
+                  id_cols =nme_cols ,
+                  names_from="pheno", values_from="mid")
+  meanv=apply(ev2[,-(1:length(nme_cols))],1,mean)
+  data.frame(ev2[,1:length(nme_cols)]%>% tibble::add_column(mid=meanv, pheno="avg", nsamps=10))
+}
 .takeMax1<-function(a1, max_vars=100){
-  ab=unite(subset(a1, lens<=max_vars),"comb","sample","CV",remove=F)
+  ab=unite(subset(a1, lens<=max_vars),"comb","sample","CV","pheno",remove=F)
   levs = unique(ab$comb); names(levs)=levs
   ab2=.merge1_new(lapply(levs, function(l1){
     sub1 = subset(ab, comb==l1 & !is.na(knots))
@@ -853,6 +863,7 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   #ab2$pheno = factor(ab2$pheno, labels=levels(ab$pheno))
   ab2
 }
+
 
 .takeMax<-function(area_p1){
   ab=unite(area_p1,"comb","sample","pheno","CV",remove=F)
@@ -911,6 +922,32 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   if(reorder)ab2$pheno = factor(ab2$pheno, levels=levs1)
   }
   ab2
+}
+
+.compareCorrelation<-function(area_p1, maxv=5){
+  samps = unique(area_p1$sample); names(samps)=samps
+  cvs=unique(area_p1$CV); names(cvs)=cvs
+  area_p_max0 = data.frame(.takeMax1(area_p1, max_vars=0))
+  
+  mvars = sort(unique(area_p1$lens)); names(mvars)=mvars
+  mvars = mvars[mvars>0 & mvars<maxv]
+  res_all=.merge1_new(lapply(mvars, function(max_vars){
+    print(max_vars)
+  area_p_max = data.frame(.takeMax1(area_p1, max_vars=max_vars))
+  data.frame(lapply(cvs, function(cv){
+    r2 = unlist(lapply(samps, function(samp){
+    # print(paste(cv, samp))
+      apm = subset(area_p_max, sample==samp & CV==cv)
+      apm0 = subset(area_p_max0, sample==samp & CV==cv)
+      if(nrow(apm0)<=1) return(NA)
+      resd = try(cor(apm$knots, apm$value,use="pairwise.complete.obs")-cor(apm0$knots,apm0$value,use="pairwise.complete.obs"))
+      if(inherits(resd,"try-error")) return(NA)
+      resd
+    }))
+    mean(r2,na.rm=T)
+  }))
+  }),addName="maxvars")
+  res_all
 }
 .plotArea<-function(area_p0, CV=F,alpha =0.8, maxphens = 50,p=c(0.1,0.9),
                     arrange_by_sample=F,takeMax=F,
@@ -987,7 +1024,7 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
     if(arrange_by_sample){
       
       if(!takeMax){
-        ggp<-ggplot(area_p1, aes(x=knots, y=value, color=lens))
+        ggp<-ggplot(area_p1, aes(x=knots, y=value, color=pheno))
         
       }else if(shapes ){
         area_p1$lens = factor(area_p1$lens)

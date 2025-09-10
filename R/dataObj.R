@@ -567,7 +567,7 @@ cats = function(maxpheno = 1e9){
   })
   names(phens) = names(self$y)
 },
-pheno = function(maxpheno=1e9,sep=F, sep_group=F,code = NULL){ 
+pheno = function(maxpheno=1e9,sep=F, sep_group=F,code = NULL,memb=NULL){ 
  phens =  lapply(self$y, function(y1) colnames(y1)[1:min(maxpheno, ncol(y1))])
  if(!is.null(code)){
    phens =  lapply(phens, function(p){
@@ -579,6 +579,17 @@ pheno = function(maxpheno=1e9,sep=F, sep_group=F,code = NULL){
  }
  nmes = names(phens)
  names(nmes)=nmes
+ if(!is.null(memb)){
+   levs = sort(unique(memb));names(levs)=levs
+   resu1 = lapply(levs, function(lev){
+     m1 = names(memb[memb==lev])
+     li = lapply(self$y, function(y1){
+       colnames(y1)[which(colnames(y1) %in% m1)]
+     })
+     li[unlist(lapply(li, length))>0]
+   })
+   return(resu1)
+ }
  if(sep_group){
    return(lapply(nmes, function(nme){
     phens[nme]
