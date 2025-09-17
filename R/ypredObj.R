@@ -839,6 +839,20 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   names(res)=c("low","mid","high")
   res
 }
+.better<-function(rmsv2, rmsv){
+  subinds = which(rmsv2$submeasure=="mid" & !is.na(rmsv2$value) & !is.na(rmsv$value))
+  rmsv2 = rmsv2[subinds,,drop=F]
+  rmsv =  rmsv[subinds,,drop=F]
+  if(nrow(rmsv2)!=nrow(rmsv)) stop("need same dims")
+  mult = rep(1, nrow(rmsv2)) 
+  mult[tolower(rmsv$measure) %in% c("correlation","auc","sens","spec","f1","youden")] =  -1  ## things where bigger is better, mult by -1   
+  
+  rmsv2$value= rmsv2$value* mult
+  rmsv$value = rmsv$value*mult
+  better = rmsv2$value<rmsv$value
+  names(better) = rmsv2$measure
+  better
+}
 
 .calcF1<-function(yp, y1,w, thresh=0.5){
   TP = length(which(y1[yp>=thresh]==1))

@@ -18,17 +18,21 @@
   }
   res1
 }
-.getPvsAll<-function(subphens,datas1, vars_l1, b_i_name,k,func_str1, project=T, useoffset=T){
-  
-  #var_new = c(prev_i$var,b_i)
+.getPvsAll<-function(subphens,datas1, vars_l1, b_i_name,k,transform_y1, 
+                     Wall =lapply(subphens, function(f) matrix(nrow=0,ncol=0)),
+                     project=T, useoffset=T){
+  useglm=F ## dont need glmnet for getting pvalues
   nmesd = names(datas1); names(nmesd)=nmesd
-  #nmed = nmesd[[1]]
   pvs_all= lapply(nmesd, function(nmed){
     d = datas1[[nmed]]
     prev_i = vars_l1[[nmed]]
     family = strsplit(names(subphens)[[1]],"\\.")[[1]][1]
     if(family=="multinomial") useoffset=F
-    prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, func_str1,family, ypred=NULL, project=project, useglm=T, logpthresh =0, useoffset=useoffset)
+    #prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k,Wall,transform_y1,
+    #                             family, ypred=ypred, project=project, useglm=useglm, logpthresh =logpthresh,useoffset=useoffset)
+    
+    
+    prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, Wall,transform_y1,family, ypred=NULL, project=project, useglm=useglm, logpthresh =0, useoffset=useoffset)
   #  if(inherits(prev_i1,"try-error")) {
     #  print(paste("problem", nmed))
    #   return(NULL)
@@ -380,7 +384,7 @@ datasEnv<-R6Class("datasEnv", public = list(
    # combined_models=lapply(nmes_vars_all, function(nme_v_all){
     #  if(verbose) print(nme_v_all)
       vars = vars_all#[[nme_v_all]]
-      func_str = lapply(transform_y, function(xx) xx[[1]]) #func_strs[[nme_v_all]]
+   
       all_models = list()
       variables = vars$variables
       var_inds = vars$inds
@@ -390,7 +394,8 @@ datasEnv<-R6Class("datasEnv", public = list(
        names(rem_inds) = as.character(rem_inds)
        names(rem_inds)[which(rem_inds==self$datas[[1]]$nreps())]="full"
        #inds1 = 1:2
-       all_models = self$makeModels(list(),names(func_str)[[1]],rem_inds , phens, func_str, flags)
+       var_transf = names(transform_y)[[1]]
+       all_models = self$makeModels(list(),var_transf,rem_inds , phens, transform_y, flags)
        
       if(length(variables)==0) return(list(models=all_models, flags = flags, phens = phens, transform_y = transform_y, db=db))
       ord = order(unlist(lapply(variables, length)),decreasing=T)
@@ -409,7 +414,7 @@ datasEnv<-R6Class("datasEnv", public = list(
        nme_ = paste(names(vars2),collapse=";")
        models1 = all_models[[nme_]]
        if(is.null(models1)){
-        models1 = self$makeModels( vars2, var_transf,inds,phens,func_str,flags)
+        models1 = self$makeModels( vars2, var_transf,inds,phens,transform_y,flags)
         for(k in 1:length(models1)){
           mod1 =   all_models[[names(models1)[[k]]]]
           if(is.null(mod1)){
@@ -441,7 +446,7 @@ datasEnv<-R6Class("datasEnv", public = list(
           if(is.null(models2)){
             models2 = self$makeModels( vars2, var_transf,inds#[p_i]
                                        ,phens#[which(names(phens) %in% p_nme)]
-                                       ,func_str,flags)
+                                       ,transform_y,flags)
             for(k in 1:length(models2)){
               all_models[[names(models2)[[k]]]] = models2[[k]]#[[p_nme]]#[[p_nme]]
                      
@@ -450,7 +455,7 @@ datasEnv<-R6Class("datasEnv", public = list(
             subinds= inds[which(is.na(match(names(inds), names(all_models[[nme_]]))))]
             if(length(subinds)>0){ ## missing inds
               models3 = self$makeModels( vars2, var_transf,subinds,phens#[which(names(phens) %in% p_nme)]
-                                         ,func_str, flags)
+                                         ,transform_y, flags)
               for(nme1_ in names(models3)){
                 for(r_i in names(models3[[nme1_]])){
                   all_models[[nme1_]][[r_i]] = models3[[nme1_]][[r_i]]
@@ -470,7 +475,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     #combined_models
    all_models_
   },
-  makeModels=function(vars2, var_transf,inds, phens,func_str1, flags){
+  makeModels=function(vars2, var_transf,inds, phens,transform_y, flags){
     datas=self$datas
 #    print(inds)
     logpthresh= log(.readFlag(flags,"pthresh",1e-3))
@@ -479,6 +484,7 @@ datasEnv<-R6Class("datasEnv", public = list(
     train_nme = .readFlag(flags,'train', names(datas)[1])
     if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
     verbose=.readFlag(flags,"verbose",FALSE)
+    if(!is.null(flags[['useglm']])) stop("define useglmnet not useglm")
     useglm=.readFlag(flags,"useglmnet",TRUE)
   #  print(paste("useglm", useglm))
     #k = .readFlag(flags, 'rep',length(datas[[1]]$train))
@@ -491,7 +497,10 @@ datasEnv<-R6Class("datasEnv", public = list(
         mods1 = lapply(inds1, function(k){
          # print(k)
             lapply(datas[names(datas) %in% train_nme], function(d){
-              mods = d$makeModels(phens1, vars2,var_transf,k,logpthresh = logpthresh,project=project, func_str1 = func_str1,useglm=useglmnet, useoffset=useoffset)
+              mods = d$makeModels(phens1, vars2,var_transf,k,logpthresh = logpthresh,project=project,
+                                  transform_y = transform_y,
+                                  flags=flags,
+                                  useglm=useglm, useoffset=useoffset)
           
             })
           #})
@@ -622,11 +631,9 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     if(typeof(transform_y)=="character"){
       transform_y = list(x=transform_y)
     }
-    
     sigDB = self$getSigDB(db,user=user)
     if(!is.null(sigDB) ){
       vars_all = sigDB$loadVars(flags, phens1, transform_y = transform_y)
-    
       if(!is.null(vars_all)) return(vars_all)
       vars_all$db=db
     }
@@ -637,6 +644,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     project=.readFlag(flags,"project",T)
     useoffset=.readFlag(flags,"useoffset",T)
     topn = .readFlag(flags,'topn', 20)
+    useglm = .readFlag(flags,'useglmnet',T)
     onlyAll = .readFlag(flags,'only_all',F)
     train_nme = .readFlag(flags,'train', names(datas1))
     train_nme = train_nme[train_nme %in% names(datas1)]
@@ -655,7 +663,6 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     nreps = 1:nreps1
     names(nreps) = nreps
     beam = .readFlag(flags,"beam",1)
-    funcst1 =lapply(transform_y, function(xx) xx[1])
     stop_y = .readFlag(flags, 'stop_y',"rand")
     stop_random=F
    # funcst = transform_y[[1]]
@@ -672,10 +679,11 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
       #invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, phens,incls_all))); ### update training object
      # res2=  lapply(phens_index, function(p_index){
         if(verbose) print(paste(k,length(nreps)))
-       
+        Wall0 =lapply(phens1, function(f) matrix(nrow=0,ncol=0)) 
 #        invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, subphens,incls_all))); ### update training object
         if(FALSE) cat(p_index); cat("\t");
-        vars_l =list(lapply(train_nme,function(xx) stateObj$new(phens1, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all = NULL)))
+      
+        vars_l =list(lapply(train_nme,function(xx) stateObj$new(phens1, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all =Wall0)))
         #vars_l1 = vars_l[[1]]
         for(incl in incls){
           if(verbose) print(incl)
@@ -686,6 +694,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
           angles_all = lapply(vars_l, function(vars_l1){
             nxt_vars1 =  tryCatch({
               varnames = vars_l1[[1]]$var_names; type = self$type
+             
             angles=lapply(train_nme, function(data_nme) {
               #print(data_nme); 
               datas1[[data_nme]]$getAngles1(phens1,varnames,incl=incl,k=k, type=type)
@@ -693,15 +702,18 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
             cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl(var_thresh[[data_nme]],incl, g_incl,qq)) ### fix 
              comb_=.combineAngles(angles,cols_incl,incl,topn=topn, onlyAll = onlyAll)
              nme_comb = names(comb_); names(nme_comb) = nme_comb
+             Wall = vars_l1[[1]]$W_all
             res_inner=lapply(nme_comb, function(nme_c1){
                #print(nme_c1)
+             transform_y1= transform_y[[nme_c1]]
                 comb = comb_[[nme_c1]]
                 if(nrow(comb)==0) return(NULL)
                 num_pvals1 = min(num_pvals, nrow(comb))
                 inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
                 nxt_vars = lapply(inds1p, function(ik){
                    b_i_name = c(comb$data_type[[ik]], comb$names[[ik]])
-                   nv = .getPvsAll(phens1,datas1[names(datas1) %in% train_nme], vars_l1, b_i_name,k, funcst1[[nme_c1]], project = project, useoffset=useoffset)
+                   nv = .getPvsAll(phens1,datas1[names(datas1) %in% train_nme], vars_l1, b_i_name,k, transform_y1, Wall,project = project, 
+                                   useoffset=useoffset)
                   attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){
                      unlist(nv1$pvs)
                    })))
@@ -725,7 +737,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
             nxt_vars1
             
           })
-          nme_func = names(funcst1); names(nme_func)=nme_func
+          nme_func = names(transform_y); names(nme_func)=nme_func
           angles_all2=lapply(nme_func, function(xx){
             angles_all_ = lapply(angles_all, function(angles_all1){
               angles_all1[[xx]]

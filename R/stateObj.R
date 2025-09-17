@@ -101,9 +101,14 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         self$var = vars
                         self$var_names = c(prev_i$var_names, list(b_i_name))
                         self$varnames=c(prev_i$varnames, varnames)
+                        self$betas_proj=lapply(betas_new, function(b_n){
+                          as.matrix(data.frame(b_n))
+                        })
+                        if(FALSE){
                         beta_nme = names(betas_new)
                         names(self$var) = names(self$var_names)
                         nme_betas_new = names(betas_new); names(nme_betas_new) = nme_betas_new
+                       
                         self$betas_proj=lapply(nme_betas_new, function(b_n){
                           b_n1 = betas_new[[b_n]]
                           if(family[[b_n]]=="multinomial"){
@@ -128,7 +133,8 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                           rbind(bet_n, b_n1)
                          
                         })
-                        self$betas=self$betas_proj  ## now these are the same
+                        }
+                        #self$betas=self$betas_proj  ## now these are the same
                         
 #                          self$betas=lapply(self$betas_proj, function(bp){
  #                           b2 = self$W_all %*% bp
@@ -136,7 +142,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                       }
                     },
                   setOffset=function(){
-                    nme_betas_new = names(self$betas)
+                    nme_betas_new = names(self$betas_proj)
                     #b_n= nme_betas_new[[1]]
                     for(b_n in nme_betas_new){
                       offset =self$mean_x%*%  self$betas[[b_n]]
@@ -148,15 +154,21 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                    #    bp = self$betas_proj[[b_n]]
                    #    W_all_new %*% bp
                    #  })
+##simplifies and translates into original space
                   simplify=function(transf){
-                  
+                    nmebp= names(self$betas_proj); names(nmebp)=nmebp
+                    self$betas=lapply(nmebp, function(bp){
+                      self$W_all[[bp]] %*% self$betas_proj[[bp]]
+                    })
+                    self$setOffset() 
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj,
                          mean_x = self$mean_x,tbls = self$tbls,
                          transf=transf,
+                     #    W_all = self$W_all,
                          var_names = self$var_names) #, pvs = self$pvs_proj)
                   },
-                  updateConst=function(phensi,ypred, data,  k, transform_func, useglm=F, verbose=F,update=F
+                  updateConst=function(phensi,ypred, data,  transform_func, useglm=F, verbose=F,update=F
                                        ){
                     #if(length(phensi)>1) stop("!!")
                     family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
