@@ -639,7 +639,7 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, Wall,transform_func,convert=T, b
   names(nmesi) = nmesi
   #nme=nmesi[[1]]
   res = lapply(nmesi, function(nme){
-  #  print(nme)
+    #print(nme)
     phensi1 =  match(nme, names(self$y))
     family=getOption("fspls.family",self$family[phensi1])
     phensi_=subphens[[nme]]
@@ -962,14 +962,11 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1, transform_fu
   ncoly = ncol(ys)
   betas = apply(ys,2,function(v1) list())# apply(train$y,2, function(v1) list())
   tbls =  apply(ys,2, function(v1) list())
-  #Walls =  apply(ys,2, function(v1) list())
-  
   constants = apply(ys,2, function(v1) list())
   pvs =  apply(ys,2, function(v1) list())
   j = length(vars1)
   non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(T,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
   x_ =self$extractData(vars1, adjust=T)
-  
   UDV = data$UDVP ## should check it corresponds to prev_i
   Wall2 = UDV$getWall(x_[,ncol(x_)], Wall1) ## updated projection
   x1_ = x_[,ncol(x_), drop=F]
@@ -988,8 +985,6 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1, transform_fu
          # cbind(x_[,1:ncol(x_)-1], x1)
         }
   }
-#  cor(x_[,1],x1_[,1])
-  #mean_x = apply(x_,2,mean, na.rm=T)
   if(length(which(duplicated(colnames(x_)))>0)){
     print(vars1);
     stop("problem")
@@ -1192,11 +1187,11 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1, transform_fu
      
       if(useoffset){ #project){
        ##betas[[kk]] = if(family=="multinomial") Wall1 %*% beta_new1 else   (Wall1 %*% beta_new1)[,1]
-        betas[[kk]] = rbind(betas1 * beta_new1[1], beta_new1[2])
+        betas[[kk]] = rbind(betas1[,kk,drop=F] * beta_new1[1], beta_new1[2])
       }else{
         betas[[kk]] = beta_new1
       }
-      pv1 = .calcPvalue(x_[nonNAk ,,drop=F] ,y, betas[[kk]], yp1,w, family,Wall2)
+       pv1 = .calcPvalue(x_[nonNAk ,,drop=F] ,y, betas[[kk]], yp1,w, family,Wall2)
     pvs[[kk]] = pv1
       constants[[kk]] = const_term  #-mean_adj*beta_new1
   }
@@ -1275,7 +1270,7 @@ makeModels=function(phens1, vars2,var_transf, k,
  # func_str = lapply(transform_y, function(xx) xx[[1]]) #func_strs[[nme_v_all]]
 #  inv_func_str = 
   names(family)=family
-  Wall = lapply(family, function(f) matrix(nrow=0,ncol=0))
+  Wall = lapply(subphens, function(f) matrix(nrow=0,ncol=0))
   transform_y1=transform_y[[var_transf[[1]]]]
   prev_i = self$makeNextModel(NULL,b_i_name,subphens,k, Wall,transform_y1,
                               family, ypred=ypred, project=project, useglm=F, logpthresh =logpthresh,useoffset=useoffset)
@@ -1317,7 +1312,7 @@ makeModels=function(phens1, vars2,var_transf, k,
     Wall = prev_i1$W_all
   
     jk = jk+1
-    print(paste(jk,nrow(Wall[[1]])))
+   # print(paste(jk,nrow(Wall[[1]])))
   }
   ## next we need to adjust projection and set offset
   models = models[1:length(nmes)]

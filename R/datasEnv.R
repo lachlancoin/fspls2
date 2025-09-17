@@ -20,23 +20,16 @@
 }
 .getPvsAll<-function(subphens,datas1, vars_l1, b_i_name,k,transform_y1, 
                      Wall =lapply(subphens, function(f) matrix(nrow=0,ncol=0)),
+                     useglm=F ,
                      project=T, useoffset=T){
-  useglm=F ## dont need glmnet for getting pvalues
+  ## dont need glmnet for getting pvalues
   nmesd = names(datas1); names(nmesd)=nmesd
   pvs_all= lapply(nmesd, function(nmed){
     d = datas1[[nmed]]
     prev_i = vars_l1[[nmed]]
     family = strsplit(names(subphens)[[1]],"\\.")[[1]][1]
     if(family=="multinomial") useoffset=F
-    #prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k,Wall,transform_y1,
-    #                             family, ypred=ypred, project=project, useglm=useglm, logpthresh =logpthresh,useoffset=useoffset)
-    
-    
     prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, Wall,transform_y1,family, ypred=NULL, project=project, useglm=useglm, logpthresh =0, useoffset=useoffset)
-  #  if(inherits(prev_i1,"try-error")) {
-    #  print(paste("problem", nmed))
-   #   return(NULL)
-  #  }
      prev_i1
   })
   pvs_all = pvs_all[unlist(lapply(pvs_all, length))>0]
@@ -713,6 +706,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
                 nxt_vars = lapply(inds1p, function(ik){
                    b_i_name = c(comb$data_type[[ik]], comb$names[[ik]])
                    nv = .getPvsAll(phens1,datas1[names(datas1) %in% train_nme], vars_l1, b_i_name,k, transform_y1, Wall,project = project, 
+                                   useglm=useglm,
                                    useoffset=useoffset)
                   attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){
                      unlist(nv1$pvs)

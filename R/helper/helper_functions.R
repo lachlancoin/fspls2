@@ -135,7 +135,7 @@ length(unique(eval1$`data:family`))
   })
   ggps
 }
-.randomize<-function(y){
+randomize<-function(y){
   y[sample.int(length(y))]
 }
 
