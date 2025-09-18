@@ -643,6 +643,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     train_nme = train_nme[train_nme %in% names(datas1)]
     quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
     genes_incls=fromJSON(.readFlag(flags,"genes_incls",'{"all":["all"]}')) #,getOption("genes_incls",NULL)
+    if(!is.list(genes_incls)) stop("genes incls should be list")
     if(length(train_nme)==0) train_nme = names(datas1)[[1]]
     names(train_nme) = train_nme
     maxsize=.readFlag(flags,'max',50)
@@ -664,7 +665,8 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     var_thresh = lapply(train_nme, function(data_nme){
       lapply(datas1[[data_nme]]$vars, function(v) quantile(v, quantiles))
     })
-     #k=1; g_incl  = genes_incls[[1]]; qq =1; incl = incls[[1]]; data_nme = train_nme[[1]]
+    Wall0 =lapply(phens1, function(f) matrix(nrow=0,ncol=0)) 
+     #k=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];
      variables=lapply(nreps, function(k){
       if(verbose) print(paste("cv",k,"of",length(nreps)))
       jj1=0
@@ -672,7 +674,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
       #invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, phens,incls_all))); ### update training object
      # res2=  lapply(phens_index, function(p_index){
         if(verbose) print(paste(k,length(nreps)))
-        Wall0 =lapply(phens1, function(f) matrix(nrow=0,ncol=0)) 
+       
 #        invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, subphens,incls_all))); ### update training object
         if(FALSE) cat(p_index); cat("\t");
       

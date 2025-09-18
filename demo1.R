@@ -122,6 +122,7 @@ write_xlsx(model_weights,outw)
 #ggps = .plotEval1(eval, rename=F, len=1)
 eval1 = .calcEval1(eval)
  ggps2=.plotEval1(eval1,  grid0="pheno", showranges=T, scales="fixed", sep="cv_full", grid1="")
+ ggps2
 ggps2$`CV=avg`
 #for multinomial or ordinal
 #ggps = .plotEval1(eval, rename=T,grid="cv~subpheno", sep="pheno", txtsize=1,len=0)

@@ -51,7 +51,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                    pvs="list",
                    sumPv="numeric",
                     initialize = function(phensi,data,
-                                          betas_new, 
+                                          betas_proj, 
                                           constants_proj,
                                           tbls,
                                          k, #mean_y,
@@ -101,16 +101,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         self$var = vars
                         self$var_names = c(prev_i$var_names, list(b_i_name))
                         self$varnames=c(prev_i$varnames, varnames)
-                        if(family=="multinomial"){
-                          self$betas_proj=lapply(betas_new, function(b_n){
-                            if(is.matrix(b_n[[1]])) return(b_n[[1]])
-                            dw = t(as.matrix(data.frame(b_n)))
-                          })
-                        }else{
-                          self$betas_proj=lapply(betas_new, function(b_n){
-                            as.matrix(data.frame(b_n))
-                          })
-                        }
+                        self$betas_proj=betas_proj
                         if(FALSE){
                         beta_nme = names(betas_new)
                         names(self$var) = names(self$var_names)

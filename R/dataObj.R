@@ -637,7 +637,7 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, Wall,transform_func,convert=T, b
   }
   nmesi = names(subphens)
   names(nmesi) = nmesi
-  #nme=nmesi[[1]]
+ #nme=nmesi[[1]]
   res = lapply(nmesi, function(nme){
     #print(nme)
     phensi1 =  match(nme, names(self$y))
@@ -672,7 +672,6 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, transform_func, s
   vars1 = c(prev_var,list(b_i))
   data$updateUDVP(prev_var)
   
-  Wall1 =self$UDVP$getWall(x_[,ncol(x_)], Wall)
   #train = data$train
   ys =self$y[[nme]]##  if(family %in% c("binomial","ordinal")) (d$y1) else if(family =="multinomial") d$y2 else d$y
   if(family=="multinomial"){
@@ -712,6 +711,8 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, transform_func, s
   x_ = x1- mean_adj
     }
   UDV = data$UDVP ## should check it corresponds to prev_i
+  Wall1 =self$UDVP$getWall(x_[,ncol(x_)], Wall)
+  
   if(!is.null(UDV$VDU)){
     if(!is.null(UDV$P2)) {
       x_ = UDV$P2 %*% x_
@@ -1388,7 +1389,18 @@ checkRMSV=function(subphens, prev_i1, ypred,transform_y1, nonNA,verbose=F, usegl
      # return(NULL)
     #  }
     tbls = if(family[[1]]=="multinomial") b_new_proj$tbls[[1]]  else b_new_proj$tbls
-    prev_i1=stateObj$new(subphens,data, betas_new,constants_proj, tbls, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = Wall2,pvs =pvs, useoffset=useoffset)
+    
+    if(family[[1]]=="multinomial"){
+      betas_proj=lapply(betas_new, function(b_n){
+        if(is.matrix(b_n[[1]])) return(b_n[[1]])
+        dw = t(as.matrix(data.frame(b_n)))
+      })
+    }else{
+      betas_proj=lapply(betas_new, function(b_n){
+        as.matrix(data.frame(b_n))
+      })
+    }
+    prev_i1=stateObj$new(subphens,data, betas_proj,constants_proj, tbls, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, W_all = Wall2,pvs =pvs, useoffset=useoffset)
   #  prev_i1$setOffset() 
     if(is.null(prev_i)) return(prev_i1)
     #prev_i1$setOffset()
