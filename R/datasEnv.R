@@ -492,7 +492,7 @@ datasEnv<-R6Class("datasEnv", public = list(
             lapply(datas[names(datas) %in% train_nme], function(d){
               mods = d$makeModels(phens1, vars2,var_transf,k,logpthresh = logpthresh,project=project,
                                   transform_y = transform_y,
-                                  flags=flags,
+                                  flags=flags,checkRMSV=F,
                                   useglm=useglm, useoffset=useoffset)
           
             })

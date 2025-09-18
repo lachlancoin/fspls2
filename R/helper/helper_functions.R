@@ -142,7 +142,7 @@ randomize<-function(y){
 .getRandomFuncs<-function(n, include_inverse=T){ ## although these are same, every invocation will give different results
   if(n==0) return(list())
   inds = 1:n
-  str="function(y) .randomize(y)"
+  str="function(y) randomize(y)"
   names(inds)=paste0("rand",inds);
   lapply(inds, function(i){
     if(!include_inverse) return(str)

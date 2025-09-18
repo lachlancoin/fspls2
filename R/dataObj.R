@@ -1354,6 +1354,7 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
 },
 checkRMSV=function(subphens, prev_i1, ypred,transform_y1, nonNA,verbose=F, useglm=T){
   inv_funcst = transform_y1[[2]]
+  data=self
   inv_func = eval(str2lang(inv_funcst))
     ypred$updateYP(data, prev_i1, nonNA, inv_func=inv_func,flip=FALSE, liab=F)
     if(verbose){
