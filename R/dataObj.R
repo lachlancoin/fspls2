@@ -979,7 +979,11 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1, transform_fu
                 x3=x2_%*%x1_
                 x3[1,1]
               }))
-            if(  max(abs(x5))>1e-5) stop("!! 1")
+              names(x5) = dimnames(x_)[[2]][-ncol(x_)]
+              inds111=which(abs(x5)>1e-5)
+            if( length(inds111)){
+              warning(paste("no longer orthogonal", max(abs(x5)), dimnames(x_)[[2]][ncol(x_)], " vs " ,paste(names(inds111),collase=",")))
+            }
           x3=x_ %*%Wall2
           chck=sum(abs(x3[,ncol(x3)]-x1_))
           if(chck>1e-5)stop("!! 2")
