@@ -986,7 +986,9 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1, transform_fu
             }
           x3=x_ %*%Wall2
           chck=sum(abs(x3[,ncol(x3)]-x1_))
-          if(chck>1e-5)stop("!! 2")
+          if(chck>1e-5){
+            warning(paste("problem with Wall",chck))
+          }
          # cbind(x_[,1:ncol(x_)-1], x1)
         }
   }

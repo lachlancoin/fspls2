@@ -138,6 +138,18 @@ length(unique(eval1$`data:family`))
 randomize<-function(y){
   y[sample.int(length(y))]
 }
+.calcAverageAccuracy<-function(comb){
+  comb1=unite(comb,comb,experiment_id, cv_full, measure,sep="__");
+  comb1_lev = unique(comb1$comb); names(comb1_lev) = comb1_lev
+  medians=.merge1_new(lapply(comb1_lev, function(x){
+    aa= subset(comb1, comb==x)
+    data.frame(list(mid=median(aa$mid,na.rm=T), comb=x))
+  }))
+  medians = medians %>% separate(comb,c("experiment_id","cv_full","measure"), sep="__")
+  medians=medians[order(medians$cv_full),]
+  print(medians)
+  subset(medians, cv_full=="CV=avg")
+}
 
 .getRandomFuncs<-function(n, include_inverse=T){ ## although these are same, every invocation will give different results
   if(n==0) return(list())
