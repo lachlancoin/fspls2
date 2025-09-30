@@ -23,7 +23,7 @@
 }
 
 .avg<-function(eval0){
-  nme_cols1 = c("data","subpheno","measure","pheno","trainedOn","transform_y","pheno_group","numvars","cv","family")
+  nme_cols1 = c("data","subpheno","measure","pheno","trainedOn","pheno_group","numvars","cv","family")
   rem_cols = names(eval0)[!(names(eval0) %in% nme_cols1)]
   nme_cols2 = c(nme_cols1, rem_cols)
   mi = match(nme_cols2, names(eval0))
@@ -35,7 +35,7 @@ length(unique(eval1$`data:family`))
 }
 
 .calcEval1<-function(eval0, rename=T, len = 3){ #c("trainedOn","measure","subpheno")
-  eval0_1 = unite(eval0, "cohort_measure_pheno_trained", "data","subpheno","measure","pheno","trainedOn","transform_y",remove=F)
+  eval0_1 = unite(eval0, "cohort_measure_pheno_trained", "data","subpheno","measure","pheno","trainedOn",remove=F)
   eval0_avg = subset(eval0_1, model=="avg") %>% tibble::add_column("fullmodel"="avg")
   eval =  subset(eval0_1, model!="avg")
   if(rename)eval=.renameModels(eval, len=len)
@@ -135,8 +135,18 @@ length(unique(eval1$`data:family`))
   })
   ggps
 }
-randomize<-function(y){
-  y[sample.int(length(y))]
+randomize<-function(y,seed){
+  set.seed(seed)
+  inds=sample.int(length(y))
+ # print(inds)
+  y1 = y[inds]
+  y1
+}
+invrandomize<-function(y1,seed){  ## inverse randomises for the same seed
+  set.seed(seed)
+  inds = sample.int(length(y1))
+  #print(inds)
+  y1[ match(1:length(y1),inds)]
 }
 .calcAverageAccuracy<-function(comb){
   comb1=unite(comb,comb,experiment_id, cv_full, measure,sep="__");
@@ -153,15 +163,35 @@ randomize<-function(y){
 
 .getRandomFuncs<-function(n, include_inverse=T){ ## although these are same, every invocation will give different results
   if(n==0) return(list())
-  inds = 1:n
-  str="function(y) randomize(y)"
-  names(inds)=paste0("rand",inds);
-  lapply(inds, function(i){
-    if(!include_inverse) return(str)
-    c(str,str)
+ inds = sample.int(1000,n, replace=T)
+ names(inds) = inds
+  r3=lapply(inds, function(i){
+    str="function(y) randomize(y,seed)"
+    str1="function(y) invrandomize(y,seed)"
+    
+    res1 = c(gsub("seed",i,str),gsub("seed",i,str1))
+    if(!include_inverse) return (res1[[1]])
+    res1
   })
+  names(r3) = paste0("rand",names(r3))
+  r3
 }
-
+.checkInverse<-function(t_y1,  xx = -10:10 ){
+#  func0 = lapply(transform_y, function(t_y) eval(str2lang(t_y[[1]])))  ## should be inverse
+  #func1 = lapply(transform_y, function(t_y) eval(str2lang(t_y[[2]])))  ## should be inverse
+  y_1 = t_y1[[1]](xx)
+  y_2 = t_y1[[2]](y_1)
+  m1=cbind(y_2,xx)
+  #m1 = cbind(t_y[[2]](t_y[[1]](xx)), xx)
+  
+  diffs = apply(m1,1,diff)
+  if(max(abs(diffs), na.rm=T)>1e-7){
+    print(t_y)
+    print(m1)
+ stop("not inverse")
+  }
+ # print("ok")
+}
 getYTransform<-function(pows = c(1), n_random=0, incl = list()){
   c(.getTransformFuncs(pows, include_inverse=T),.getRandomFuncs(n_random,include_inverse=T),incl)
 }
@@ -858,7 +888,7 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
 
 .takeAvg<-function(eval1){
   #does not deal with subpheno if different
-  nme_cols = c("cv_full","measure","numvars","data","cv","isfull","experiment_id","fullmodel","model","transform_y","transf","subpheno")
+  nme_cols = c("cv_full","measure","numvars","data","cv","isfull","experiment_id","fullmodel","model","transf","subpheno")
   ev2=pivot_wider(eval1,
                   id_cols =nme_cols ,
                   names_from="pheno", values_from="mid")

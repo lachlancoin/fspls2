@@ -17,7 +17,7 @@ trainObj<-R6Class("trainObj",
                     family="character",
                     looc_incl = "vector",
                     products="list",
-                    func_str="character",
+                    transforms="list",
                     phens1 = "list",
                     incl="list",
                     subphens ="list",
@@ -25,19 +25,19 @@ trainObj<-R6Class("trainObj",
                   #  func_str = "character",
                   #  ifuncs="list",
                     
-                    initialize = function(y, looc, incl, funcst,family=names(y)
+                    initialize = function(y, looc, incl, transforms,family=names(y)
                                           ){  #y is a list of sparse matrices
-                      if(length(names(funcst))==0) stop("no names on transform")
+                      if(length(names(transforms))==0) stop("no names on transform")
                       
                     #  types_ =     getOption("fspls.types", fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC"}'))
                       self$family=family
-                      self$func_str = lapply(funcst, function(xx) xx[[1]])
+                      self$transforms = transforms
                       self$means_y = list()
                       self$looc_incl=looc$incl
                       self$y1=y
                       self$yTr =
                         lapply(self$y1,function(y11){
-                          lapply(funcst, function(f_k){
+                          lapply(transforms, function(f_k){
                             y12 = t(y11)
                           })
                           })
@@ -45,13 +45,16 @@ trainObj<-R6Class("trainObj",
                       self$incl = incl
                       
                     },
+                    diffTransforms=function(transforms){
+                      toJSON(names(transforms))!= toJSON(names(self$transforms))
+                    },
                     product=function(ik,ii, phensi1){ #  self$train$products[[ik]][[ii]][phensi1,,drop=F]  #[,self$cols_incl[[ik]],drop=F]
                      lapply(self$products[[ik]][[ii]], function(p1){
                       p1[match( names(phensi1),dimnames(p1)[[1]]),,drop=F]
                      })
                     },
                     transform=function(weights, k,  phens1){
-                       funcst=self$func_str
+                       funcst=self$transforms
                      # func_str1 = paste("function(x)",func_str)
                       y1 = self$y1
                       looc_incl_k_ij = self$looc_incl[,k]
@@ -62,17 +65,20 @@ trainObj<-R6Class("trainObj",
                        ncols=ncol(y1[[colk]])
                        inds_to_do_1 = which(dimnames(y1[[colk]])[[2]] %in% phens1[[colk1]])
                        for(f_k in 1:length(funcst)){
-                          funcs =  eval(str2lang(funcst[[f_k]]))
+                          funcs =  funcst[[f_k]][[1]] #eval(str2lang(funcst[[f_k]]))
                           meansy = rep(0, ncols)
                           for(j in inds_to_do_1){
                              v = funcs(y1[[colk]][,j])
                              nonNA1 = !is.na(v) & looc_incl_k_ij
+                             if(length(which(is.na(v)))> 0.3 *length(v)) warning(paste(" more than 30% NA in transformation", toJSON(funcs)))
                              d_w = weights[nonNA1]
                              meansy[[j]] = (v[nonNA1]%*% d_w)/sum(d_w) 
                              self$yTr[[colk]][[f_k]][j,] = weights*(v  - meansy[j]) #y[,j]  - mean_y[j]
                                 if(length(which(!nonNA1))>0){
                                   self$yTr[[colk]][[f_k]][j,!nonNA1] =0  
                                 }
+                             vars1 = apply(self$yTr[[colk]][[f_k]][j,,drop=F],1,var)
+                             if(min(vars1)==0) stop(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs)))
                              }
                         
                     #    print(meansy)
@@ -108,10 +114,7 @@ trainObj<-R6Class("trainObj",
                       self$phens1 = phens1
                         ycols = which(names(self$y1) %in% names(phens1))
                      
-                        funcst=self$func_str
-                      #  if(!is.na(k)){
-                      #   if(k[1]==self$k[1])  return(NULL)
-                      #  }
+                        funcst=self$transforms
                         self$k = k
                           # no need to update
                       #phensi = ycols

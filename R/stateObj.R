@@ -153,7 +153,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                    #    W_all_new %*% bp
                    #  })
 ##simplifies and translates into original space
-                  simplify=function(transf){
+                  simplify=function(){
                     nmebp= names(self$betas_proj); names(nmebp)=nmebp
                     self$betas=lapply(nmebp, function(bp){
                       self$W_all[[bp]] %*% self$betas_proj[[bp]]
@@ -162,11 +162,10 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj,
                          mean_x = self$mean_x,tbls = self$tbls,
-                         transf=transf,
                      #    W_all = self$W_all,
                          var_names = self$var_names) #, pvs = self$pvs_proj)
                   },
-                  updateConst=function(phensi,ypred, data,  transform_func, useglm=F, verbose=F,update=F
+                  updateConst=function(phensi,ypred, data,  useglm=F, verbose=F,update=F
                                        ){
                     #if(length(phensi)>1) stop("!!")
                     family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
@@ -181,7 +180,6 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     kk = names(phensi)[[kk1]]
                     phensi1 = phensi[[kk1]]
                     y=  if(family[[kk]]=="multinomial")   attr(data$y[[kk]],"factor")[na_k] else data$y[[kk]][na_k,,drop=F]
-                    y = transform_func(y)
                     yp1 =ypred$ypreds[[kk1]][na_k,,drop=F]
                     if(family[[kk]]=="multinomial"){
                         levs = levels(y)# c(0,1:length(self$betas[[k]]))

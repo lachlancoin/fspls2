@@ -82,6 +82,7 @@ liability<-function(xM){ ## use with glmnet output
                               liab=T,
                               vars1 = prev_kj$var,
                               betas =  prev_kj$betas,
+                              transforms = NULL,
                               # levs = names(prev_kj$tbls[[kk]]),
                               constants= prev_kj$constants_proj[[kk]]){
   #  if(getOption("fspls.DRS",F)){
@@ -95,7 +96,7 @@ liability<-function(xM){ ## use with glmnet output
 #    return (yp)
   }
   beta1 = betas[[kk]]
-  incl1 = unlist(lapply(vars1, length))==2
+  incl1 = unlist(lapply(vars1, length))>1
   df1 = as.matrix(data.frame(vars1[incl1]))
   beta1 = beta1[incl1,,drop=F]
   
@@ -105,7 +106,8 @@ liability<-function(xM){ ## use with glmnet output
       inds_11 = which(df1[1,]==ki)
       if(length(inds_11)>0){
         ##CHECK IF CORRECT
-        d2 =data[[ki]][ind_1,df1[2,inds_11], drop=F]
+#        d2 =data[[ki]][ind_1,df1[2,inds_11], drop=F]
+        d2 = .extract1(data[[ki]],ind_1, df1, inds_11 ,transforms)
         #print(beta1)
         extra=d2%*%  beta1[inds_11,,drop=F]
         yp = yp + extra
@@ -126,6 +128,7 @@ liability<-function(xM){ ## use with glmnet output
 .calcYpred_ord<-function(prev_kj, data, ind_1,levs,
                          kk=1,
                          liab=T,
+                         transforms = NULL,
                          betas1=prev_kj$betas[[kk]],
                          const =prev_kj$constants_proj[[kk]][[1]]){
   #  if(getOption("fspls.DRS",F)){
@@ -147,7 +150,7 @@ liability<-function(xM){ ## use with glmnet output
   # print(prev_kj$constants_proj)
   #if(!is.null(numvar))vars1 = vars1[1:numvar]
   #  const = prev_kj$const[[i]][[ycol]]
-  incl1 = unlist(lapply(vars1, length))==2
+  incl1 = unlist(lapply(vars1, length))>1
   df1 = as.matrix(data.frame(vars1[incl1]))
   betas1 = betas1[incl1,,drop=F]
   
@@ -156,7 +159,8 @@ liability<-function(xM){ ## use with glmnet output
       inds_11 = which(df1[1,]==ki)
       if(length(inds_11)>0){
         ##CHECK IF CORRECT
-        yp = yp + data[[ki]][ind_1,df1[2,inds_11], drop=F]%*% betas1[inds_11,,drop=F]
+        d2 = .extract1(data[[ki]],ind_1, df1, inds_11 ,transforms)
+        yp = yp + d2%*% betas1[inds_11,,drop=F] # d2 = .extract1(data1[[kj]],ind_1, df1, inds_11 ,transforms)
       }
     }
     #  yp = yp+ unlist(prev_kj$constants_proj)
@@ -174,6 +178,7 @@ liability<-function(xM){ ## use with glmnet output
 .calcYpred_binomial<-function(prev_kj, data, ind_1,
                                kk=1,kk1="",
                               liab=T,
+                              transforms = NULL,
                               betas1 = prev_kj$betas[[kk1]],
                               constants= prev_kj$constants_proj[[kk1]]){
   #  if(getOption("fspls.DRS",F)){
@@ -202,7 +207,7 @@ liability<-function(xM){ ## use with glmnet output
   
   
   
-  incl1 = unlist(lapply(vars1, length))==2
+  incl1 = unlist(lapply(vars1, length))>1
   df1 = as.matrix(data.frame(vars1[incl1]))
   betas1 = betas1[incl1,,drop=F]
   
@@ -217,8 +222,8 @@ liability<-function(xM){ ## use with glmnet output
       inds_11 = which(df1[1,]==ki)
       if(length(inds_11)>0){
         ##CHECK IF CORRECT
-        d2 =data[[ki]][ind_1,df1[2,inds_11], drop=F]
-        
+        #d2 =data[[ki]][ind_1,df1[2,inds_11], drop=F]
+        d2 = .extract1(data[[ki]],ind_1, df1, inds_11 ,transforms)
         #d2 =t( t(data[[ki]][ind_1,df1[2,inds_11], drop=F]) - prev_kj$mean_x[inds_11])
         yp = yp + d2%*% betas1[inds_11,,drop=F]
       }
@@ -231,9 +236,20 @@ liability<-function(xM){ ## use with glmnet output
   .logistic(yp)
 }
 
+.extract1<-function(data2,ind_1, df1, inds_11, transforms){
+  d2 = data2[ind_1,df1[2,inds_11], drop=F]
+  if(!is.null(transforms)){
+    tr = transforms[df1[3,inds_11]]
+    for(jkk in 1:ncol(d2)){
+      d2[,jkk] = tr[[jkk]][[1]](d2[,jkk])
+    }
+  }
+  d2
+}
 .calcYpred_1<-function(prev_i1, data1, ind_1,
                        kk=1,kk1="",
                        betas1 = prev_kj$betas[[kk1]],
+                       transforms = NULL,
                        constants= prev_i1$constants_proj[[kk]]
                        #constants= unlist(prev_kj$constants_proj)
 ){
@@ -253,7 +269,7 @@ liability<-function(xM){ ## use with glmnet output
  
 #  yp = .rep(constants+y1_off[1,1], length(which(ind_1)))
   
-  incl1 = unlist(lapply(vars1, length))==2
+  incl1 = unlist(lapply(vars1, length))>1
   df1 = as.matrix(data.frame(vars1[incl1]))
   betas1 = betas1[incl1,,drop=F]
 
@@ -264,10 +280,8 @@ liability<-function(xM){ ## use with glmnet output
     #  yp =  betas1[inds_11,,drop=F]*meanx%*%
       #print(meanx)
       if(length(inds_11)>0){
-        d2 = data1[[kj]][ind_1,df1[2,inds_11], drop=F]
-        #d2 = t(t(d1) - meanx[inds_11])
-        #d2=d1
-      #  print(apply(d2,2,mean))
+        d2 = .extract1(data1[[kj]],ind_1, df1, inds_11 ,transforms)
+        
         prod=d2%*% betas1[inds_11,,drop=F]
         yp = yp + prod
       }
@@ -600,8 +614,8 @@ ypredObj<-R6Class("ypredObj", public = list(
 #  within=(k2==self$nreps())
 #  ypred$updateYP(data, prev, nonNA, !within)  
 #},
-
-updateYP=function(d,full_model,  nonNA,inv_func=NULL, flip=T, ignore.na=F, liab=T){
+## use inv_transform on y  
+updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, liab=T){
   prev_i1=full_model
   ypred = self
   prev_kj = prev_i1 
@@ -609,6 +623,12 @@ updateYP=function(d,full_model,  nonNA,inv_func=NULL, flip=T, ignore.na=F, liab=
   prev_kj$var = lapply(prev_kj$var_names, d$convert)  ## this would not be threadsafe
   na_x = if(ignore.na) rep(F, self$nrow) else d$getNA(prev_kj$var)
   #kk1 = names(phensi)[[1]]
+  inv_func = NULL
+  len = length(prev_kj$var)
+  if(inv_transform_y && len>0){
+    t_i=prev_kj$var[[len]][[3]]
+    inv_func =  d$transforms[[t_i]][[2]]
+  }
   for(kk1 in names(phensi)){ #} 1:length( ypred$ypreds)){
     kk = phensi[[kk1]]
     if(is.null(nonNA)){
@@ -629,12 +649,14 @@ updateYP=function(d,full_model,  nonNA,inv_func=NULL, flip=T, ignore.na=F, liab=
 },
 
 #calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, kk)
+# if inv_func is NULL we should forward transform the x otherwise we transform y
   calcYpred=function(prev_kj, d, ind_1,  kk1, kk,na_x,  inv_func,family = self$family[[kk]],liab=T){  ## kk1 in model space 
     data =  d$data
+    transforms = if(is.null(inv_func)) d$transforms else NULL
     #      ypred$ypreds[[kk]]$calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, self$family[[kk]])
     if(family=="multinomial"){
       levs = dimnames( self$ypreds[[kk1]])[[2]]
-      ab=.calcYpred_multinom(prev_kj,  data, ind_1, levs, kk=kk1, liab=liab)  ## for multi-prediction
+      ab=.calcYpred_multinom(prev_kj,  data, ind_1, levs, transforms=transforms, kk=kk1, liab=liab)  ## for multi-prediction
       #mi22 = match(dimnames( self$ypreds[[kk1]])[[2]], levs)
       mi22 = match(dimnames( self$ypreds[[kk1]])[[2]], dimnames(ab)[[2]])
       
@@ -656,6 +678,7 @@ updateYP=function(d,full_model,  nonNA,inv_func=NULL, flip=T, ignore.na=F, liab=
         levs1 = 0:length(constk)
          ab= .calcYpred_ord(prev_kj,  data, ind_1, levs = levs1,
                                                 betas1 = betas1,
+                                          transforms=transforms, 
                                                  kk=kk_1, const = constk, liab=liab)  ## for multi-prediction
        
         self$ypreds[[kk1]][ind_1,] =  ab
@@ -666,6 +689,7 @@ updateYP=function(d,full_model,  nonNA,inv_func=NULL, flip=T, ignore.na=F, liab=
      # for(kk_1 in 1:length(kk)){
         ab =   .calcYpred_binomial(prev_kj,  data, ind_1, kk1 = kk1,
                                                     kk=kk_1, 
+                                   transforms=transforms, 
                                      betas1 = prev_kj$betas[[kk1]],
                                    constants = constants, liab=liab)  ## for multi-prediction
         self$ypreds[[kk1]][ind_1,] =ab
@@ -679,6 +703,7 @@ updateYP=function(d,full_model,  nonNA,inv_func=NULL, flip=T, ignore.na=F, liab=
  #     for(kk_1 in 1:length(kk)){
         ab = .calcYpred_1(prev_kj,  data, ind_1,kk=kk_1, kk1 = kk1,
                           betas1 = prev_kj$betas[[kk1]],
+                          transforms = transforms,
                           constants=constants) 
         if(!is.null(inv_func)){
           ab=apply(ab,2,inv_func)
