@@ -40,18 +40,16 @@ path="~/github/FSPLS-publication-repo/input"
 print(dir(path,full=T,rec=T))
 
 
-flags = list(pthresh = 5e-2, nrep=5,batch=0, max=50,topn=100,beam=1,all_v_all=T, one_v_rest=F)
-t_x=getXTransform(seq(-.2,2,by=.4))
-t_x=getXTransform(seq(-.2,2,by=.6))
-
-flags[['transform']] =toJSON(t_x)#  '{"x" :"function(x) x", "log":"function(x) log1p(x)"}'
-
+flags = list(pthresh = 0.2, nrep=10,batch=0, max=50,topn=100,beam=2,all_v_all=F, one_v_rest=F,x_transform=T)
 #flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)", "x3":"function(x) x^3","1x":"function(x) 1/x"}'
 #flags[['transform']] = '{"x" :"function(x) x","log" :"function(x) log1p(x)"}'
 #flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)"}'
-
+flags$transform_y = toJSON(getYTransform(pows = seq(0.2,2.0,by=0.4) ,offset=0.1, n_random=10,norm=10))
 
 #flags[['transform']] = '{"x" :"function(x) x"}'
+
+#flags[['transform']] =toJSON(getXTransform(c(seq(-1,-0.2,by=0.2),seq(0.1,0.9,by=.1), seq(1,2,by=.5))))#  '{"x" :"function(x) x", "log":"function(x) log1p(x)"}'
+
 
 rawl = .readRawlinsonData(filenames=list(golub = 'coin_data/coin_multiclass_data.prepd.Rds'), path= path)
 rawl = .readRawlinsonData(filenames=list(golub = 'ng_data/ng_counts.prepd.Rds'), path= path)
@@ -65,36 +63,28 @@ rds = readRDS("/home/unimelb.edu.au/lcoin/github/FSPLS-publication-repo/output/a
 vars = apply(rawl$golub$dataset$rna,2,var)
 rawl$golub$dataset$rna = rawl$golub$dataset$rna[,vars>quantile(vars)[1]] ## remove low variance cols
 datasAll =datasEnv$new(rawl,flags=flags) 
-#datasAll$update(flags)
-#datasAll$dims()
+datasAll$updateTransforms( toJSON(getYTransform(pows = seq(1) ,expX=T,n_random=10,norm=10)))
 
 phens=datasAll$pheno(sep=F)
-phens = phens[1]
+#apply(datasAll$datas$golub$y$multinomial.y,2,sum)
+phens = phens[[1]]
 #phens$all$binomial.multiway = phens$all$binomial.multiway[2]
 ## FIND VARIABLES
-transform_y=getYTransform(n_random=1)
+#transform_y=getYTransform(n_random=10)
 
-vars_all = datasAll$select(phens$all, flags,transform_y,verbose=T)
-.extractFullVars(vars_all)$variables
+vars_all = datasAll$select(phens, flags,verbose=T)
+vars_all1=.extractFullVars(vars_all)
+
 ## FIT MODELS
 options("fspls.verbose1"=T); options("fspls.CHECK"=F)
-all_models = datasAll$makeAllModels(vars_all)
-eval = datasAll$evaluateAllModels(all_models)
+all_models = datasAll$makeAllModels(vars_all, phens, flags)
+eval = datasAll$evaluateAllModels(all_models, phens, flags)
 ##PLOT
-eval1 = .calcEval1(eval, rename=F)
-ggps = .plotEval1(eval1, legend=T, showrange=F)
-#for multinomial or ordinal
-#ggps = .plotEval1(eval, rename=F,grid="subpheno~cv", sep="pheno",sep=)
-ggps
+ggps1=.plotEval2(eval,legend=T, grid1="subpheno", grid0="measure",
+                 shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
+                 scales="free",title =names(phens)[1], title1="pheno" ) 
 
-ggps=.plotEval1(eval1,grid0="pheno", grid1="",showranges=T, scales="free",sep="cv_full");
-#ggps=.plotEval1(eval1,grid0="pheno", showranges=T, scales="free",sep="pheno")
-
-
-ggps=.plotEval1(eval1,  grid0="pheno",grid1="", showranges=T, scales="free", sep="cv_full")
-
-
-ggps
+ggps1
 ##VISUALISE PREDICTIONS
 predictions0 =datasAll$extractPredictions(all_models,phens, flags, CV = F, liab=F);
 

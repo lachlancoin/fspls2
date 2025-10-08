@@ -679,6 +679,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
         if(FALSE) cat(p_index); cat("\t");
       
         vars_l =list(lapply(train_nme,function(xx) stateObj$new(phens, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all =Wall0)))
+      names(vars_l) = "empty"
       #vars_l1 = vars_l[[1]]
         for(incl in incls){
          if(verbose) print(incl)
@@ -752,62 +753,39 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
             stop_random=T;
             next;
           }
-          nme_func = names(self$datas[[1]]$transforms); names(nme_func)=nme_func
-          angles_all2=lapply(nme_func, function(xx){
-            angles_all_ = lapply(angles_all, function(angles_all1){
-              angles_all1[[xx]]
-            })
-            angles_all_ = angles_all_[unlist(lapply(angles_all_,length))>0]
-            angles_all1 = unlist(angles_all_, rec=F)
-            ord = order(unlist(lapply(angles_all1, function(nv)attr(nv,"cumpv"))))
-            logpv1 = attr(angles_all1[[ord[1]]],"cumpv")
-            #print(logpv)
-           # if(logpv<=logpvthresh || length(vars_l[[1]][[1]]$var) < minsize){
-              vars_l_nxt = angles_all1[ord][1:beam]
-            #}
-            
-            list(vars_l = vars_l_nxt, logpv = logpv1)
-          })
-          logpvs=unlist(lapply(angles_all2, function(xx) xx$logpv))
-        
-          if(length(func_ind)>0 && !.readFlag(flags,"x_transform",F)){ ## if we start with one y transform we need to continue, unless random or transform on x
-            avail = rep(F, length(logpvs)); names(avail) = names(logpvs)
-            first_func_name = names(func_ind)[[1]]
-            avail[grep(stop_y, names(angles_all2))]=T
-            avail[names(angles_all2)==first_func_name]=T
-          }else{
-            avail = rep(T, length(logpvs)); names(avail) = names(logpvs)
+          
+          ang1 = unlist(unlist(angles_all, rec=F),rec=F)
+          logpvs = unlist(lapply(ang1, function(a1)attr(a1,"cumpv")))
+          ord = order(logpvs)
+          ang1 = ang1[ord]
+          logpvs = logpvs[ord]
+          if(!.readFlag(flags,"x_transform",F)){
+            if(length(func_ind)>0 ){
+              finds = unlist(lapply(ang1, function(a1)a1[[1]]$var[[1]][3]))
+              ang1 = ang1[finds==func_ind[[1]]]
+            }else{
+              func_ind = c(func_ind,ang1[[1]][[1]]$var[[1]][3])
+            }
           }
-         min_ind=which(logpvs==min(logpvs[avail]))
-         pow1_ind = grep("^pow1$", names(min_ind))
-         if(length(pow1_ind)>0) min_ind = min_ind[pow1_ind]
-         min_ind = min_ind[1]
-          logpv =min(logpvs)
           if(!is.null(stop_y)){
-            stop_random = length(grep(stop_y,names(angles_all2)[min_ind]))>0
+            stop_ind = grep(stop_y,names(ang1))
+            stop_random = min(stop_ind)==1
           }
           gp1=grep(stop_y, names(logpvs))
           gp=grep(stop_y, names(logpvs), inv=T)
-          print(c( min(logpvs[gp1]),sort(logpvs[gp])))
+          print(c( min(logpvs[gp1]),head(sort(logpvs[gp]))))
           if(stop_random){
-           
-            
-            print(c(exp(logpvs[gp]), min(exp(logpvs[gp1]))))
             print(paste("stopping due to random", exp(logpv)))
           }
+          logpv =min(logpvs)
+         
           #logpv<=logpvthresh || length(vars_l[[1]][[1]]$var) < minsize 
           if((!stop_random && logpv<=logpvthresh) || length(vars_l[[1]][[1]]$var)<minsize  ){
-            func_ind = c(func_ind,min_ind)
-            
-            vars_l =lapply(angles_all2[[min_ind]]$vars_l , function(aa){
-              aa$transf = names(angles_all2)[[min_ind]]
-              aa
-            })
-            
+            vars_l = ang1[1:min(length(ang1),beam)]
           }
           if(verbose){
             print(names(vars_l))
-            print(paste("logpv",nme_func[min_ind],logpv,jj1))
+            print(paste("logpv",logpv,jj1))
             jj1 = jj1+1
           }
           #angles_all = angles_all[unlist(lapply(angles_all,length))>0]

@@ -657,7 +657,7 @@ updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, li
                      family = self$family[[kk]],liab=T,x_transform = F){  ## kk1 in model space 
     transforms = d$getTransforms(prev_kj$var,inv_transform = x_transform )
     x_ = d$extractData(prev_kj$var, adjust=F, inv_transform=F)
-    ab=.eval1_(x_, prev_kj$betas_proj[[kk1]], prev_kj$Wall[[kk1]], transforms, family, mean_x = prev_kj$mean_x)
+    ab=.eval1_(x_[ind_1,,drop=F], prev_kj$betas_proj[[kk1]], prev_kj$Wall[[kk1]], transforms, family, mean_x = prev_kj$mean_x)
     ab = as.matrix(ab)
     constants = prev_kj$constants_proj[[kk1]]
    # transforms = if(is.null(inv_func)) d$transforms else NULL
@@ -665,8 +665,9 @@ updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, li
     if(family=="multinomial"){
       
       levs = names(prev_kj$tbls[[kk1]][kk])
-      if(is.null(dim(ab))) ab = matrix(0, ncol=length(levs), nrow = length(ab))
+      if(is.null(dim(ab)) ) ab = matrix(1, ncol=length(levs), nrow = length(which(ind_1)))
       dimnames(ab)[[2]] = levs
+      if(max(abs(ab))==0) ab =ab+1
       attr(ab, "levs") =levs
       #print(yp)
       if(liab) ab=liability(ab)

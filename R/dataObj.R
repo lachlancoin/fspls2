@@ -16,11 +16,11 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
 }
 #  xt = matrix(nrow =nrow(x_), ncol = length(beta_new2) )
   #print(beta_new2)
+  if(is.null(dim(beta_new2))) beta_new2 =as.matrix(beta_new2, nrow = ncol(x_), ncol = 1)
+  
   if(ncol(x_)==0){
-    yp1 = rep(0,nrow(x_))
+    yp1 = matrix(0,nrow(x_), ncol(beta_new2))
   }else{
-    if(is.null(dim(beta_new2))) beta_new2 =as.matrix(beta_new2, nrow = ncol(x_), ncol = 1)
-    
     t2 = transf[[1]](x_[,1,drop=F]) %*% Wall2[1,1,drop=F] 
     yp1 = t2 %*% beta_new2[1,,drop=F]
     #yp1 = data.frame(apply(beta_new2,2,function(xx) as.matrix(xx[[1]]*t2)))
@@ -1737,7 +1737,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
   if(length(all_models_y)==0) return(NULL)
   nmes_models = names(all_models_y[[1]][[1]]) #[[1]]);
   names(nmes_models) = nmes_models
-  numvar = numvars[[2]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+  #numvar = numvars[[1]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){

@@ -219,13 +219,22 @@ invrandomize<-function(y1,seed){  ## inverse randomises for the same seed
   invisible(m1)
  # print("ok")
 }
-getYTransform<-function(pows = c(1),offset=1, n_random=0,norm=1000, incl = list()){
-  c(.getTransformFuncs(pows, include_inverse=T, norm = norm, offset=offset),.getRandomFuncs(n_random,include_inverse=T),incl)
+getYTransform<-function(pows = c(1),offset=1, n_random=0,norm=1000, expX =F, logX=F, incl = list()){
+  funcs = c(.getTransformFuncs(pows, include_inverse=T, norm = norm, offset=offset),.getRandomFuncs(n_random,include_inverse=T),incl)
+  if(expX)funcs = c(funcs, getExpFunc(rev=F, offset=offset))
+  if(logX)funcs = c(funcs, getExpFunc(rev=T, offset=offset))
+  funcs
 }
 getXTransform<-function(pows= c(1),offset=1e-10){
   .getTransformFuncs(pows, offset=offset, include_inverse=F)
 }
 
+getExpFunc<-function(rev=F,offset=0.1){  
+  res = list(exp = c(paste0("function(y) log(y+",offset,")"),
+                     paste0("function(x) exp(x)-",offset)))
+  if(rev) res[[1]] = rev(res[[1]])
+  res
+}
 #.getRandomFuncs(3)
 #c(list(x=c("function(y) y","function(y) y")), random_funcs)
 
