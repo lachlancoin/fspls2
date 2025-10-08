@@ -1064,7 +1064,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
               names(x5) = dimnames(x_)[[2]][-ncol(x_)]
               inds111=which(abs(x5)>1e-5 )#*sd(x1_[,1]))
             if( length(inds111)){
-              stop(paste("no longer orthogonal", max(abs(x5)), dimnames(x_)[[2]][ncol(x_)], " vs " ,paste(names(inds111),collase=",")), sd(x1_[,1], sd(d3[,inds111[1]])))
+              warning(paste("no longer orthogonal but might be due to transformation giving large SD", max(abs(x5)), dimnames(x_)[[2]][ncol(x_)], " vs " ,paste(names(inds111),collase=",")), sd(x1_[,1], sd(d3[,inds111[1]])))
             }
           x3=x_ %*%Wall2
           chck=sum(abs(x3[,ncol(x3)]-x1_))

@@ -773,6 +773,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
           }
           gp1=grep(stop_y, names(logpvs))
           gp=grep(stop_y, names(logpvs), inv=T)
+          print("HERE")
           print(c( min(logpvs[gp1]),head(sort(logpvs[gp]))))
           if(stop_random){
             print(paste("stopping due to random", exp(logpv)))
@@ -781,6 +782,8 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
          
           #logpv<=logpvthresh || length(vars_l[[1]][[1]]$var) < minsize 
           if((!stop_random && logpv<=logpvthresh) || length(vars_l[[1]][[1]]$var)<minsize  ){
+            dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1[[1]]$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
+            ang1 = ang1[!duplicated(dupls)]
             vars_l = ang1[1:min(length(ang1),beam)]
           }
           if(verbose){
