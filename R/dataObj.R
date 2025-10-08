@@ -1,5 +1,50 @@
 default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC"}')
 
+## assumes Wall1 is upper diagonal
+## uses data with mean subtracted
+## does not add any constant term
+.eval1_<-function(x_, beta_new2, Wall2, transf, family,mean_x = apply(x_,2, mean,na.rm=T), CHECK=F){ 
+  x_ = t(t(x_) - mean_x)
+  #if(TRUE){
+  #  yp_new = (x_ %*% Wall2) %*% beta_new2
+  #  return(yp_new)
+  #}
+ # if(!is.matrix(x_1)) print(typeof(x_1))
+  #if(!is.matrix(x_1)) x_1 = matrix(x_1, nrow=length(x_1), ncol=1)
+  if(ncol(Wall2) > 1){
+    if( max(abs(Wall2[lower.tri(Wall2)]))>0) stop("!!")
+}
+#  xt = matrix(nrow =nrow(x_), ncol = length(beta_new2) )
+  #print(beta_new2)
+  if(ncol(x_)==0){
+    yp1 = rep(0,nrow(x_))
+  }else{
+    if(is.null(dim(beta_new2))) beta_new2 =as.matrix(beta_new2, nrow = ncol(x_), ncol = 1)
+    
+    t2 = transf[[1]](x_[,1,drop=F]) %*% Wall2[1,1,drop=F] 
+    yp1 = t2 %*% beta_new2[1,,drop=F]
+    #yp1 = data.frame(apply(beta_new2,2,function(xx) as.matrix(xx[[1]]*t2)))
+  }
+  if(ncol(x_)>1){
+    for(jj in 2:ncol(x_)){
+      t2 = transf[[jj]](x_[,1:jj] %*% Wall2[1:jj,jj,drop=F]) 
+      yp2 = t2 %*% beta_new2[jj,,drop=F]
+      #yp2 = data.frame(apply(beta_new2,2,function(xx) as.matrix(xx[[jj]]*t2)))
+      yp1 =yp1 + yp2
+    }
+  }
+  # if(is.matrix(x) || typeof(x)=="S4"){
+  if(CHECK){
+     yp_new = (x_ %*% Wall2) %*% beta_new2
+     print(head(cbind(yp1,yp_new)))
+  }
+#}else{
+#  yp_new =   as.matrix((x %*% Wall2) %*% beta_new1, ncol=1)
+#  yp1 = matrix(yp1, ncol=1, nrow= nrow(yp_new))
+#}
+#  yp1 =  if(family=="multinomial")  (x_[,-ncol(x_),drop=F ] %*%  Wall1) %*% betas1  else (x_[,-ncol(x_),drop=F ] %*%  Wall1) %*% betas1 [,kk,drop=F]
+ yp1 
+}
 .getZetaBinary<-function(x,y, w){
   levsy =sort(unique(y[!is.na(y)]))
   yn = .mkBinary(y)
@@ -32,17 +77,13 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
   yn[y>thresh]=1
   yn
 }
-.calcPvalue<-function(x,y, beta_new1, yp1,w, family, Wall2){   ## this seems to not work anymore for multinomial
+.calcPvalue<-function(x_,y, beta_new2, yp1,w, family, Wall2, transf){   ## this seems to not work anymore for multinomial
   #print(dim(Wall2))
   #print(Wall2)
   #print(beta_new1)
   if(length(which(!is.na(y)))==0) return (0)
-  if(is.matrix(x) || typeof(x)=="S4"){
-    yp_new = (x %*% Wall2) %*% beta_new1
-  }else{
-    yp_new = as.matrix((x %*% Wall2) %*% beta_new1, ncol=1)
-    yp1 = matrix(yp1, ncol=1, nrow= nrow(yp_new))
-  }
+  yp_new = .eval1_(x_, beta_new2, Wall2, transf, family)
+ 
   if(family=="multinomial"){
     m1 = multinom_ridge(yp1,y,w)
     m2 = multinom_ridge(yp_new,y,w)
@@ -215,7 +256,7 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
     df[order(df$score),]
   })
 }
-.combineAngles<-function(angles,cols_incl, incl,onlyAll=F, topn=100){
+.combineAngles<-function(angles,cols_incl, incl,onlyAll=F, topn=100, excl = list()){
   names(incl)=incl
   nme_trans = names(angles[[1]][[1]][[1]]); names(nme_trans) = nme_trans
   comb_all1=lapply(nme_trans, function(nme_t1){
@@ -232,6 +273,10 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
             for(jk in 1:length(ang1)){
               cs = cs+colSums(ang1[[jk]][[nme_t1]])
             }
+          }
+          excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1))]
+          if(length(excl1)>0){
+          col_incl[which(names(col_incl) %in% unlist(lapply(excl1, function(ex) ex[2])))]=F
           }
           cs[col_incl]
         })
@@ -639,7 +684,9 @@ mult = grep("multinomial",names(phens))
   }
 },
 ####does regression just on orthogonal component
-calcBetaProj1=function(subphens,k,b_i,prev_var, Wall,convert=T, betas = list(), strict=F,project=F,  useglm=getOption("glmnet",T), useoffset=F){
+calcBetaProj1=function(subphens,k,b_i,prev_var, Wall,convert=T, betas = list(), strict=F,project=F, 
+                       inv_transform=getOption("x_transform",F),
+                       useglm=getOption("glmnet",T), useoffset=F){
   if(convert){
     b_i = self$convert(b_i)
     if(length(b_i)<2) {
@@ -661,9 +708,9 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, Wall,convert=T, betas = list(), 
     Wall1 = Wall[[nme]]
     if(family=="multinomial") useoffset=F
     if(!is.null(betas1) && length(prev_var)>0 ){
-      res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, prev_var, Wall1,betas1,project=project, strict=strict,useglm=useglm, useoffset=useoffset)
+      res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, prev_var, Wall1,betas1,project=project, strict=strict,useglm=useglm, useoffset=useoffset, inv_transform=inv_transform)
     }else{
-      res1 = self$calcBetaProj(nme,phensi_,family,  k, b_i, prev_var, Wall1,strict=strict, useglm=useglm)
+      res1 = self$calcBetaProj(nme,phensi_,family,  k, b_i, prev_var, Wall1,strict=strict, useglm=useglm, inv_transform = inv_transform)
     }
     res1
   })
@@ -675,17 +722,28 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, Wall,convert=T, betas = list(), 
   })
   res1
 },
-
-calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F, useglm=getOption("glmnet",T)){
+getTransforms=function(vars1, inv_transform=T){
+  transf = list(self$default_transform)
+  if(length(vars1)>0){
+    transf = lapply(vars1, function(v1) {
+      if(length(v1)==0 || !inv_transform) self$default_transform else self$transforms[[v1[[3]]]][[2]]
+    })
+  }
+},
+calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F, 
+                      inv_transform = getOption("x_transform",F),
+                      useglm=getOption("glmnet",T)){
   #b_i = b_i1
+  if(length(prev_var)>0) stop("problem")
   data = self
   train = data$train
   d = train
   # print(family)fcalz
   nonNA = self$looc$incl[,k]
   vars1 = c(prev_var,list(b_i))
-  data$updateUDVP(prev_var, inv_transform=getOption("x_transform",F))
-  
+  data$updateUDVP(prev_var)
+  transf = self$getTransforms(vars1, inv_transform = inv_transform)
+ 
   #train = data$train
   ys =self$y[[nme]]##  if(family %in% c("binomial","ordinal")) (d$y1) else if(family =="multinomial") d$y2 else d$y
   if(family=="multinomial"){
@@ -719,7 +777,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F, useglm=
   if(length(vars1[[j]])==0){
     x_=rep(1, self$nrow)
     }else{
-      x_ =self$extractData(vars1, adjust=T, inv_transform=getOption("x_transform",F) )
+      x_ =self$extractData(vars1, adjust=T, inv_transform=F)
     }
   UDV = data$UDVP ## should check it corresponds to prev_i
   Wall1 =self$UDVP$getWall(x_[,ncol(x_)], Wall)
@@ -748,12 +806,13 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F, useglm=
   #if(varx<1e-10)stop("variance  too small")
   #k =NULL ##delete this later
   transform_func_y = self$default_transform
-  if(length(b_i)>0 && !getOption("x_transform",F)) {
+  if(length(b_i)>0 && !inv_transform) {
     transform_func_y= self$transforms[[b_i[[3]]]][[1]]
   }
+  .print_verbose("transform_func_y",transform_func_y,1)
   for(kk in 1:ncoly){
     nonNAk = nonNA & non_na_x
-    x = x_[nonNAk ]
+    x = transf[[1]](x_[nonNAk ])
     y = transform_func_y(ys[,kk])[nonNAk]
     w = data$weights[nonNAk]
     beta_new1=0;
@@ -944,7 +1003,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F, useglm=
       ll2 =  logLik(update(m1, ~1))
       pv1 = .lrt(ll1,ll2,length(levels(y)),1, log.p=T)
     }else{
-       pv1 = .calcPvalue(x,y, beta_new1, 1,w, family,Wall1)
+       pv1 = .calcPvalue(matrix(x),y, beta_new1, matrix(rep(1, length(x))),w, family,Wall1, transf)
     }
     pvs[[kk]] = pv1
     constants[[kk]] = const_term  #-mean_adj*beta_new1
@@ -958,10 +1017,12 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F, useglm=
  #   Wall1 = UDVP1$getWall(x_[,kkj+1], Wall1)
 #  }
 #},
+
 ##project variable controls whether the projection of the variable is fitted, or the variable itself
 ## Wall1 is projection from previous
 calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, project=F, strict=F, 
                          CHECK=getOption("fspls.check",T),
+                         inv_transform=getOption("x_transform",F),
                          useoffset = F,useglm=getOption("glmnet",T)){
   data = self 
   if(!useoffset) project=F
@@ -983,14 +1044,17 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
   pvs =  apply(ys,2, function(v1) list())
   j = length(vars1)
   non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(T,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
-  x_ =self$extractData(vars1, adjust=T, inv_transform=getOption("x_transform",F) )
+  x_ =self$extractData(vars1, adjust=T, inv_transform=F )
+  transf = self$getTransforms(vars1,inv_transform = inv_transform) #lapply(vars1, function(v1) self$transforms[[v1[[3]]]][[2]])
   UDV = data$UDVP ## should check it corresponds to prev_i
   Wall2 = UDV$getWall(x_[,ncol(x_)], Wall1) ## updated projection
   x1_ = x_[,ncol(x_), drop=F]
+  transf1 = transf[[ncol(x_)]]
   if(useoffset && project){
         x1_ = x1_ - UDV$P %*% (UDV$VDU %*% x1_)
         if(CHECK){ ##THIS DEMONSTRATE ORTHOGONALITY
-             d3 = self$extractData(UDV$var, adjust=T, inv_transform=getOption("x_transform",F))
+             d3 = self$extractData(UDV$var, adjust=T, inv_transform=F)
+          #   var_x1 = var(x1_[,1])
               x5=unlist(lapply( 1:length(UDV$var), function(jk){
                 
                 x2_ =d3[,jk] # self$data[[UDV$var[[jk]][1]]][,UDV$var[[jk]][2]]- self$mean__x(UDV$var[[jk]]) # [[UDV$var[[jk]][1]]][UDV$var[[jk]][2]]
@@ -998,9 +1062,9 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
                 x3[1,1]
               }))
               names(x5) = dimnames(x_)[[2]][-ncol(x_)]
-              inds111=which(abs(x5)>1e-5)
+              inds111=which(abs(x5)>1e-5 )#*sd(x1_[,1]))
             if( length(inds111)){
-              stop(paste("no longer orthogonal", max(abs(x5)), dimnames(x_)[[2]][ncol(x_)], " vs " ,paste(names(inds111),collase=",")))
+              stop(paste("no longer orthogonal", max(abs(x5)), dimnames(x_)[[2]][ncol(x_)], " vs " ,paste(names(inds111),collase=",")), sd(x1_[,1], sd(d3[,inds111[1]])))
             }
           x3=x_ %*%Wall2
           chck=sum(abs(x3[,ncol(x3)]-x1_))
@@ -1012,11 +1076,11 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
   }
   if(length(which(duplicated(colnames(x_)))>0)){
     print(vars1);
-    stop("problem")
+    stop("problem .. duplicated colnames")
   }
   non_na_x = apply(x_,1,function(v) length(which(is.na(v))))==0
   transform_func_y = self$default_transform
-  if(!getOption("x_transform",F)){
+  if(!inv_transform){
       transform_func_y =self$transforms[[b_i[[3]]]][[1]]
   }
   for(kk in 1:ncoly){
@@ -1026,10 +1090,12 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
     beta_new1=0;
     const_term=0
    # Wall1 = NULL
-    yp1 =  if(family=="multinomial")  (x_[,-ncol(x_),drop=F ] %*%  Wall1) %*% betas1  else (x_[,-ncol(x_),drop=F ] %*%  Wall1) %*% betas1 [,kk,drop=F]
+    yp1 =  .eval1_(x_[,-ncol(x_),drop=F ],  betas1,Wall1, transf[-ncol(x_)], family)
+      
+    #  if(family=="multinomial")  (x_1 %*%  Wall1) %*% betas1  else (x_[,-ncol(x_),drop=F ] %*%  Wall1) %*% betas1 [,kk,drop=F]
     
     if(useoffset){
-      x = cbind(yp1[nonNAk,], x1_[nonNAk,1])
+      x = cbind(yp1[nonNAk,], transf1(x1_[nonNAk,1]))
       dimnames(x)[[2]] = c(paste0("A",1:(ncol(x)-1)),"x")
       #if(project){ 
     #    UDVP1=UDVPObj$new(self, NULL,yp1) #,check=F, centralise=F)
@@ -1220,21 +1286,20 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
       }else{
         betas[[kk]] = beta_new1
       }
-       pv1 = .calcPvalue(x_[nonNAk ,,drop=F] ,y, betas[[kk]], yp1,w, family,Wall2)
+       pv1 = .calcPvalue(x_[nonNAk ,,drop=F] ,y, betas[[kk]], yp1,w, family,Wall2, transf)
     pvs[[kk]] = pv1
       constants[[kk]] = const_term  #-mean_adj*beta_new1
   }
   list(betas=betas, constants = constants,tbls = tbls, pvs = pvs, Wall = Wall2)
 },
 ##var and W_all1 are from one smaller model
-calcWall=function(b_i, var, W_all1){
-  data = self
- # var = prev_i$var
-  data$updateUDVP(var)
-  UDV = data$UDVP ## should check it corresponds to prev_i
-  x = data$data[[b_i[1]]][, b_i[2]] - data$mean_x[[b_i[1]]][b_i[2]]
-  UDV$getWall(x, W_all1)
-},
+#calcWall=function(b_i, var, W_all1, inv_transform=getOption("x_transform",F)){
+#  data = self
+#  data$updateUDVP(var, inv_transform=inv_transform)
+#  UDV = data$UDVP ## should check it corresponds to prev_i
+#  x = data$data[[b_i[1]]][, b_i[2]] - data$mean_x[[b_i[1]]][b_i[2]]
+#  UDV$getWall(x, W_all1)
+#},
 getConstantsProj=function(phensi){  ##default constants
   data = self
   family =unlist(lapply(names(phensi),function(x) getOption("fspls.family",  strsplit(x,"\\.")[[1]][1])))
@@ -1260,7 +1325,8 @@ mean__x = function(v1){
 #  self$mean_x[[v1[[1]]]][v1[[2]]]
   mean(self$data[[v1[1]]][,v1[2]])
 },
-extractData=function(var, adjust=T,convert=F,inv_transform=getOption("x_transform",F)){
+extractData=function(var, adjust=T,convert=F,inv_transform=F){
+  transforms = self$transforms
   if(convert)var = lapply(var,self$convert)
   Dall = Matrix( 0,nrow = self$nrow, ncol = length(var), dimnames = list(dimnames(self$data[[1]])[[1]], names(var)), sparse=T)
   nme = rep("", length(var))
@@ -1269,10 +1335,15 @@ extractData=function(var, adjust=T,convert=F,inv_transform=getOption("x_transfor
     v1 = var[[jk]]
     Dall[,jk] = self$data[[v1[1]]][,v1[2]];
     t_ind = v1[[3]]
-    nme[[jk]] = paste(names(self$data)[[v1[1]]], dimnames(self$data[[v1[1]]])[[2]][v1[2]], names(transforms)[[t_ind]])
-    if(inv_transform) Dall[,jk] = self$transforms[[t_ind]][[2]](Dall[,jk]) ## applies inverse transform
+    nme[[jk]] = paste(names(self$data)[[v1[1]]], dimnames(self$data[[v1[1]]])[[2]][v1[2]])
+  
+  
     #print(c( mean(Dall[,jk]),self$mean_x[[v1[1]]][v1[2]]))
     if(adjust)Dall[,jk] = Dall[,jk]- mean(Dall[,jk]) #self$mean_x[[v1[1]]][v1[2]]
+    if(inv_transform) {
+      Dall[,jk] = self$transforms[[t_ind]][[2]](Dall[,jk]) ## applies inverse transform
+      nme[[jk]] = paste(nme[[jk]], names(transforms)[[t_ind]])
+    }
   }
   dimnames(Dall)[[2]] = nme
   Dall
@@ -1281,7 +1352,8 @@ extractData=function(var, adjust=T,convert=F,inv_transform=getOption("x_transfor
 #vars2 = vars_all[[1]]$variables[[1]];phens1 = phens[[1]]; k=1; useoffset=T
 makeModels=function(phens1, vars2,k, 
                     project=T,logpthresh = -5,useglm=T,useoffset=T,
-                    flags = list(),checkRMSV=T, verbose=F
+                    flags = list(),checkRMSV=T, verbose=F,
+                    inv_transform=.readFlag(flags,"x_transform",F)
                   ){
   nonNA = self$looc$incl[,k]
   if(is.null(self$looc)){
@@ -1301,29 +1373,28 @@ makeModels=function(phens1, vars2,k,
   if(family[[1]]=="multinomial") useoffset=F
   nme1 = ""
   b_i_name=c()
-#  func_str1=func_str[1]## could think about updating this for new iteration, but for moment stick
-  #transform_func = eval(str2lang(func_str[[1]]))
- # func_str = lapply(transform_y, function(xx) xx[[1]]) #func_strs[[nme_v_all]]
-#  inv_func_str = 
   names(family)=family
   Wall = lapply(subphens, function(f) matrix(nrow=0,ncol=0))
   #transform_y1=transform_y[[var_transf[[1]]]]
  # nme_c1 = var_transf[[1]]
   prev_i = self$makeNextModel(NULL,b_i_name,subphens,k, Wall,
-                              family, ypred=ypred, project=project, useglm=F, logpthresh =logpthresh,useoffset=useoffset)
+                              family, ypred=ypred, project=project, useglm=F, 
+                              inv_transform=.readFlag(flags,"x_transform",F),
+                              logpthresh =logpthresh,useoffset=useoffset)
   models[[1]] = prev_i$simplify()
   nmes[[1]] = "empty"
   jk=1
 
  #Wall = prev_i$W_all
  #rmsv=NULL
- rmsv=if(checkRMSV) self$checkRMSV(subphens,prev_i, ypred, nonNA,verbose=verbose,inv_transform_y=!getOption("x_transform",F)) else NULL
+ rmsv=if(checkRMSV) self$checkRMSV(subphens,prev_i, ypred, nonNA,verbose=verbose,inv_transform_y=!inv_transform) else NULL
   #print(rmsv1)
   while(jk<=len){
     b_i_name = vars2[[jk]]
 #    transform_func=eval(str2lang(func_str1[var_transf[[jk]]]))
    # transform_y1=transform_y[[var_transf[[jk]]]]
     prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k,Wall,
+                                 inv_transform=.readFlag(flags,"x_transform",F),
                                  family, ypred=ypred, project=project, useglm=useglm, logpthresh =logpthresh,useoffset=useoffset)
     if(is.null(prev_i1)) break;
     nme2 = paste(vars2[[jk]], collapse=".")
@@ -1331,7 +1402,7 @@ makeModels=function(phens1, vars2,k,
     nmes[[jk+1]] = nme1
     models[[jk+1]] =prev_i1$simplify()
     if(checkRMSV){
-      rmsv2=self$checkRMSV(subphens,prev_i1, ypred, nonNA, inv_transform_y=!getOption("x_transform",F),verbose=verbose)
+      rmsv2=self$checkRMSV(subphens,prev_i1, ypred, nonNA, inv_transform_y=!inv_transform,verbose=verbose)
       if(!is.null(rmsv)){
       better = .better(rmsv2, rmsv)
     #print(better)
@@ -1400,21 +1471,19 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=!getOption("x
 },
  makeNextModel=function(prev_i, b_i_name, subphens, k,Wall, family, ypred=NULL, project=T, useglm=T,    logpthresh = -5,
                         useoffset=T,
+                        inv_transform = getOption("x_transform", F),
                         CHECK=getOption("fspls.check",F),
                         verbose=getOption("fspls.verbose1",F)) {
    data =self
-  # transform_y1 = self$transforms[[nme_c1]]
-  # transform_func = transform_y1[[1]]
-   #transform_func = eval(str2lang(funcst))
     b_i = if(length(b_i_name)==0) c() else self$convert(b_i_name)
-    #if(is.null(b_i)) return(NULL)
     prev_var = if(is.null(prev_i)) list() else prev_i$var
-    self$updateUDVP(prev_var, inv_transform = getOption("x_transform", F))
+    self$updateUDVP(prev_var)
     #W_all = data$calcWall(b_i, prev_i$var, prev_i$W_all) ## WALL not important, we can get rid of it later
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
     betas = prev_i$betas_proj
   
     b_new_proj = self$calcBetaProj1(subphens,k,b_i,prev_var, Wall, betas = betas, project=project,convert=F,  
+                                    inv_transform=inv_transform,
                                     strict=T, useglm=useglm, useoffset=useoffset) 
     Wall2 = b_new_proj$Wall
    # b_new_proj1 = self$calcBetaProj1(subphens,k,b_i,prev_var,  betas = betas, project=!project,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
@@ -1446,9 +1515,9 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=!getOption("x
     if(is.null(prev_i)) return(prev_i1)
     #prev_i1$setOffset()
     if(FALSE){ ##JUST TO CHECK WHAT GLM VARIABLES  WOULD BE IF WE JUST FIT ALL
-      extractd0 = self$extractData(c(prev_i$var, list(b_i)), adjust=F, inv_transform=getOption("x_transform",F))
+      extractd0 = self$extractData(c(prev_i$var, list(b_i)), adjust=F, inv_transform=inv_transform)
       means_x = apply(extractd0,2,mean)
-      extractd = self$extractData(c(prev_i$var, list(b_i)), adjust=T, inv_transform=getOption("x_transform",F))
+      extractd = self$extractData(c(prev_i$var, list(b_i)), adjust=T, inv_transform=inv_transform)
       subnme = names(subphens)[[1]]
       family = strsplit(subnme,"\\.")[[1]]
       df2 = data.frame(lapply(subphens[[1]], function(colind){
@@ -1582,9 +1651,10 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x 
 },
 
 extractPredictions=function(all_models_,phens1, flags, CV = FALSE,liab=T,
+                            inv_transform=.readFlag(flags, "x_transform",F) ,
                             ypred = self$ypred(phens1)){
   d = self
-  inv_transform_y = !getOption("x_transform",F)
+  inv_transform_y = !inv_transform
   nmesp = names(phens1)
   names(nmesp)= nmesp
   #all_models1_ = all_models_[[1]]
@@ -1667,7 +1737,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
   if(length(all_models_y)==0) return(NULL)
   nmes_models = names(all_models_y[[1]][[1]]) #[[1]]);
   names(nmes_models) = nmes_models
-  #numvar = numvars[[2]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+  numvar = numvars[[2]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
@@ -1770,13 +1840,14 @@ evaluateAllModels=function(all_models_y,phens,flags,
     #   })
     mabv
   },
-  updateUDVP=function(var,inv_transform= getOption("x_transform",F)){
+  updateUDVP=function(var){
+    inv_transform=F
     UDV=self$UDVP
     if(!is.null(UDV) && !is.null(UDV$var)){
       if(length(UDV$var)==0 &&length(var)==0) return(NULL)
       if(length(UDV$var)==length(var) &&  length(which(unlist(UDV$var)!=unlist(var)))==0) return(NULL) ## dont need to update
     }
-    Dall = self$extractData(var, adjust=T, inv_transform=inv_transform)
+    Dall = self$extractData(var, adjust=T,inv_transform=F)
     self$UDVP=UDVPObj$new(self, var,Dall)
   },
 projOut1=function(ik){
@@ -1847,10 +1918,10 @@ getVariance=function(){
     }
   })
 },
-getProjectedData1=function(prev_var, b_i,inv_transform= getOption("x_transform",F)){
+getProjectedData1=function(prev_var, b_i){
   self$updateUDVP(prev_var)
   UDV=self$UDVP
-  D_all = self$extractData(c(prev_var,list(b_i)), adjust=T, inv_transform=inv_transform)
+  D_all = self$extractData(c(prev_var,list(b_i)), adjust=T)
   a= UDV$P %*% UDV$VDU # %*% D_all
   d2=D_all[,ncol(D_all)] - a%*% D_all[,ncol(D_all)]
   d2
@@ -1970,7 +2041,7 @@ getNorm=function(W,var,ik,type){
   }
   return(norm)
 },
-getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
+getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5,inv_transform=getOption("x_transform",F)){
   
   assoc=(type %in% c("assoc","assoc1"))
   W = if(type %in% c("slow","assoc"))self$projOut(ik) else self$projOut1(ik)
@@ -2006,7 +2077,7 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
      }else{
         norm = self$getNorm(W,var, ik, type)
         norm_sel = abs(norm[unlist(lapply(var, function(v) if(v[1]==ik) v[2] else NULL))])
-        if(length(which(norm_sel>var_thresh))>0 && !getOption("x_transform",F)) warning(" not projecting out properly .. possibly due to correlated vars !")
+        if(length(which(norm_sel>var_thresh))>0 && !inv_transform) warning(" not projecting out properly .. possibly due to correlated vars !")
         to_rem = which(norm>-var_thresh)
         P = self$UDVP$P
         angles1 = lapply(names(phensi), function(ii){
@@ -2096,8 +2167,11 @@ getAngleInner=function(phensi,ik,k,var){
 },
 phensi=function(subphens){
   phensi=lapply(names(subphens), function(nme){
+    if(is.null(self$y[[nme]])) stop("subphens is wrong")
     mi2=match(subphens[[nme]], colnames(self$y[[nme]]))
     names(mi2) = subphens[[nme]]
+    na_ind= which(is.na(mi2))
+    if(length(na_ind)>0) stop("should not have NA")
     mi2
   })
   names(phensi) = names(subphens)
@@ -2113,7 +2187,7 @@ getAngles1=function(subphens,varnames,incl=names(self$data), k=1,type="slow1"){
 },
   getAngles=function(phensi, var,incl=names(self$data), k=1,type="slow1"){  ## type can be fast, slow, assoc, slow1 .. fast gives wrong results
     run_separate=T
-     self$updateUDVP(var, inv_transform=getOption("x_transform",F))
+     self$updateUDVP(var)
     ntrans=attr(self$data,"ntrans") 
     if(is.null(ntrans)) ntrans=1
     #d = self$train
@@ -2128,7 +2202,7 @@ getAngles1=function(subphens,varnames,incl=names(self$data), k=1,type="slow1"){
           angles_d[[ik]] = self$getAngleInner(phensi,ik,k,var)
         }else{
           angles_d[[ik]] =  tryCatch({
-            self$getAngleInnerOld(phensi,ik, k,var,type)
+            self$getAngleInnerOld(phensi,ik, k,var,type, inv_transform=inv_transform)
           },error=function(errw){
             print(errw)
             NULL
@@ -2246,6 +2320,8 @@ updateTrain=function(phens,flags, verbose=F){ ## this updates the reps and train
   incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
   if(length(incls) == 0 )incls = list("all"=names(self$data))
   incls_all = unique(unlist(incls))
+  
+  
   if(length(self$train)!=nrep  ||  is.null(self$train[[1]]) || self$train[[1]]$diffTransforms(transforms)){ # || toJSON(self$train[[1]]$func_str)!=toJSON(transform_y)){
     self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$looc , incls_all, transforms,family=self$family)) #lapply(1:ncol,function(k)
   }
@@ -2312,7 +2388,7 @@ randomise=function(n= nrow(self$y[[1]]),
   }
 },
   
-cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #incl, g_incl,qq
+cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1, excl = list()){ #incl, g_incl,qq
   norm = self$norm
  names(incl) = incl
  useall = length(g_incl)==1 & g_incl[[1]]=="all"
@@ -2326,6 +2402,8 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #i
       if(!is.null(g_incl) && length(g_incl)>0 && !useall){
         var_res = var_res & (names(norm1) %in% g_incl)
       }
+      excl1 = excl[unlist(lapply(excl, function(e1)e1[[1]]==norm_nme))]
+      var_res = var_res[!(names(var_res) %in% unlist( lapply(excl1, function(e1) e1[[2]])))]
       var_res
   })
 },
@@ -2470,6 +2548,14 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1){ #i
     self$norms_list = lapply(self$norm, function(n) list())
     
   },
+updateTransforms=function(transform_y){
+  transform_y1 = fromJSON(transform_y)
+  self$transforms = lapply(transform_y1, function(t_y){
+    t_y1 =  lapply(t_y, function(t_y1) eval(str2lang(t_y1)))
+    .checkInverse(t_y1)
+    t_y1
+  })
+},
   initialize=function( cohort, 
                        transform_y=list(x=c("function(y) y","function(y) y")),
                       incl_full=T,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores

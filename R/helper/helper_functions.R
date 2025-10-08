@@ -21,7 +21,12 @@
     attr(eval,"translate")=models2
     eval
 }
-
+.print_verbose<-function(txt,str,lev){
+  if(lev<=getOption("fspls.verbose",0)) {
+    print(paste(txt,"::"))
+    print(str)
+  }
+}
 .avg<-function(eval0){
   nme_cols1 = c("data","subpheno","measure","pheno","trainedOn","pheno_group","numvars","cv","family")
   rem_cols = names(eval0)[!(names(eval0) %in% nme_cols1)]
@@ -64,8 +69,20 @@ length(unique(eval1$`data:family`))
 .modify<-function(eval3, shape_color,
                   shape_color_nme ){
   if(!(shape_color_nme %in% names(eval3))){
-      eval3 = eval3 %>% tibble::add_column(shape_color_nme = apply(eval3[,names(eval3) %in% shape_color,drop=F],1,paste, collapse=" "))
-        names(eval3) = gsub("shape_color_nme", shape_color_nme, names(eval3))
+    eval3_sub=eval3[,names(eval3) %in% shape_color,drop=F]
+    for(jk in 1:length(eval3_sub)) eval3_sub[[jk]]=factor(eval3_sub[[jk]])
+    levs1 = lapply(eval3_sub, function(vv) levels(vv))
+    levs_all = levs1[[1]]
+    if(length(levs1)>1){
+      for(jk in 2:length(levs1)){
+      levs_all = unlist(lapply(levs1[[jk]], function(levs11) paste(levs_all, levs11)))
+      }
+    }
+      eval4 = eval3 %>% tibble::add_column(shape_color_nme = apply(eval3_sub,1,paste, collapse=" "))
+      
+      eval4[['shape_color_nme']]=factor(eval4[['shape_color_nme']], levels = levs_all)
+        names(eval4) = gsub("shape_color_nme", shape_color_nme, names(eval4))
+        return(eval4)
   }
   eval3
 }
@@ -95,6 +112,10 @@ length(unique(eval1$`data:family`))
   grid1_nme = paste(grid1,collapse="_");
   shape_color_nme = paste(shape_color,collapse="_")
   sep_by_nme = "sep_by"
+  subphens = table(eval3$subpheno)
+  subphens = subphens[order(as.numeric(unlist(lapply(names(subphens), function(str)strsplit(str,"\\|")[[1]][1]))))]
+  eval3$subpheno = factor(eval3$subpheno, levels = names(subphens))
+  eval3$measure = factor(eval3$measure)
   eval3 = .modify(eval3, shape_color, shape_color_nme)
   eval3 = .modify(eval3, linetype, linetype_nme)
   eval3 = .modify(eval3, sep_by, sep_by_nme)
@@ -106,9 +127,8 @@ length(unique(eval1$`data:family`))
   names(phenos)=phenos
   
   
-  subphens = table(eval2$subpheno)
-  subphens = subphens[order(as.numeric(unlist(lapply(names(subphens), function(str)strsplit(str,"\\|")[[1]][1]))))]
-  eval2$subpheno = factor(eval2$subpheno, levels = names(subphens))
+  
+ 
   eval2$numvars = as.numeric(eval2$numvars)
 # eval2$isfull = (eval2$isfull+1)/2.0
   ggps=lapply(phenos, function(ph){ 
@@ -176,24 +196,31 @@ invrandomize<-function(y1,seed){  ## inverse randomises for the same seed
   names(r3) = paste0("rand",names(r3))
   r3
 }
+.checkInverse1<-function(funcstr, xx=-10:10){
+  t_y1 = lapply(funcstr, function(funcstr1) eval(str2lang(funcstr1)))
+  ab = .checkInverse(t_y1, xx)
+  head(ab)
+  plot(ab[,1:2])
+}
 .checkInverse<-function(t_y1,  xx = -10:10 ){
 #  func0 = lapply(transform_y, function(t_y) eval(str2lang(t_y[[1]])))  ## should be inverse
   #func1 = lapply(transform_y, function(t_y) eval(str2lang(t_y[[2]])))  ## should be inverse
   y_1 = t_y1[[1]](xx)
   y_2 = t_y1[[2]](y_1)
-  m1=cbind(y_2,xx)
+  m1 = cbind(xx, y_1, y_2)
   #m1 = cbind(t_y[[2]](t_y[[1]](xx)), xx)
   
-  diffs = apply(m1,1,diff)
+  diffs = apply(m1[,c(1,3)],1,diff)
   if(max(abs(diffs), na.rm=T)>1e-7){
     print(t_y)
     print(m1)
  stop("not inverse")
   }
+  invisible(m1)
  # print("ok")
 }
-getYTransform<-function(pows = c(1), n_random=0, incl = list()){
-  c(.getTransformFuncs(pows, include_inverse=T),.getRandomFuncs(n_random,include_inverse=T),incl)
+getYTransform<-function(pows = c(1),offset=1, n_random=0,norm=1000, incl = list()){
+  c(.getTransformFuncs(pows, include_inverse=T, norm = norm, offset=offset),.getRandomFuncs(n_random,include_inverse=T),incl)
 }
 getXTransform<-function(pows= c(1),offset=1e-10){
   .getTransformFuncs(pows, offset=offset, include_inverse=F)
@@ -203,12 +230,13 @@ getXTransform<-function(pows= c(1),offset=1e-10){
 #c(list(x=c("function(y) y","function(y) y")), random_funcs)
 
 ##this gets transformations for x variable
-.getTransformFuncs<-function(pows,offset=1e-10, include_inverse=F){
+.getTransformFuncs<-function(pows,offset=0.1, norm=1000,include_inverse=F){
   names(pows) = paste0("pow", round(pows,2))
   if(include_inverse){
     transf=lapply(pows, function(pow){ ## 1e-10 avoids problems with zeros
       if(pow==1) return(c("function(x) x", "function(x) x"))
-      c( paste0("function(x) sign(x) * abs(x)^",pow),paste0("function(x) sign(x) * abs(x)^",1/pow))
+      c( paste0("function(x) { x1=(x+",offset,")/",norm,"; sign(x1) * abs(x1)^",pow,"}"),
+         paste0("function(y) { y1 = sign(y) * abs(y)^",1/pow,";", "y1*",norm,"-",offset,"}"))
     })
   }else{
   transf=lapply(pows, function(pow){ ## 1e-10 avoids problems with zeros

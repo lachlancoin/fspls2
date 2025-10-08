@@ -20,7 +20,7 @@
 }
 .getPvsAll<-function(subphens,datas1, vars_l1, b_i_name,k,
                      Wall =lapply(subphens, function(f) matrix(nrow=0,ncol=0)),
-                     useglm=F ,
+                     useglm=F ,inv_transform=getOption("x_transform",F),
                      project=T, useoffset=T){
   ## dont need glmnet for getting pvalues
   nmesd = names(datas1); names(nmesd)=nmesd
@@ -29,7 +29,9 @@
     prev_i = vars_l1[[nmed]]
     family = strsplit(names(subphens)[[1]],"\\.")[[1]][1]
     if(family=="multinomial") useoffset=F
-    prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, Wall,family, ypred=NULL, project=project, useglm=useglm, logpthresh =0, useoffset=useoffset)
+    prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, Wall,family, ypred=NULL, 
+                              inv_transform=inv_transform,
+                              project=project, useglm=useglm, logpthresh =0, useoffset=useoffset)
      prev_i1
   })
   pvs_all = pvs_all[unlist(lapply(pvs_all, length))>0]
@@ -349,7 +351,8 @@ datasEnv<-R6Class("datasEnv", public = list(
     names(incl )= incl
     k = .readFlag(flags, 'rep',length(datas[[1]]$train)) ## this is the full data, not cv
     angles_all = lapply(vars, function(vars1){
-      angles=lapply(train_nme, function(data_nme) datas[[data_nme]]$getAngles1(phens,vars1,incl=incl,k=k, type=self$type))
+      angles=lapply(train_nme, function(data_nme) datas[[data_nme]]$getAngles1(phens,vars1,incl=incl,k=k, type=self$type, 
+                                                                              ))
       cols_incl = lapply(train_nme, function(data_nme)datas1[[data_nme]]$cols_incl)
       comb=.combineAngles(angles,cols_incl,topn=topn)
       as.list(comb)       
@@ -398,7 +401,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       ord = order(unlist(lapply(variables, length)),decreasing=T)
       variables = variables[ord]
       var_inds = var_inds[ord]
-     #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
+    # v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
       
      for(v_nme in names(variables)){
       # print(v_nme)
@@ -482,14 +485,9 @@ datasEnv<-R6Class("datasEnv", public = list(
     verbose=.readFlag(flags,"verbose",FALSE)
     if(!is.null(flags[['useglm']])) stop("define useglmnet not useglm")
     useglm=.readFlag(flags,"useglmnet",TRUE)
-  #  print(paste("useglm", useglm))
-    #k = .readFlag(flags, 'rep',length(datas[[1]]$train))
-   # nmes_inds = names(inds);names(nmes_inds)=nmes_inds
-    #nmes_inds1 = nmes_inds[[1]];d =self$datas[[1]]
-    #models = lapply(nmes_inds, function(nmes_inds1){
       inds1 = inds#[[nmes_inds1]]
       phens1 = phens#[[nmes_inds1]]
-      #k=inds1[[1]]
+      #k=inds1[[1]]; d = datas[[1]]
         mods1 = lapply(inds1, function(k){
          # print(k)
             lapply(datas[names(datas) %in% train_nme], function(d){
@@ -609,6 +607,8 @@ datasEnv<-R6Class("datasEnv", public = list(
   },
 updateTrain=function( phens, flags,  verbose=F){
   train_nme = .readFlag(flags,"train", names(self$datas))
+  mi = match(train_nme,names(self$datas))
+  if(length(which(is.na(mi)))>0) stop("train flag is wrong")
   datas1 = self$datas
   invisible(lapply(train_nme, function(data_nme) {
     if(verbose)print(data_nme)
@@ -622,16 +622,16 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
   
 },
 
-  select=function(phens1,flags, verbose=F, db=NULL,user="" ){#c(y="function(y) y","function(y) y")
+  select=function(phens,flags, verbose=F, db=NULL,user="" ){#c(y="function(y) y","function(y) y")
    
     sigDB = self$getSigDB(db,user=user)
     if(!is.null(sigDB) ){
-      vars_all = sigDB$loadVars(flags, phens1)
+      vars_all = sigDB$loadVars(flags, phens)
       if(!is.null(vars_all)) return(vars_all)
       vars_all$db=db
     }
-    self$updateLOOC(phens1, flags, verbose=verbose)
-    self$updateTrain(phens1, flags,  verbose=verbose)
+    self$updateLOOC(phens, flags, verbose=verbose)
+    self$updateTrain(phens, flags,  verbose=verbose)
     nreps1 =ncol(self$datas[[1]]$looc$incl)
     datas1 = self$datas
     project=.readFlag(flags,"project",T)
@@ -665,7 +665,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     var_thresh = lapply(train_nme, function(data_nme){
       lapply(self$datas[[data_nme]]$vars, function(v) quantile(v, quantiles))
     })
-    Wall0 =lapply(phens1, function(f) matrix(nrow=0,ncol=0)) 
+    Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0)) 
      #k=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];#nme_c1 = names(transform_y)[[1]]
      variables=lapply(nreps, function(k){
       if(verbose) print(paste("cv",k,"of",length(nreps)))
@@ -678,7 +678,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
 #        invisible(lapply(train_nme, function(data_nme) datas1[[data_nme]]$update(k, funcst, subphens,incls_all))); ### update training object
         if(FALSE) cat(p_index); cat("\t");
       
-        vars_l =list(lapply(train_nme,function(xx) stateObj$new(phens1, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all =Wall0)))
+        vars_l =list(lapply(train_nme,function(xx) stateObj$new(phens, NULL,NULL,NULL,NULL,k, var=c(), varnames=c(), W_all =Wall0)))
       #vars_l1 = vars_l[[1]]
         for(incl in incls){
          if(verbose) print(incl)
@@ -691,10 +691,10 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
               varnames = vars_l1[[1]]$var_names; type = self$type
               angles=lapply(train_nme, function(data_nme) {
               #print(data_nme); 
-              self$datas[[data_nme]]$getAngles1(phens1,varnames,incl=incl,k=k, type=type)
+              self$datas[[data_nme]]$getAngles1(phens,varnames,incl=incl,k=k, type=type)
               })
-            cols_incl = lapply(train_nme, function(data_nme)self$datas[[data_nme]]$cols_incl(var_thresh[[data_nme]],incl, g_incl,qq)) ### fix 
-             comb_=.combineAngles(angles,cols_incl,incl,topn=topn, onlyAll = onlyAll)
+            cols_incl = lapply(train_nme, function(data_nme)self$datas[[data_nme]]$cols_incl(var_thresh[[data_nme]],incl, g_incl,qq, excl=varnames)) ### fix 
+             comb_=.combineAngles(angles,cols_incl,incl,topn=topn, onlyAll = onlyAll, excl=varnames)
              nme_comb = names(comb_); names(nme_comb) = nme_comb
              Wall = vars_l1[[1]]$W_all
             res_inner=lapply(nme_comb, function(nme_c1){
@@ -705,16 +705,27 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
                 num_pvals1 = min(num_pvals, nrow(comb))
                 inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
                 nxt_vars = lapply(inds1p, function(ik){
+                #  print(ik)
                    b_i_name = c(comb$data_type[[ik]], comb$names[[ik]], nme_c1)
-                   nv = .getPvsAll(phens1,self$datas[names(self$datas) %in% train_nme], vars_l1, b_i_name,k,  Wall,project = project, 
+                   
+                   nv =  try(
+                     .getPvsAll(phens,self$datas[names(self$datas) %in% train_nme], vars_l1, b_i_name,k,  Wall,project = project, 
                                    useglm=useglm,
-                                   useoffset=useoffset)
+                                   inv_transform=.readFlag(flags,"x_transform",F),
+                                   useoffset=useoffset))
+                   if(inherits(nv,"try-error")) {
+                     print(paste(nme_c1, "error"))
+                     return(NULL)
+                   }
                   attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){
                      unlist(nv1$pvs)
                    })))
+                  
                   nv
                   #mStateObj$new(comb[ik],  .sumChisq(pv) , prev_i=prev_i)
                 })
+                nxt_vars = nxt_vars[unlist(lapply(nxt_vars, length))>0]
+                if(length(nxt_vars)==0) return(NULL)
                 pvs_list = unlist(lapply(nxt_vars, function(nv) attr(nv,"cumpv")))
                 #print(pvs_list)
                 #subinds1 = pvs_list<=logpvthresh
@@ -723,15 +734,24 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
                 #pvs_list = pvs_list[subinds1]
                 nxt_vars[order(pvs_list)] 
             })
+            res_inner = res_inner[unlist(lapply(res_inner, length))>0]
+            if(length(res_inner)==0) return(NULL)
             res_inner
             },error=function(w){
               print(w)
-              print("error")
+              #print("error")
               return(NULL)
             })
+            nxt_vars1 =nxt_vars1[unlist(lapply(nxt_vars1, length))>0]
+            if(length(nxt_vars1)==0) return(NULL)
             nxt_vars1
             
           })
+          angles_all = angles_all[unlist(lapply(angles_all, length))>0]
+          if(length(angles_all)==0){
+            stop_random=T;
+            next;
+          }
           nme_func = names(self$datas[[1]]$transforms); names(nme_func)=nme_func
           angles_all2=lapply(nme_func, function(xx){
             angles_all_ = lapply(angles_all, function(angles_all1){
@@ -750,7 +770,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
           })
           logpvs=unlist(lapply(angles_all2, function(xx) xx$logpv))
         
-          if(length(func_ind)>0 && !getOption("x_transform",F)){ ## if we start with one y transform we need to continue, unless random or transform on x
+          if(length(func_ind)>0 && !.readFlag(flags,"x_transform",F)){ ## if we start with one y transform we need to continue, unless random or transform on x
             avail = rep(F, length(logpvs)); names(avail) = names(logpvs)
             first_func_name = names(func_ind)[[1]]
             avail[grep(stop_y, names(angles_all2))]=T
@@ -806,7 +826,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     #     res2[unlist(lapply(res2,function(xx) length(xx[[1]]$var)))>0]
     })
     vars_all=self$post_process(variables)
-    vars_all$flags = flags; vars_all$phens = phens1;  vars_all$db=db #vars_all$transform_y = transform_y ;
+    vars_all$flags = flags; vars_all$phens = phens;  vars_all$db=db #vars_all$transform_y = transform_y ;
     if(length(vars_all$variables)==0) return(vars_all)
     if(!is.null(sigDB) ){
 #      saveVars = function(vars_all,flags,phens,transform_y,user="", replace=T){
@@ -842,10 +862,13 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     predictions0=res3[unlist(lapply(res3, function(x) length(x[[1]][[1]])))>0]
     predictions0 # 
  },
+updateTransforms = function(transform_y){
+  for(k in 1:length(self$datas)){
+    self$datas[[k]]$updateTransforms(transform_y)
+  }
+},
   evaluateAllModels=function(all_models, phens=all_models$phens,flags=all_models$flags,verbose=F,
-                             db=all_models$db, user="", inv_transform_y=!getOption("x_transform",F)){ ## different folds with same variables
-##                          inds = as.numeric(names(all_models))){
-    #self = all_models
+                             db=all_models$db, user="", inv_transform_y=!.readFlag(flags,"x_transform",F)){ ## different folds with same variables
     sigDB = self$getSigDB(db,user=user)
     if(!is.null(sigDB) ){
       eval1 = sigDB$loadEval(flags,phens,)
@@ -857,14 +880,6 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     if(length(all_models$models)==0) return(NULL)
     nme_d2 = .readFlag(flags,"test",names(self$datas))
     names(nme_d2) = nme_d2
-   # print(nme_d2)
-   # func_strs = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
-  #  inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
-    #k=1
-    
-#    mod_nmes = names(all_models); names(mod_nmes) = mod_nmes
-    #mod_nme = mod_nmes[[1]]; nme1 = nme_d[[1]] 
-    #eval1=.merge1_new( lapply(mod_nmes, function(mod_nme){
       all_models_y = all_models$models#[[mod_nme]]
     eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
       #print(nme1)

@@ -44,6 +44,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     betas_proj="vector", #list of vector
                     W_all="matrix",  ##list of matrix,
                     constants_proj="list",
+                    constants = "list",
                    betas="list",
                     nonNA="logical",
                     mean_x="numeric",
@@ -65,6 +66,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                       self$pvs = pvs
                       self$sumPv = .sumChisq(unlist(pvs))
                       self$constants_proj=constants_proj
+                      self$constants = NULL
                       self$nonNA = data$looc$incl[,k];
                       train = data$train
                       self$tbls = tbls
@@ -72,6 +74,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                       #if(length(phensi)>1) stop("!!")
                       family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
                       names(family)=names(phensi)
+                      self$betas_proj=betas_proj
                       if(is.null(prev_i)){
                         self$var = var
                         self$var_names = var
@@ -79,7 +82,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         self$mean_x=c()
                         self$name=""
                    #     self$cum_pvs_proj = list()
-                        self$betas_proj= if(length(var)==0) c() else lapply(data$y, function(yy)(matrix(0,nrow=1, ncol= length(var)))) #lapply(datas, function(x) return(c()))
+                    #    self$betas_proj= betas_proj #if(length(var)==0) c() else lapply(data$y, function(yy)(matrix(0,nrow=1, ncol= length(var)))) #lapply(datas, function(x) return(c()))
                         self$betas = if(length(var)==0) NULL else lapply(data$y, function(yy)(matrix(0,ncol=1, nrow= length(var)))) 
                         self$name=if(length(var)==0) "" else paste(unlist(lapply(var, paste, collapse=".")),collapse="-")
                       }else{
@@ -101,7 +104,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         self$var = vars
                         self$var_names = c(prev_i$var_names, list(b_i_name))
                         self$varnames=c(prev_i$varnames, varnames)
-                        self$betas_proj=betas_proj
+                       
                         if(FALSE){
                         beta_nme = names(betas_new)
                         names(self$var) = names(self$var_names)
@@ -141,11 +144,12 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     },
                   setOffset=function(){
                     nme_betas_new = names(self$betas_proj)
+                    self$constants = self$constants_proj
                     #b_n= nme_betas_new[[1]]
                     for(b_n in nme_betas_new){
                       offset =self$mean_x%*%  self$betas[[b_n]]
                       vv = unlist(self$constants_proj[[b_n]])-offset[1,]
-                      self$constants_proj[[b_n]] = vv
+                      self$constants[[b_n]] = vv  ## this was constants_proj
                     }
                   },
                    # self$betas=lapply(nme_betas_new, function(b_n) {
@@ -158,9 +162,12 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     self$betas=lapply(nmebp, function(bp){
                       self$W_all[[bp]] %*% self$betas_proj[[bp]]
                     })
-                    self$setOffset() 
+                   # self$setOffset() 
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj,
+                         constants = self$constants,
+                         betas_proj = self$betas_proj,
+                         Wall = self$W_all,
                          mean_x = self$mean_x,tbls = self$tbls,
                      #    W_all = self$W_all,
                          var_names = self$var_names) #, pvs = self$pvs_proj)
