@@ -50,6 +50,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     mean_x="numeric",
                    tbls="list",
                    pvs="list",
+                   pvs_all ="list",
                    sumPv="numeric",
                     initialize = function(phensi,data,
                                           betas_proj, 
@@ -64,6 +65,8 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                                          useoffset=T
                                          ){
                       self$pvs = pvs
+                      self$pvs_all = unlist(pvs)
+                      if(!is.null(prev_i)) self$pvs_all = c(self$pvs_all, prev_i$pvs_all)
                       self$sumPv = .sumChisq(unlist(pvs))
                       self$constants_proj=constants_proj
                       self$constants = NULL

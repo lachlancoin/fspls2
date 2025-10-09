@@ -721,6 +721,9 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
                   attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){
                      unlist(nv1$pvs)
                    })))
+                  attr(nv,"cumpv_all")= .sumChisq(unlist(lapply(nv, function(nv1){
+                    unlist(nv1$pvs_all)
+                  })))
                   
                   nv
                   #mStateObj$new(comb[ik],  .sumChisq(pv) , prev_i=prev_i)
@@ -728,6 +731,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
                 nxt_vars = nxt_vars[unlist(lapply(nxt_vars, length))>0]
                 if(length(nxt_vars)==0) return(NULL)
                 pvs_list = unlist(lapply(nxt_vars, function(nv) attr(nv,"cumpv")))
+               # pvs_list_all = unlist(lapply(nxt_vars, function(nv) attr(nv,"cumpv_all")))
                 #print(pvs_list)
                 #subinds1 = pvs_list<=logpvthresh
                 #if(length(which(subinds1)==0)) return(NULL)
@@ -756,9 +760,13 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
           
           ang1 = unlist(unlist(angles_all, rec=F),rec=F)
           logpvs = unlist(lapply(ang1, function(a1)attr(a1,"cumpv")))
+          logpvs_all = unlist(lapply(ang1, function(a1)attr(a1,"cumpv_all")))
           ord = order(logpvs)
-          ang1 = ang1[ord]
-          logpvs = logpvs[ord]
+          names(ord) = names(logpvs)
+          ord_all = order(logpvs_all)
+          ang1 = ang1[ord_all]
+          logpvs = logpvs[ord_all]
+          logpvs_all = logpvs_all[ord_all]
           if(!.readFlag(flags,"x_transform",F)){
             if(length(func_ind)>0 ){
               finds = unlist(lapply(ang1, function(a1)a1[[1]]$var[[1]][3]))
@@ -768,17 +776,21 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
             }
           }
           if(!is.null(stop_y)){
-            stop_ind = grep(stop_y,names(ang1))
+            stop_ind = grep(stop_y,names(ord))
+            print(head(sort(ord[stop_ind])))
             stop_random = min(stop_ind)==1
           }
           gp1=grep(stop_y, names(logpvs))
           gp=grep(stop_y, names(logpvs), inv=T)
           print("HERE")
-          print(c( min(logpvs[gp1]),head(sort(logpvs[gp]))))
+          print(c( min(logpvs[gp1]),min(logpvs[gp])))
+          print("HERE ALL")
+          print(head(sort(logpvs_all[gp])))
           if(stop_random){
             print(paste("stopping due to random", exp(logpv)))
           }
           logpv =min(logpvs)
+          
          
           #logpv<=logpvthresh || length(vars_l[[1]][[1]]$var) < minsize 
           if((!stop_random && logpv<=logpvthresh) || length(vars_l[[1]][[1]]$var)<minsize  ){
@@ -788,7 +800,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
           }
           if(verbose){
             print(names(vars_l))
-            print(paste("logpv",logpv,jj1))
+            print(paste("logpv",logpv,min(logpvs_all), jj1))
             jj1 = jj1+1
           }
           #angles_all = angles_all[unlist(lapply(angles_all,length))>0]
