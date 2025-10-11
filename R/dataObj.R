@@ -3,7 +3,7 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
 ## assumes Wall1 is upper diagonal
 ## uses data with mean subtracted
 ## does not add any constant term
-.eval1_<-function(x_, beta_new2, Wall2, transf, family,mean_x = apply(x_,2, mean,na.rm=T), CHECK=F){ 
+.eval1_<-function(x_, beta_new2, Wall2, transf, params, family,mean_x = apply(x_,2, mean,na.rm=T), CHECK=F){ 
   x_ = t(t(x_) - mean_x)
   #if(TRUE){
   #  yp_new = (x_ %*% Wall2) %*% beta_new2
@@ -21,13 +21,13 @@ default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomi
   if(ncol(x_)==0){
     yp1 = matrix(0,nrow(x_), ncol(beta_new2))
   }else{
-    t2 = transf[[1]](x_[,1,drop=F]) %*% Wall2[1,1,drop=F] 
+    t2 = transf[[1]]$func(x_[,1,drop=F] %*% Wall2[1,1,drop=F], transf[[1]]$param) 
     yp1 = t2 %*% beta_new2[1,,drop=F]
     #yp1 = data.frame(apply(beta_new2,2,function(xx) as.matrix(xx[[1]]*t2)))
   }
   if(ncol(x_)>1){
     for(jj in 2:ncol(x_)){
-      t2 = transf[[jj]](x_[,1:jj] %*% Wall2[1:jj,jj,drop=F]) 
+      t2 = transf[[jj]]$func(x_[,1:jj] %*% Wall2[1:jj,jj,drop=F], transf[[jj]]$param) 
       yp2 = t2 %*% beta_new2[jj,,drop=F]
       #yp2 = data.frame(apply(beta_new2,2,function(xx) as.matrix(xx[[jj]]*t2)))
       yp1 =yp1 + yp2
@@ -261,20 +261,22 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
   nme_trans = names(angles[[1]][[1]][[1]]); names(nme_trans) = nme_trans
   comb_all1=lapply(nme_trans, function(nme_t1){
   #nme_t1 = nme_trans[[1]]
+     nme_pow = names(angles[[1]][[1]][[1]][[nme_t1]]); names(nme_pow)=nme_pow
+     lapply(nme_pow, function(nme_p1){
       comb_all = lapply(incl,function(inc1){
         matrices = lapply(1:length(angles), function(i){
           ang1 = angles[[i]][[inc1]]
           if(is.null(ang1)) return(NULL)
           col_incl = cols_incl[[i]][[inc1]]
           #ang1=angle1[[inc1]]
-          ang2=ang1[[1]][[nme_t1]]
+          ang2=ang1[[1]][[nme_t1]][[nme_p1]]
           cs = colSums(ang2)
           if(length(ang1)>1){
             for(jk in 1:length(ang1)){
-              cs = cs+colSums(ang1[[jk]][[nme_t1]])
+              cs = cs+colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
             }
           }
-          excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1))]
+          excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1 && ex[4] ==nme_p1))]
           if(length(excl1)>0){
           col_incl[which(names(col_incl) %in% unlist(lapply(excl1, function(ex) ex[2])))]=F
           }
@@ -292,6 +294,7 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
   }),addName="data_type")
   t1 = t1[order(t1$value),]
   subset(t1, value<999)
+  })
   })
   comb_all1
 }
@@ -601,7 +604,8 @@ convert=function(b_i1){
   var_ind = which(dimnames(self$data[[data_ind]])[[2]]==b_i1[2])
   if(length(var_ind)==0) return(NULL)
   trans_ind=match(b_i1[[3]],names(self$transforms))
-  c(data_ind, var_ind, trans_ind)
+  pow_ind = match(b_i1[[4]], names(self$transforms[[trans_ind]]$params))
+  c(data_ind, var_ind, trans_ind, pow_ind)
 },
 cats = function(maxpheno = 1e9){
   fam=self$family
@@ -723,12 +727,18 @@ calcBetaProj1=function(subphens,k,b_i,prev_var, Wall,convert=T, betas = list(), 
   res1
 },
 getTransforms=function(vars1, inv_transform=T){
-  transf = list(self$default_transform)
-  if(length(vars1)>0){
+  deft = list(func=self$default_transform, param=0)
+  transf = list(deft)
+  if(length(vars1)>0 && !is.null(vars1[[1]])){
+  #  print("h")
+   # print(vars1)
     transf = lapply(vars1, function(v1) {
-      if(length(v1)==0 || !inv_transform) self$default_transform else self$transforms[[v1[[3]]]][[2]]
+      tf = self$transforms[[v1[[3]]]];
+      param = tf$params[[v1[[4]]]]
+      if(length(v1)==0 || !inv_transform) deft else list(func=tf[[2]], param =param)
     })
   }
+  transf
 },
 calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F, 
                       inv_transform = getOption("x_transform",F),
@@ -743,7 +753,6 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F,
   vars1 = c(prev_var,list(b_i))
   data$updateUDVP(prev_var)
   transf = self$getTransforms(vars1, inv_transform = inv_transform)
- 
   #train = data$train
   ys =self$y[[nme]]##  if(family %in% c("binomial","ordinal")) (d$y1) else if(family =="multinomial") d$y2 else d$y
   if(family=="multinomial"){
@@ -812,7 +821,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F,
   .print_verbose("transform_func_y",transform_func_y,1)
   for(kk in 1:ncoly){
     nonNAk = nonNA & non_na_x
-    x = transf[[1]](x_[nonNAk ])
+    x = transf[[1]]$func(x_[nonNAk ], transf[[1]]$param)
     y = transform_func_y(ys[,kk])[nonNAk]
     w = data$weights[nonNAk]
     beta_new1=0;
@@ -1095,7 +1104,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
     #  if(family=="multinomial")  (x_1 %*%  Wall1) %*% betas1  else (x_[,-ncol(x_),drop=F ] %*%  Wall1) %*% betas1 [,kk,drop=F]
     
     if(useoffset){
-      x = cbind(yp1[nonNAk,], transf1(x1_[nonNAk,1]))
+      x = cbind(yp1[nonNAk,], transf1$func(x1_[nonNAk,1], transf1$param))
       dimnames(x)[[2]] = c(paste0("A",1:(ncol(x)-1)),"x")
       #if(project){ 
     #    UDVP1=UDVPObj$new(self, NULL,yp1) #,check=F, centralise=F)
@@ -2089,8 +2098,11 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5,inv_trans
           products =self$train[[k]]$product(ik,ii,phensi1);
           nmes_products = names(products); names(nmes_products) = nmes_products
           angle=lapply(nmes_products, function(nmes_prod){
-            product = products[[nmes_prod]]
-            yTr1 = yTr[[nme_i]][[nmes_prod]]
+            product0 = products[[nmes_prod]]
+            nmes_products1 = names(product0); names(nmes_products1) = nmes_products1
+            lapply(nmes_products1, function(nmes_prod1){
+              product = products[[nmes_prod]][[nmes_prod1]]
+            yTr1 = yTr[[nme_i]][[nmes_prod]][[nmes_prod1]]
             if(length(var)==0){
              
               #  self$train$products[[ik]][[ii]][phensi1,,drop=F]  #[,self$cols_incl[[ik]],drop=F]
@@ -2108,6 +2120,7 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5,inv_trans
                 angle_1[,to_rem]=999  #after we project out the projected out columns have zero norm
             }
             angle_1
+          })
           })
         #if(FALSE){
           ##JUST TO SHOW THAT SUBTRACTING MEAN DOESNT MAKE DIFF BECAUSE yTR has mean zero
@@ -2551,20 +2564,21 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1, exc
 updateTransforms=function(transform_y){
   transform_y1 = fromJSON(transform_y)
   self$transforms = lapply(transform_y1, function(t_y){
-    t_y1 =  lapply(t_y, function(t_y1) eval(str2lang(t_y1)))
-    .checkInverse(t_y1)
+    t_y1 =  lapply(t_y[1:2], function(t_y1) eval(str2lang(t_y1)))
+    .checkInverse(t_y1, t_y[[3]])
     t_y1
   })
 },
   initialize=function( cohort, 
-                       transform_y=list(x=c("function(y) y","function(y) y")),
+                       transform_y=list(x=list(invfunc="function(y) y",func="function(y) y",1), params=1),
                       incl_full=T,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores
     self$transforms = lapply(transform_y, function(t_y){
-       t_y1 =  lapply(t_y, function(t_y1) eval(str2lang(t_y1)))
+       t_y1 =  lapply(t_y[1:2], function(t_y1) eval(str2lang(t_y1)))
+       t_y1$params = t_y[[3]]
       .checkInverse(t_y1)
-       t_y1
+      t_y1 
     })
-    self$default_transform = eval(str2lang("function(x) x"))
+    self$default_transform = eval(str2lang("function(x,pow) x"))
     if(!is.null(memDir)){
       mem_dirp = memDir
       mem_dirp = paste(memDir,nrow(cohort$rna$matrix),sep="/")  #getOption("fspls.mem_dir", NULL)

@@ -38,7 +38,10 @@ trainObj<-R6Class("trainObj",
                       self$yTr =
                         lapply(self$y1,function(y11){
                           lapply(transforms, function(f_k){
-                            y12 = t(y11)
+                            params = f_k$params;names(params)=params
+                            lapply(params, function(p1){
+                               t(y11)
+                            })
                           })
                           })
                       self$k=NA
@@ -49,16 +52,19 @@ trainObj<-R6Class("trainObj",
                       toJSON(names(transforms))!= toJSON(names(self$transforms))
                     },
                     product=function(ik,ii, phensi1){ #  self$train$products[[ik]][[ii]][phensi1,,drop=F]  #[,self$cols_incl[[ik]],drop=F]
-                     lapply(self$products[[ik]][[ii]], function(p1){
-                      p1[match( names(phensi1),dimnames(p1)[[1]]),,drop=F]
+                     produ=lapply(self$products[[ik]][[ii]], function(p0){
+                       lapply(p0, function(p1){
+                          p1[match( names(phensi1),dimnames(p1)[[1]]),,drop=F]
                      })
+                     })
+                     produ
                     },
                     transform=function(weights, k,  phens1){
                        funcst=self$transforms
                      # func_str1 = paste("function(x)",func_str)
                       y1 = self$y1
                       looc_incl_k_ij = self$looc_incl[,k]
-                      means_y = lapply(y1, function(y1_) lapply(funcst, function(fst) rep(0, ncol(y1_))))
+                      means_y = lapply(y1, function(y1_) lapply(funcst, function(fst) lapply(fst$params,function(f3) rep(0, ncol(y1_)))))
                       inds_to_do = which(names(self$y1) %in% names(phens1))
                       for(colk1 in 1:length(inds_to_do)){
                        colk = inds_to_do[colk1]
@@ -66,23 +72,27 @@ trainObj<-R6Class("trainObj",
                        inds_to_do_1 = which(dimnames(y1[[colk]])[[2]] %in% phens1[[colk1]])
                        for(f_k in 1:length(funcst)){
                           funcs =  funcst[[f_k]][[1]] #eval(str2lang(funcst[[f_k]]))
-                          meansy = rep(0, ncols)
-                          for(j in inds_to_do_1){
-                             v = funcs(y1[[colk]][,j])
-                             nonNA1 = !is.na(v) & looc_incl_k_ij
-                             if(length(which(is.na(v)))> 0.3 *length(v)) warning(paste(" more than 30% NA in transformation", toJSON(funcs)))
-                             d_w = weights[nonNA1]
-                             meansy[[j]] = (v[nonNA1]%*% d_w)/sum(d_w) 
-                             self$yTr[[colk]][[f_k]][j,] = weights*(v  - meansy[j]) #y[,j]  - mean_y[j]
-                                if(length(which(!nonNA1))>0){
-                                  self$yTr[[colk]][[f_k]][j,!nonNA1] =0  
-                                }
-                             vars1 = apply(self$yTr[[colk]][[f_k]][j,,drop=F],1,var)
-                             if(min(vars1)==0) stop(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs)))
-                             }
-                        
-                    #    print(meansy)
-                        means_y[[colk]][[f_k]] = meansy
+                          params = funcst[[f_k]][[3]]; names(params)=params
+                          for(g_k in 1:length(params)){
+                            pow1 = params[[1]]
+                              meansy = rep(0, ncols)
+                              for(j in inds_to_do_1){
+                                 v = funcs(y1[[colk]][,j], pow1)
+                                 nonNA1 = !is.na(v) & looc_incl_k_ij
+                                 if(length(which(is.na(v)))> 0.3 *length(v)) warning(paste(" more than 30% NA in transformation", toJSON(funcs)))
+                                 d_w = weights[nonNA1]
+                                 meansy[[j]] = (v[nonNA1]%*% d_w)/sum(d_w) 
+                                 self$yTr[[colk]][[f_k]][[g_k]][j,] = weights*(v  - meansy[j]) #y[,j]  - mean_y[j]
+                                    if(length(which(!nonNA1))>0){
+                                      self$yTr[[colk]][[f_k]][[g_k]][j,!nonNA1] =0  
+                                    }
+                                 vars1 = apply(self$yTr[[colk]][[f_k]][[g_k]][j,,drop=F],1,var)
+                                 if(min(vars1)==0) stop(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs)))
+                                 }
+                            
+                        #    print(meansy)
+                            means_y[[colk]][[f_k]][[g_k]] = meansy
+                          }
                        }
                       }
                       self$means_y[[k]] = means_y
@@ -113,7 +123,6 @@ trainObj<-R6Class("trainObj",
                       })
                       self$phens1 = phens1
                         ycols = which(names(self$y1) %in% names(phens1))
-                     
                         funcst=self$transforms
                         self$k = k
                           # no need to update
@@ -126,10 +135,13 @@ trainObj<-R6Class("trainObj",
                       nmes_funcst = names(funcst);names(nmes_funcst)=nmes_funcst
                       ymean = lapply(nmes_phens1, function(nme_p1){
                         lapply(nmes_funcst, function(nme_f1){
-                            yTr1 = self$yTr[[nme_p1]][[nme_f1]]
+                          nme_t1=names(self$transforms[[nme_f1]]$params); names(nme_t1) = nme_t1
+                          lapply(nme_t1,function(p1){
+                            yTr1 = self$yTr[[nme_p1]][[nme_f1]][[p1]]
                             subinds = dimnames(yTr1)[[1]] %in% unlist(phens1) #[[nmes_phens1]]
                             if(length(which(subinds))==0) subinds = dimnames(yTr1)[[1]] %in% phens1[nmes_phens1]
                             apply(yTr1[subinds,,drop=F],1,mean,na.rm=T)
+                          })
                         })
                       })
                        incl1 = names(data$data); names(incl1) = incl1
@@ -138,7 +150,9 @@ trainObj<-R6Class("trainObj",
                         x = data$data[[ik]]
                         lapply(nmes_phens1, function(nme_p1){
                           lapply(nmes_funcst, function(nme_f1){
-                          yTr1 = self$yTr[[nme_p1]][[nme_f1]]
+                            nme_t1=names(self$transforms[[nme_f1]]$params); names(nme_t1) = nme_t1
+                            lapply(nme_t1,function(p1){
+                          yTr1 = self$yTr[[nme_p1]][[nme_f1]][[p1]]
                           subinds = dimnames(yTr1)[[1]] %in% unlist(phens1)#[[nmes_phens1]]
                           if(length(which(subinds))==0) subinds = dimnames(yTr1)[[1]] %in% phens1[[nmes_phens1]]
                           yTr1 = yTr1[subinds,,drop=F]
@@ -148,6 +162,7 @@ trainObj<-R6Class("trainObj",
                             resu1=if(isbigmatrix(x) && typeof(yTr1)!="S4") dgemm(A=yTr1,B=x) else yTr1 %*% x
                             dimnames(resu1) = list(dimnames(yTr1)[[1]],dimnames(x)[[2]])
                             resu1
+                            })
                           })
                         })
                       })

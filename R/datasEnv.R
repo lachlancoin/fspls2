@@ -301,7 +301,11 @@ datasEnv<-R6Class("datasEnv", public = list(
   },
    getSigDB=function(nme1="",reload= F, clear=F, user=""){
      if(is.null(nme1)) return(NULL)
-   if(reload || is.null(self$sigs[[nme1]])){
+     curr_sigs = self$sigs[[nme1]]
+     if(!is.null(curr_sigs)){
+       if(toJSON(curr_sigs$data_flags)!=toJSON(self$flags)) reload=T
+     }
+   if(reload || is.null(curr_sigs)){
      self$sigs[[nme1]]=   sigEnv$new(self$sigsdir,nme1, clear=clear, user=user)
      self$sigs[[nme1]]$updateData(data_flags = self$flags, 
                                   data_names =names(self$datas), 
@@ -699,15 +703,15 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
              nme_comb = names(comb_); names(nme_comb) = nme_comb
              Wall = vars_l1[[1]]$W_all
             res_inner=lapply(nme_comb, function(nme_c1){
-             #  print(nme_c1)
-             #transform_y1= transform_y[[nme_c1]]
-                comb = comb_[[nme_c1]]
+               nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
+               lapply(nmesp1, function(nme_p1){
+                comb = comb_[[nme_c1]][[nme_p1]]
                 if(nrow(comb)==0) return(NULL)
                 num_pvals1 = min(num_pvals, nrow(comb))
                 inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
                 nxt_vars = lapply(inds1p, function(ik){
                 #  print(ik)
-                   b_i_name = c(comb$data_type[[ik]], comb$names[[ik]], nme_c1)
+                   b_i_name = c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
                    
                    nv =  try(
                      .getPvsAll(phens,self$datas[names(self$datas) %in% train_nme], vars_l1, b_i_name,k,  Wall,project = project, 
@@ -739,6 +743,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
                 #pvs_list = pvs_list[subinds1]
                 nxt_vars[order(pvs_list)] 
             })
+            })
             res_inner = res_inner[unlist(lapply(res_inner, length))>0]
             if(length(res_inner)==0) return(NULL)
             res_inner
@@ -758,7 +763,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
             next;
           }
           
-          ang1 = unlist(unlist(angles_all, rec=F),rec=F)
+          ang1 = unlist(unlist(unlist(angles_all, rec=F),rec=F),rec=F)
           logpvs = unlist(lapply(ang1, function(a1)attr(a1,"cumpv")))
           logpvs_all = unlist(lapply(ang1, function(a1)attr(a1,"cumpv_all")))
           ord = order(logpvs)
@@ -856,6 +861,8 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     predictions0 # 
  },
 updateTransforms = function(transform_y){
+  
+  self$flags[['transform_y']] = transform_y
   for(k in 1:length(self$datas)){
     self$datas[[k]]$updateTransforms(transform_y)
   }

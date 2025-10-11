@@ -181,54 +181,61 @@ invrandomize<-function(y1,seed){  ## inverse randomises for the same seed
   subset(medians, cv_full=="CV=avg")
 }
 
-.getRandomFuncs<-function(n, include_inverse=T){ ## although these are same, every invocation will give different results
+.getRandomFuncs<-function(n,CHECK=F){ ## although these are same, every invocation will give different results
   if(n==0) return(list())
  inds = sample.int(1000,n, replace=T)
  names(inds) = inds
-  r3=lapply(inds, function(i){
-    str="function(y) randomize(y,seed)"
-    str1="function(y) invrandomize(y,seed)"
-    
-    res1 = c(gsub("seed",i,str),gsub("seed",i,str1))
-    if(!include_inverse) return (res1[[1]])
-    res1
+ transf=list(invfunc="function(y,seed) randomize(y,seed)",func="function(x,seed) invrandomize(x,seed)",params=as.list(inds))
+ if(CHECK){
+   ggp= .checkInverse1(transf)
+   ggp
+ }
+ transf
+}
+.checkInverse1<-function(transf){
+  xx=seq(-5,5,by=0.05)
+      t_y1= lapply(transf[1:2],function(funcstr1) eval(str2lang(funcstr1)) )
+      l1 = lapply(transf[[3]], function(pow){
+      ab = data.frame(.checkInverse(t_y1,pow, xx))
+  ab
   })
-  names(r3) = paste0("rand",names(r3))
-  r3
+      names(l1)=transf[[3]]
+  ab_all=.merge1_new(l1,addName="func")
+  ggplot(ab_all, aes(x=xx, y=y_1, color=func))+geom_line();# +scale_y_log10()
 }
-.checkInverse1<-function(funcstr, xx=-10:10){
-  t_y1 = lapply(funcstr, function(funcstr1) eval(str2lang(funcstr1)))
-  ab = .checkInverse(t_y1, xx)
-  head(ab)
-  plot(ab[,1:2])
-}
-.checkInverse<-function(t_y1,  xx = -10:10 ){
+.checkInverse<-function(t_y1,pow = t_y1[[3]],  xx = -10:10 ){
 #  func0 = lapply(transform_y, function(t_y) eval(str2lang(t_y[[1]])))  ## should be inverse
   #func1 = lapply(transform_y, function(t_y) eval(str2lang(t_y[[2]])))  ## should be inverse
-  y_1 = t_y1[[1]](xx)
-  y_2 = t_y1[[2]](y_1)
+  llm=lapply(pow,function(pow1){
+         y_1 = t_y1[[1]](xx,pow1)
+  y_2 = t_y1[[2]](y_1,pow1)
   m1 = cbind(xx, y_1, y_2)
   #m1 = cbind(t_y[[2]](t_y[[1]](xx)), xx)
   
   diffs = apply(m1[,c(1,3)],1,diff)
   if(max(abs(diffs), na.rm=T)>1e-7){
-    print(t_y)
+    print(t_y1)
     print(m1)
  stop("not inverse")
   }
   invisible(m1)
+  })
+  invisible(llm)
  # print("ok")
 }
-getYTransform<-function(pows = c(1),offset=1, n_random=0,norm=1000, expX =F, logX=F, incl = list()){
-  funcs = c(.getTransformFuncs(pows, include_inverse=T, norm = norm, offset=offset),.getRandomFuncs(n_random,include_inverse=T),incl)
-  if(expX)funcs = c(funcs, getExpFunc(rev=F, offset=offset))
-  if(logX)funcs = c(funcs, getExpFunc(rev=T, offset=offset))
+getYTransform<-function(pows = c(1),offset=1, n_random=0,norm=1000){
+  funcs = list(pow=.getTransformFuncs(pows,  norm = norm, offset=offset),
+               rand=.getRandomFuncs(n_random))
+ # if(expX)funcs = c(funcs, getExpFunc(rev=F, offset=offset))
+#  if(logX)funcs = c(funcs, getExpFunc(rev=T, offset=offset))
   funcs
 }
 getXTransform<-function(pows= c(1),offset=1e-10){
-  .getTransformFuncs(pows, offset=offset, include_inverse=F)
+  .getTransformFuncs(pows, offset=offset)
 }
 
+##exp is problematic because of neg numbers, particularly after centralisation
+##could work with adding back in mean values?? may not generalise to unseen datasets
 getExpFunc<-function(rev=F,offset=0.1){  
   res = list(exp = c(paste0("function(y) log(y+",offset,")"),
                      paste0("function(x) exp(x)-",offset)))
@@ -238,21 +245,27 @@ getExpFunc<-function(rev=F,offset=0.1){
 #.getRandomFuncs(3)
 #c(list(x=c("function(y) y","function(y) y")), random_funcs)
 
+powfunc<-function(x,pow, norm=1, offset=0.1){
+ # pow=v[1]; norm=v[2]; offset=v[3]
+  x1=(x+offset)/norm; 
+  sign(x1) * abs(x1)^pow
+}
+invpowfunc<-function(y,pow, norm=1, offset=0.1){
+  #pow=v[1]; norm=v[2]; offset=v[3];
+  y1 = sign(y) * abs(y)^(1/pow); 
+  y1*norm-offset
+}
+
 ##this gets transformations for x variable
-.getTransformFuncs<-function(pows,offset=0.1, norm=1000,include_inverse=F){
-  names(pows) = paste0("pow", round(pows,2))
-  if(include_inverse){
-    transf=lapply(pows, function(pow){ ## 1e-10 avoids problems with zeros
-      if(pow==1) return(c("function(x) x", "function(x) x"))
-      c( paste0("function(x) { x1=(x+",offset,")/",norm,"; sign(x1) * abs(x1)^",pow,"}"),
-         paste0("function(y) { y1 = sign(y) * abs(y)^",1/pow,";", "y1*",norm,"-",offset,"}"))
-    })
-  }else{
-  transf=lapply(pows, function(pow){ ## 1e-10 avoids problems with zeros
-    if(pow==1) return("function(x) x")
-    paste0("function(x) sign(x+",offset,") * abs(x+",offset,")^",pow)#,paste0("function(x) sign(x) * abs(x)^",1/pow))
-  })
-  }
+.getTransformFuncs<-function(pows,
+                             offset=0.1, norm=1,CHECK=F){
+  names(pows)=pows
+   transf=list(invfunc =  paste0("function(y,pow,norm=",norm,",offset=",offset,") powfunc(y,pow,norm,offset)"),
+         func=paste0("function(x,pow,norm=",norm,",offset=",offset,") invpowfunc(x,pow,norm,offset)"), params = as.list(pows))
+    if(CHECK){
+    ggp= .checkInverse1(transf)
+    ggp
+    }
  transf
 }
 
@@ -467,7 +480,9 @@ isbigmatrix<-function(x){
     })
     t = t1
   }
+  
   if(length(t)==0) return(NULL)
+  if(!is.data.frame(t[[1]])) stop("not dataframe")
   t = t[!unlist(lapply(t, is.null))]
   t = t[unlist(lapply(t,nrow))>0]
   
