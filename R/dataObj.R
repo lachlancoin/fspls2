@@ -689,7 +689,7 @@ mult = grep("multinomial",names(phens))
 },
 ####does regression just on orthogonal component
 calcBetaProj1=function(subphens,k,b_i,prev_var, Wall,convert=T, betas = list(), strict=F,project=F, 
-                       inv_transform=getOption("x_transform",F),
+                       inv_transform=getOption("x_transform",T),
                        useglm=getOption("glmnet",T), useoffset=F){
   if(convert){
     b_i = self$convert(b_i)
@@ -741,7 +741,7 @@ getTransforms=function(vars1, inv_transform=T){
   transf
 },
 calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F, 
-                      inv_transform = getOption("x_transform",F),
+                      inv_transform = getOption("x_transform",T),
                       useglm=getOption("glmnet",T)){
   #b_i = b_i1
   if(length(prev_var)>0) stop("problem")
@@ -786,7 +786,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F,
   if(length(vars1[[j]])==0){
     x_=rep(1, self$nrow)
     }else{
-      x_ =self$extractData(vars1, adjust=T, inv_transform=F)
+      x_ =self$extractData(vars1, adjust=T)
     }
   UDV = data$UDVP ## should check it corresponds to prev_i
   Wall1 =self$UDVP$getWall(x_[,ncol(x_)], Wall)
@@ -1031,7 +1031,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,prev_var,Wall, strict=F,
 ## Wall1 is projection from previous
 calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, project=F, strict=F, 
                          CHECK=getOption("fspls.check",T),
-                         inv_transform=getOption("x_transform",F),
+                         inv_transform=getOption("x_transform",T),
                          useoffset = F,useglm=getOption("glmnet",T)){
   data = self 
   if(!useoffset) project=F
@@ -1053,7 +1053,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
   pvs =  apply(ys,2, function(v1) list())
   j = length(vars1)
   non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(T,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
-  x_ =self$extractData(vars1, adjust=T, inv_transform=F )
+  x_ =self$extractData(vars1, adjust=T)
   transf = self$getTransforms(vars1,inv_transform = inv_transform) #lapply(vars1, function(v1) self$transforms[[v1[[3]]]][[2]])
   UDV = data$UDVP ## should check it corresponds to prev_i
   Wall2 = UDV$getWall(x_[,ncol(x_)], Wall1) ## updated projection
@@ -1062,7 +1062,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
   if(useoffset && project){
         x1_ = x1_ - UDV$P %*% (UDV$VDU %*% x1_)
         if(CHECK){ ##THIS DEMONSTRATE ORTHOGONALITY
-             d3 = self$extractData(UDV$var, adjust=T, inv_transform=F)
+             d3 = self$extractData(UDV$var, adjust=T)
           #   var_x1 = var(x1_[,1])
               x5=unlist(lapply( 1:length(UDV$var), function(jk){
                 
@@ -1302,7 +1302,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
   list(betas=betas, constants = constants,tbls = tbls, pvs = pvs, Wall = Wall2)
 },
 ##var and W_all1 are from one smaller model
-#calcWall=function(b_i, var, W_all1, inv_transform=getOption("x_transform",F)){
+#calcWall=function(b_i, var, W_all1, inv_transform=getOption("x_transform",T)){
 #  data = self
 #  data$updateUDVP(var, inv_transform=inv_transform)
 #  UDV = data$UDVP ## should check it corresponds to prev_i
@@ -1334,7 +1334,7 @@ mean__x = function(v1){
 #  self$mean_x[[v1[[1]]]][v1[[2]]]
   mean(self$data[[v1[1]]][,v1[2]])
 },
-extractData=function(var, adjust=T,convert=F,inv_transform=F){
+extractData=function(var, adjust=T,convert=F){
   transforms = self$transforms
   if(convert)var = lapply(var,self$convert)
   Dall = Matrix( 0,nrow = self$nrow, ncol = length(var), dimnames = list(dimnames(self$data[[1]])[[1]], names(var)), sparse=T)
@@ -1349,10 +1349,10 @@ extractData=function(var, adjust=T,convert=F,inv_transform=F){
   
     #print(c( mean(Dall[,jk]),self$mean_x[[v1[1]]][v1[2]]))
     if(adjust)Dall[,jk] = Dall[,jk]- mean(Dall[,jk]) #self$mean_x[[v1[1]]][v1[2]]
-    if(inv_transform) {
-      Dall[,jk] = self$transforms[[t_ind]][[2]](Dall[,jk]) ## applies inverse transform
-      nme[[jk]] = paste(nme[[jk]], names(transforms)[[t_ind]])
-    }
+    #if(inv_transform) {
+    #  Dall[,jk] = self$transforms[[t_ind]][[2]](Dall[,jk]) ## applies inverse transform
+    #  nme[[jk]] = paste(nme[[jk]], names(transforms)[[t_ind]])
+    #}
   }
   dimnames(Dall)[[2]] = nme
   Dall
@@ -1362,7 +1362,7 @@ extractData=function(var, adjust=T,convert=F,inv_transform=F){
 makeModels=function(phens1, vars2,k, 
                     project=T,logpthresh = -5,useglm=T,useoffset=T,
                     flags = list(),checkRMSV=T, verbose=F,
-                    inv_transform=.readFlag(flags,"x_transform",F)
+                    inv_transform=.readFlag(flags,"x_transform",T)
                   ){
   nonNA = self$looc$incl[,k]
   if(is.null(self$looc)){
@@ -1388,7 +1388,7 @@ makeModels=function(phens1, vars2,k,
  # nme_c1 = var_transf[[1]]
   prev_i = self$makeNextModel(NULL,b_i_name,subphens,k, Wall,
                               family, ypred=ypred, project=project, useglm=F, 
-                              inv_transform=.readFlag(flags,"x_transform",F),
+                              inv_transform=.readFlag(flags,"x_transform",T),
                               logpthresh =logpthresh,useoffset=useoffset)
   models[[1]] = prev_i$simplify()
   nmes[[1]] = "empty"
@@ -1403,7 +1403,7 @@ makeModels=function(phens1, vars2,k,
 #    transform_func=eval(str2lang(func_str1[var_transf[[jk]]]))
    # transform_y1=transform_y[[var_transf[[jk]]]]
     prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k,Wall,
-                                 inv_transform=.readFlag(flags,"x_transform",F),
+                                 inv_transform=.readFlag(flags,"x_transform",T),
                                  family, ypred=ypred, project=project, useglm=useglm, logpthresh =logpthresh,useoffset=useoffset)
     if(is.null(prev_i1)) break;
     nme2 = paste(vars2[[jk]], collapse=".")
@@ -1464,7 +1464,7 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
     self$weights[naInds] = min(w1)
   }
 },
-checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=!getOption("x_transform",F),verbose=F, useglm=T){
+checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=!getOption("x_transform",T),verbose=F, useglm=T){
   #transform_y1 = self$transforms[[nme_c1]]
   #inv_funcst = transform_y1[[2]]
   data=self
@@ -1524,9 +1524,9 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=!getOption("x
     if(is.null(prev_i)) return(prev_i1)
     #prev_i1$setOffset()
     if(FALSE){ ##JUST TO CHECK WHAT GLM VARIABLES  WOULD BE IF WE JUST FIT ALL
-      extractd0 = self$extractData(c(prev_i$var, list(b_i)), adjust=F, inv_transform=inv_transform)
+      extractd0 = self$extractData(c(prev_i$var, list(b_i)), adjust=F)
       means_x = apply(extractd0,2,mean)
-      extractd = self$extractData(c(prev_i$var, list(b_i)), adjust=T, inv_transform=inv_transform)
+      extractd = self$extractData(c(prev_i$var, list(b_i)), adjust=T)
       subnme = names(subphens)[[1]]
       family = strsplit(subnme,"\\.")[[1]]
       df2 = data.frame(lapply(subphens[[1]], function(colind){
@@ -1660,7 +1660,7 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x 
 },
 
 extractPredictions=function(all_models_,phens1, flags, CV = FALSE,liab=T,
-                            inv_transform=.readFlag(flags, "x_transform",F) ,
+                            inv_transform=.readFlag(flags, "x_transform",T) ,
                             ypred = self$ypred(phens1)){
   d = self
   inv_transform_y = !inv_transform
@@ -1746,55 +1746,63 @@ evaluateAllModels=function(all_models_y,phens,flags,
   if(length(all_models_y)==0) return(NULL)
   nmes_models = names(all_models_y[[1]][[1]]) #[[1]]);
   names(nmes_models) = nmes_models
-  #numvar = numvars[[1]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+  #numvar = numvars1[[2]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
       #ypred = ypreds[[pheno_nme]]; 
       if(is.null(ypred)) stop("ypred is null")
-      .merge1_new(lapply(nmes_models, function(nmes1){
+      evals =.merge1_new(lapply(nmes_models, function(nmes1){
         group_names2 = group_names[numvars==numvar]
-        evals = .merge1_new(lapply(group_names2, function(group_name){
-          if(verbose) print(paste(numvar,nmes1,group_name))
-          all_models1 = all_models_y[[group_name]]#[[pheno_nme]]   
-              full_ind = names(all_models1)=="full"
-              full_model = all_models1[["full"]][[nmes1]]
-              all_models2 = lapply(all_models1[!full_ind], function(am) am[[nmes1]])
+       # evals = .merge1_new(lapply(group_names2, function(group_name){
+      #    if(verbose) print(paste(numvar,nmes1,group_name))
+          all_models1 = all_models_y[names(all_models_y) %in% group_names2]#[[pheno_nme]]   
+       
+              
+              
+              all_models2 = lapply(all_models1, function(am) lapply(am, function(am1) am1[[nmes1]]))
               if(length(all_models2)>0){
                 all_models2 = all_models2[!unlist(lapply(all_models2, is.null))]
               }
-              nmesm = names(all_models2)
+              names(all_models2) = NULL
+              all_models3 = unlist(all_models2,rec=F)
+              full_model = all_models3[["full"]]
+               full_model_nme=paste(names(full_model$var_names), collapse=";")
+              nmesm = grep("full",names(all_models3),inv=T,v=T);
               inds=as.numeric(nmesm)
               res1 = NULL; res2 = NULL
               if(!is.null(full_model)){
                 #ypredObj$updateYP(self, phens, )#= self$looc$incl[,k2]
                 nonNA =self$looc$incl[,self$nreps()]
                 ypred$updateYP(d, full_model, nonNA, inv_transform_y = inv_transform_y, flip=FALSE, liab=liab)
-                res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)%>% tibble::add_column(isfull=T, transf=full_model$transf)
+                res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)%>% tibble::add_column(isfull=T, model=full_model_nme)
                 #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
               }
               if(length(nmesm)>0){
-                transf=c()
+                #transf=c()
                 for(j in 1:length(nmesm)){
                   nonNA =self$looc$incl[,inds[[j]]]
-                  prev_i1 = all_models2[[j]]
-                  transf = c(transf,prev_i1$transf)
+                  prev_i1 = all_models3[[j]]
+               #   transf = c(transf,prev_i1$transf)
                   ypred$updateYP(d, prev_i1, nonNA,inv_transform_y=inv_transform_y, flip=TRUE)
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
                 nonNA=self$getNonNAInds(inds)
-                res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)%>% tibble::add_column(isfull=F)
+                res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)%>% tibble::add_column(isfull=F,model="cv")
               }
               rbind(res1,res2)
-        }),addName="model")
+#        }),addName="model")
+     }),addName="trainedOn")
+      if(T) return(evals)
         if(is.null(evals) ) return(NULL)
         ## this calculates average scores across cv
-        evals1 = unite(evals,"phenomodel","pheno","model")
-        evals$isfull[evals1$phenomodel %in% evals1$phenomodel[evals1$isfull]] = T
+      #  evals1 = unite(evals,"phenomodel","pheno","model")
+      #  evals$isfull[evals1$phenomodel %in% evals1$phenomodel[evals1$isfull]] = T
         evals3 = subset(evals, cv==T)%>% pivot_wider(names_from="pheno", names_prefix="pivoted_")
         if(nrow(evals3)==0) return(evals)
-        evals4 = unite(evals3,"comb","submeasure","measure","subpheno","family", remove=F)
-        combs = unique(evals4$comb)
+       # evals4 = unite(evals3,"comb","submeasure","measure","subpheno","family", remove=F)
+        evals4 = unite(evals3,"submeasure","measure","subpheno","family", remove=F)
+        #combs = unique(evals4$comb)
         mi = match(c("comb","submeasure","measure","subpheno","family","cv","isfull","model"),names(evals4))
         avg_inds =( 1:ncol(evals4))[-mi]
        # print(evals4)
@@ -1810,7 +1818,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
         mi2 = match(names(evals),names(avgs1))
       
         rbind(evals, avgs1[,mi2])
-      }),addName="trainedOn")
+    
    # }),addName="pheno_group")
   }),addName="numvars")
   if(!is.null(evals_all$numvars)){
@@ -1856,7 +1864,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
       if(length(UDV$var)==0 &&length(var)==0) return(NULL)
       if(length(UDV$var)==length(var) &&  length(which(unlist(UDV$var)!=unlist(var)))==0) return(NULL) ## dont need to update
     }
-    Dall = self$extractData(var, adjust=T,inv_transform=F)
+    Dall = self$extractData(var, adjust=T)
     self$UDVP=UDVPObj$new(self, var,Dall)
   },
 projOut1=function(ik){
@@ -2050,7 +2058,7 @@ getNorm=function(W,var,ik,type){
   }
   return(norm)
 },
-getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5,inv_transform=getOption("x_transform",F)){
+getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
   
   assoc=(type %in% c("assoc","assoc1"))
   W = if(type %in% c("slow","assoc"))self$projOut(ik) else self$projOut1(ik)
@@ -2086,7 +2094,7 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5,inv_trans
      }else{
         norm = self$getNorm(W,var, ik, type)
         norm_sel = abs(norm[unlist(lapply(var, function(v) if(v[1]==ik) v[2] else NULL))])
-        if(length(which(norm_sel>var_thresh))>0 && !inv_transform) warning(" not projecting out properly .. possibly due to correlated vars !")
+        if(length(which(norm_sel>var_thresh))>0 ) warning(" not projecting out properly .. possibly due to correlated vars !")
         to_rem = which(norm>-var_thresh)
         P = self$UDVP$P
         angles1 = lapply(names(phensi), function(ii){
@@ -2215,7 +2223,7 @@ getAngles1=function(subphens,varnames,incl=names(self$data), k=1,type="slow1"){
           angles_d[[ik]] = self$getAngleInner(phensi,ik,k,var)
         }else{
           angles_d[[ik]] =  tryCatch({
-            self$getAngleInnerOld(phensi,ik, k,var,type, inv_transform=inv_transform)
+            self$getAngleInnerOld(phensi,ik, k,var,type)
           },error=function(errw){
             print(errw)
             NULL
