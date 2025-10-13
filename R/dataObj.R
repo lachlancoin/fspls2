@@ -1758,19 +1758,24 @@ evaluateAllModels=function(all_models_y,phens,flags,
       #    if(verbose) print(paste(numvar,nmes1,group_name))
           all_models1 = all_models_y[names(all_models_y) %in% group_names2]#[[pheno_nme]]   
        
-              
+              full_ind = 
               
               all_models2 = lapply(all_models1, function(am) lapply(am, function(am1) am1[[nmes1]]))
+              all_models2_full = all_models2[unlist(lapply(all_models2, function(am)"full" %in% names(am) ))]
               if(length(all_models2)>0){
                 all_models2 = all_models2[!unlist(lapply(all_models2, is.null))]
               }
               names(all_models2) = NULL
+              names(all_models2_full) = NULL
               all_models3 = unlist(all_models2,rec=F)
+              all_models3_full = unlist(all_models2_full,rec=F)
               full_model = all_models3[["full"]]
                full_model_nme=paste(names(full_model$var_names), collapse=";")
               nmesm = grep("full",names(all_models3),inv=T,v=T);
-              inds=as.numeric(nmesm)
-              res1 = NULL; res2 = NULL
+              nmesm_full = grep("full",names(all_models3_full),inv=T,v=T);
+              inds=as.numeric(nmesm); 
+              inds_full = as.numeric(nmesm_full)
+              res1 = NULL; res2 = NULL; res3 = NULL
               if(!is.null(full_model)){
                 #ypredObj$updateYP(self, phens, )#= self$looc$incl[,k2]
                 nonNA =self$looc$incl[,self$nreps()]
@@ -1790,7 +1795,19 @@ evaluateAllModels=function(all_models_y,phens,flags,
                 nonNA=self$getNonNAInds(inds)
                 res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)%>% tibble::add_column(isfull=F,model="cv")
               }
-              rbind(res1,res2)
+              if(length(nmesm_full)>0){
+                #transf=c()
+                for(j in 1:length(nmesm_full)){
+                  nonNA =self$looc$incl[,inds_full[[j]]]
+                  prev_i1 = all_models3_full[[j]]
+                  #   transf = c(transf,prev_i1$transf)
+                  ypred$updateYP(d, prev_i1, nonNA,inv_transform_y=inv_transform_y, flip=TRUE)
+                  #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
+                }
+                nonNA=self$getNonNAInds(inds_full)
+                res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)%>% tibble::add_column(isfull=T,model=full_model_nme)
+              }
+              rbind(res1,res2,res3)
 #        }),addName="model")
      }),addName="trainedOn")
       if(T) return(evals)
