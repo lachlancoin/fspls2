@@ -1,4 +1,28 @@
 
+
+
+## this from sce single cell format
+.convertSCEToSparse<-function(sce){
+comb = cbind(sce$donorID, sce$majorCluster)
+dimnames(comb)[[2]] = c("donorID","majorCluster")
+ncohort = length(levels(sce$donorID))
+ncluster = length(levels(sce$majorCluster))
+
+j = (comb[,1]-1)*ncluster + comb[,2]
+i = 1:nrow(comb)
+dims = c(nrow(comb), ncohort *ncluster)
+spM = sparseMatrix(i,j,dims = dims) #dimnames=list(sce$cohortID, sce$majorCluster))
+cell_names = levels(sce$majorCluster)
+sample_names = levels(sce$donorID)
+coln=unlist(lapply(sample_names, function(sn){
+  paste(sn, cell_names,sep=".")
+}))
+colnames(spM) = coln
+
+countsMatrix = sce@assays@data$X %*% spM
+countsMatrix
+}
+
 .renameModels<-function(eval,len=3){
     models = lapply(eval$model, function(x)strsplit(x,";")[[1]])
     models1 =unlist(models)
@@ -28,6 +52,9 @@
     print(str)
   }
 }
+
+
+
 .avg<-function(eval0){
   nme_cols1 = c("data","subpheno","measure","pheno","trainedOn","pheno_group","numvars","cv","family")
   rem_cols = names(eval0)[!(names(eval0) %in% nme_cols1)]
@@ -103,11 +130,10 @@ length(unique(eval1$`data:family`))
 #      maxn = max(eval2$nsamps)
   #head(eval4)#pivot_wider(eval2, names_from = c("cv", "fullmodel", "numvars"), values_from ="value")
 .plotEval1<-function(eval3,
-           shape_color=c("pheno","subpheno"),linetype="fullmodel",showranges=T,
+           shape_color=c("pheno","subpheno"),linetype="fullmodel",showranges=T, ## linetype="fullmodel"
            txtsize=1,logy=F,legend=F,sep_by="",scales="free",point=T,line=T,
            grid0 = c("cohort","measure"),grid1 = "cv_full",title="", title1=""
           ){
- 
   linetype_nme = paste(linetype, collapse="_");
   grid0_nme = paste(grid0, collapse="_")
   grid1_nme = paste(grid1,collapse="_");

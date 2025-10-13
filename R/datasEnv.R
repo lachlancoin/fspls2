@@ -20,7 +20,7 @@
 }
 .getPvsAll<-function(subphens,datas1, vars_l1, b_i_name,k,
                      Wall =lapply(subphens, function(f) matrix(nrow=0,ncol=0)),
-                     useglm=F ,inv_transform=getOption("x_transform",F),
+                     useglm=F ,inv_transform=getOption("x_transform",T),
                      project=T, useoffset=T){
   ## dont need glmnet for getting pvalues
   nmesd = names(datas1); names(nmesd)=nmesd
@@ -650,7 +650,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     if(!is.list(genes_incls)) stop("genes incls should be list")
     if(length(train_nme)==0) train_nme = names(datas1)[[1]]
     names(train_nme) = train_nme
-    maxsize=.readFlag(flags,'max',50)
+    maxsize=.readFlag(flags,'max',500)
     minsize=.readFlag(flags,'min',0)
     num_pvals = min(topn, 10)
     incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
@@ -670,7 +670,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
       lapply(self$datas[[data_nme]]$vars, function(v) quantile(v, quantiles))
     })
     Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0)) 
-     #k=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];#nme_c1 = names(transform_y)[[1]]
+    # k=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];#nme_c1 = names(transform_y)[[1]]
      variables=lapply(nreps, function(k){
       if(verbose) print(paste("cv",k,"of",length(nreps)))
       jj1=0
@@ -716,7 +716,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
                    nv =  try(
                      .getPvsAll(phens,self$datas[names(self$datas) %in% train_nme], vars_l1, b_i_name,k,  Wall,project = project, 
                                    useglm=useglm,
-                                   inv_transform=.readFlag(flags,"x_transform",F),
+                                   inv_transform=.readFlag(flags,"x_transform",T),
                                    useoffset=useoffset))
                    if(inherits(nv,"try-error")) {
                      print(paste(nme_c1, "error"))
@@ -772,7 +772,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
           ang1 = ang1[ord_all]
           logpvs = logpvs[ord_all]
           logpvs_all = logpvs_all[ord_all]
-          if(!.readFlag(flags,"x_transform",F)){
+          if(!.readFlag(flags,"x_transform",T)){
             if(length(func_ind)>0 ){
               finds = unlist(lapply(ang1, function(a1)a1[[1]]$var[[1]][3]))
               ang1 = ang1[finds==func_ind[[1]]]
@@ -781,18 +781,20 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
             }
           }
           if(!is.null(stop_y)){
-            stop_ind = grep(stop_y,names(ord))
-            print(head(sort(ord[stop_ind])))
-            stop_random = min(stop_ind)==1
+            gp1=grep(stop_y, names(logpvs))
+            gp=grep(stop_y, names(logpvs), inv=T)
+         
+            print("HERE")
+            print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
+            stop_random= min(logpvs[gp1])<=min(logpvs[gp])
+            #print(head(sort(ord[stop_ind])))
           }
-          gp1=grep(stop_y, names(logpvs))
-          gp=grep(stop_y, names(logpvs), inv=T)
-          print("HERE")
-          print(c( min(logpvs[gp1]),min(logpvs[gp])))
+         
+     
           print("HERE ALL")
           print(head(sort(logpvs_all[gp])))
           if(stop_random){
-            print(paste("stopping due to random", exp(logpv)))
+            print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
           }
           logpv =min(logpvs)
           
@@ -868,7 +870,7 @@ updateTransforms = function(transform_y){
   }
 },
   evaluateAllModels=function(all_models, phens=all_models$phens,flags=all_models$flags,verbose=F,
-                             db=all_models$db, user="", inv_transform_y=!.readFlag(flags,"x_transform",F)){ ## different folds with same variables
+                             db=all_models$db, user="", inv_transform_y=!.readFlag(flags,"x_transform",T)){ ## different folds with same variables
     sigDB = self$getSigDB(db,user=user)
     if(!is.null(sigDB) ){
       eval1 = sigDB$loadEval(flags,phens,)
@@ -905,6 +907,7 @@ updateTransforms = function(transform_y){
       return(eval1)
     }
     #print("HH")
+ #  if(T) return(eval2)
     .calcEval1(eval2, rename=F)
   },
   pvalues=function(vars,phens,transform_y,flags){
