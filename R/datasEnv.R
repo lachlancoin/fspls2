@@ -212,7 +212,7 @@ datasEnv<-R6Class("datasEnv", public = list(
               dbDir="./",
                       memDir=NULL){
     self$flags = flags
-    transform_y =fromJSON(.readFlag(flags, "transform_y",toJSON(list(x=c("function(y) y","function(y) y")))))
+    transform_y =fromJSON(.readFlag(flags, "transform_y",toJSON(list(x=list(unvfunc="function(y,param) y",func="function(y,param) y", param=1)))))
     ### MAKE SIGNATURE DIRECTORY
     self$sigsdir=paste(dbDir,"fspls_signatures",sep="/")
     
