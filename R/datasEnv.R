@@ -114,11 +114,38 @@ getFullModels<-function(all_models){
   }
 }
 
+##if(length(cohort)>1){
+#       
+#        lapply(cohort, function(c){
+#          mi1 =  match(rownames(c$matrix), rn)
+#          mi0 =  match(rn,rownames(c$matrix))
+#          
+#         
+#          if(typeof(c$matrix)!="S4") stop(" should be sparse matrix")
+#          
+#          
+#          })
+#    }
+.getAllSparseMatrices<-function(data, hasNA=T, convertToBigMatrix=F){
+  rn = unlist(lapply(data, function(d1) rownames(d1)))
+  rn = rn[!duplicated(rn)]
+  lapply(data, function(mat){
+              .getSparseMatrices(mat, hasNA=hasNA, convertToBigMatrix = convertToBigMatrix,rn = rn)
+  })
+  
+}
 ##this function removes NAs
 ## if no NA matrixNA is just empty matrix
-.getSparseMatrices<-function(mat, hasNA=T, convertToBigMatrix=F){
-
-  if(!hasNA){
+.getSparseMatrices<-function(mat, hasNA=T, convertToBigMatrix=F,rn = rownames(mat)){
+  mi1 =  match(rownames(mat), rn)
+  mi0 =  match(rn,rownames(mat))
+  newNA=T
+  if(length(mi1)==length(rn)){
+               if(max(abs(apply(cbind(mi1, 1:length(rn)),1,diff)))==0) newNA=F
+            }
+  newNA = length(which(is.na(mi0))>0)
+  
+  if(!hasNA& !newNA){
     if(convertToBigMatrx){
       m2=matrix(0, nrow = nrow(mat), ncol = ncol(mat))
       res1 = list(matrix = as.big.matrix(mat),
@@ -130,16 +157,33 @@ getFullModels<-function(all_models){
                     )
     }
   }else{
-    m1=apply(mat,2,function(v){
-      mv = mean(v, na.rm=T)
-      v[is.na(v)]=mv
-      v
-    })
-    m2 = apply(mat,2,function(v){
-      v1 = rep(0, length(v))
-      v1[is.na(v)]=1
-      v1
-    })
+    if(newNA){
+      m1=apply(mat,2,function(v){
+        v1 = v[mi0]
+        mv = mean(v, na.rm=T)
+        v1[is.na(v1)]=mv
+        v1
+      })
+      rownames(m1) = rn
+      m2 = apply(mat,2,function(v){
+        v1 = rep(1, length(rn))
+        v1[mi1[!is.na(v)]]=0
+        v1
+      })
+      rownames(m2) = rn
+        
+    }else{
+          m1=apply(mat,2,function(v){
+            mv = mean(v, na.rm=T)
+            v[is.na(v)]=mv
+            v
+          })
+          m2 = apply(mat,2,function(v){
+            v1 = rep(0, length(v))
+            v1[is.na(v)]=1
+            v1
+          })
+    }
     if(convertToBigMatrix){
        res1 = list(matrix= as.big.matrix(m1), matrixNA = as.big.matrix(m2))
     }else{
@@ -161,7 +205,9 @@ datasEnv<-R6Class("datasEnv", public = list(
               flags = list(),
            
               convertToBigMatrix=F,
-              mats = lapply(datasets, function(d) lapply(d$data, function(d1).getSparseMatrices(d1, convertToBigMatrix=convertToBigMatrix))),
+              hasNA=T,
+              mats = lapply(datasets, function(d) .getAllSparseMatrices(d$data,hasNA=hasNA, convertToBigMatrix=convertToBigMatrix)),
+        
               families=lapply(ys, function(d) .getFamily(d)),
               dbDir="./",
                       memDir=NULL){

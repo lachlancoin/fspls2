@@ -1752,14 +1752,11 @@ evaluateAllModels=function(all_models_y,phens,flags,
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
       #ypred = ypreds[[pheno_nme]]; 
       if(is.null(ypred)) stop("ypred is null")
-      evals =.merge1_new(lapply(nmes_models, function(nmes1){
+      .merge1_new(lapply(nmes_models, function(nmes1){
         group_names2 = group_names[numvars==numvar]
        # evals = .merge1_new(lapply(group_names2, function(group_name){
       #    if(verbose) print(paste(numvar,nmes1,group_name))
           all_models1 = all_models_y[names(all_models_y) %in% group_names2]#[[pheno_nme]]   
-       
-              full_ind = 
-              
               all_models2 = lapply(all_models1, function(am) lapply(am, function(am1) am1[[nmes1]]))
               all_models2_full = all_models2[unlist(lapply(all_models2, function(am)"full" %in% names(am) ))]
               if(length(all_models2)>0){
@@ -1810,32 +1807,6 @@ evaluateAllModels=function(all_models_y,phens,flags,
               rbind(res1,res2,res3)
 #        }),addName="model")
      }),addName="trainedOn")
-      if(T) return(evals)
-        if(is.null(evals) ) return(NULL)
-        ## this calculates average scores across cv
-      #  evals1 = unite(evals,"phenomodel","pheno","model")
-      #  evals$isfull[evals1$phenomodel %in% evals1$phenomodel[evals1$isfull]] = T
-        evals3 = subset(evals, cv==T)%>% pivot_wider(names_from="pheno", names_prefix="pivoted_")
-        if(nrow(evals3)==0) return(evals)
-       # evals4 = unite(evals3,"comb","submeasure","measure","subpheno","family", remove=F)
-        evals4 = unite(evals3,"submeasure","measure","subpheno","family", remove=F)
-        #combs = unique(evals4$comb)
-        mi = match(c("comb","submeasure","measure","subpheno","family","cv","isfull","model"),names(evals4))
-        avg_inds =( 1:ncol(evals4))[-mi]
-       # print(evals4)
-        avgs = .merge1_new(lapply(combs, function(comb1){
-          s1 = subset(evals4, comb==comb1)
-          s2 = s1[1,,drop=F]
-          avg_v = apply(s1[,avg_inds,drop=F],2,mean,na.rm=T)
-          s2[avg_inds] = as.list(avg_v)
-          s2$model = "avg"
-          s2
-        }))
-        avgs1 = avgs[,-1]%>%pivot_longer(cols=starts_with("pivoted_"),names_prefix="pivoted_",names_to="pheno")
-        mi2 = match(names(evals),names(avgs1))
-      
-        rbind(evals, avgs1[,mi2])
-    
    # }),addName="pheno_group")
   }),addName="numvars")
   if(!is.null(evals_all$numvars)){
@@ -2632,6 +2603,8 @@ updateTransforms=function(transform_y){
     #ncoly = 1
 #    self$ones =     matrix(1, nrow=nrowy, ncol = ncoly)
 #    self$ones_x =     matrix(1, ncol=nrowy, nrow= 1)
+   
+    
     self$data = lapply(cohort, function(c) {
       cm = c$matrix
       if(is.null(rownames(cm))) rownames(cm) = 1:nrow(cm)
@@ -2664,7 +2637,8 @@ updateTransforms=function(transform_y){
     self$mean_x = lapply(self$data, function(d1){
       mx = attr(d1,"mean_x")
       if(is.null(mx)){
-        mx =if(typeof(d1)=="S4")  (ym %*% d1)[1,]/sum(ym) else    dgemm( A=ym, B=d1)[1,]/sum(ym)
+        mx =if(typeof(d1)=="S4")  (ym[,1:nrow(d1),drop=F] %*% d1)[1,]/sum(ym) else    dgemm( A=ym[,1:nrow(d1),drop=F], B=d1)[1,]/sum(ym)
+        #mx =if(typeof(d1)=="S4")  (ym %*% d1)[1,]/sum(ym) else    dgemm( A=ym, B=d1)[1,]/sum(ym)
       }
       mx
       })
