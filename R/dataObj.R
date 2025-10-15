@@ -1,4 +1,12 @@
 default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC"}')
+.convertToTransform<-function(transform_y){
+lapply(fromJSON(transform_y), function(t_y){
+  t_y1 =  lapply(t_y[1:2], function(t_y1) eval(str2lang(t_y1)))
+  t_y1$params = t_y[[3]]
+  .checkInverse(t_y1)
+  t_y1 
+})
+}
 
 ## assumes Wall1 is upper diagonal
 ## uses data with mean subtracted
@@ -1094,7 +1102,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,prev_var, Wall1,betas1, proje
   }
   for(kk in 1:ncoly){
     nonNAk = nonNA & non_na_x
-    y = transform_func_y(ys[,kk])[nonNAk]
+   # y = transform_func_y(ys[,kk])[nonNAk]
+    y=ys[,kk][nonNAk]
     w = data$weights[nonNAk]
     beta_new1=0;
     const_term=0
@@ -2558,22 +2567,12 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1, exc
     
   },
 updateTransforms=function(transform_y){
-  transform_y1 = fromJSON(transform_y)
-  self$transforms = lapply(transform_y1, function(t_y){
-    t_y1 =  lapply(t_y[1:2], function(t_y1) eval(str2lang(t_y1)))
-    .checkInverse(t_y1, t_y[[3]])
-    t_y1
-  })
+  self$transforms =.convertToTransform(transform_y)
 },
   initialize=function( cohort, 
-                       transform_y=list(x=list(invfunc="function(y) y",func="function(y) y",1), params=1),
+                       transform_y=toJSON(list(x=list(invfunc="function(y) y",func="function(y) y",1), params=1)),
                       incl_full=T,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores
-    self$transforms = lapply(transform_y, function(t_y){
-       t_y1 =  lapply(t_y[1:2], function(t_y1) eval(str2lang(t_y1)))
-       t_y1$params = t_y[[3]]
-      .checkInverse(t_y1)
-      t_y1 
-    })
+    self$transforms = .convertToTransform(transform_y)
     self$default_transform = eval(str2lang("function(x,pow) x"))
     if(!is.null(memDir)){
       mem_dirp = memDir

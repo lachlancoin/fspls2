@@ -212,7 +212,7 @@ datasEnv<-R6Class("datasEnv", public = list(
               dbDir="./",
                       memDir=NULL){
     self$flags = flags
-    transform_y =fromJSON(.readFlag(flags, "transform_y",toJSON(list(x=list(unvfunc="function(y,param) y",func="function(y,param) y", param=1)))))
+    transform_y =.readFlag(flags, "transform_y",toJSON(list(x=list(unvfunc="function(y,param) y",func="function(y,param) y", param=1))))
     ### MAKE SIGNATURE DIRECTORY
     self$sigsdir=paste(dbDir,"fspls_signatures",sep="/")
     
@@ -716,7 +716,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
       lapply(self$datas[[data_nme]]$vars, function(v) quantile(v, quantiles))
     })
     Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0)) 
-    # k=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];#nme_c1 = names(transform_y)[[1]]
+     #k=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];#nme_c1 = names(transform_y)[[1]]
      variables=lapply(nreps, function(k){
       if(verbose) print(paste("cv",k,"of",length(nreps)))
       jj1=0
@@ -756,7 +756,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
                 num_pvals1 = min(num_pvals, nrow(comb))
                 inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
                 nxt_vars = lapply(inds1p, function(ik){
-                #  print(ik)
+                 # print(ik)
                    b_i_name = c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
                    
                    nv =  try(
@@ -830,17 +830,16 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
             gp1=grep(stop_y, names(logpvs))
             gp=grep(stop_y, names(logpvs), inv=T)
          
-            print("HERE")
-            print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
+           # print("HERE")
+            #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
             stop_random= min(logpvs[gp1])<=min(logpvs[gp])
             #print(head(sort(ord[stop_ind])))
           }
          
      
-          print("HERE ALL")
-          print(head(sort(logpvs_all[gp])))
+          #print("HERE ALL")
           if(stop_random){
-            print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
+            if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
           }
           logpv =min(logpvs)
           
@@ -852,6 +851,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
             vars_l = ang1[1:min(length(ang1),beam)]
           }
           if(verbose){
+            print(head(sort(logpvs_all[gp])))
             print(names(vars_l))
             print(paste("logpv",logpv,min(logpvs_all), jj1))
             jj1 = jj1+1

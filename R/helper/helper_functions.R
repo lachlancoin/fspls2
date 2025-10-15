@@ -136,7 +136,7 @@ length(unique(eval1$`data:family`))
           ){
   linetype_nme = paste(linetype, collapse="_");
   grid0_nme = paste(grid0, collapse="_")
-  grid1_nme = paste(grid1,collapse="_");
+  grid1_nme = if(length(grid1)==0) NULL else  paste(grid1,collapse="_");
   shape_color_nme = paste(shape_color,collapse="_")
   sep_by_nme = "sep_by"
   subphens = table(eval3$subpheno)
@@ -147,7 +147,9 @@ length(unique(eval1$`data:family`))
   eval3 = .modify(eval3, linetype, linetype_nme)
   eval3 = .modify(eval3, sep_by, sep_by_nme)
   eval3 = .modify(eval3,grid0, grid0_nme)
+  if(!is.null(grid1_nme)){
   eval3 = .modify(eval3,grid1, grid1_nme)
+  }
   eval2 = eval3
   
   phenos = unique(eval2$sep_by)
@@ -169,7 +171,7 @@ length(unique(eval1$`data:family`))
    ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype_nme,color=shape_color_nme, fill = shape_color_nme ), alpha = 0.1)
   }
   if(nchar(grid0_nme)>0){
-    if(nchar(grid1_nme)>0){
+    if(!is.null(grid1_nme) && nchar(grid1_nme)>0){
        ggp<-ggp+facet_grid(paste(grid0_nme, grid1_nme,sep="~"),scales=scales)
     }else{
       ggp<-ggp+facet_wrap(grid0_nme, scales=scales)
@@ -250,11 +252,12 @@ invrandomize<-function(y1,seed){  ## inverse randomises for the same seed
   invisible(llm)
  # print("ok")
 }
-getYTransform<-function(pows = c(1),offset=1, n_random=0,norm=1000){
-  funcs = list(pow=.getTransformFuncs(pows,  norm = norm, offset=offset),
-               rand=.getRandomFuncs(n_random))
- # if(expX)funcs = c(funcs, getExpFunc(rev=F, offset=offset))
-#  if(logX)funcs = c(funcs, getExpFunc(rev=T, offset=offset))
+getYTransform<-function(pows = c(1),offset=1, n_random=0,norm=1000, exp_x = c(), exp_y = c(), CHECK=F){
+  funcs = list()
+  if(length(pows)>0) funcs = c(funcs,list(pow=.getTransformFuncs(pows,  norm = norm, offset=offset, CHECK=CHECK) ))
+  if(n_random>0)funcs = c(funcs,list( rand=.getRandomFuncs(n_random)))
+  if(length(exp_x)>0) funcs = c(funcs, list(log=getExpFunc(exp_x, rev=F, offset=offset, CHECK=CHECK)))
+  if(length(exp_y)>0) funcs = c(funcs, list(exp=getExpFunc(exp_y, rev=T, offset=offset, CHECK=CHECK)))
   funcs
 }
 getXTransform<-function(pows= c(1),offset=1e-10){
@@ -263,14 +266,45 @@ getXTransform<-function(pows= c(1),offset=1e-10){
 
 ##exp is problematic because of neg numbers, particularly after centralisation
 ##could work with adding back in mean values?? may not generalise to unseen datasets
-getExpFunc<-function(rev=F,offset=0.1){  
-  res = list(exp = c(paste0("function(y) log(y+",offset,")"),
-                     paste0("function(x) exp(x)-",offset)))
-  if(rev) res[[1]] = rev(res[[1]])
-  res
+getExpFunc<-function(pows, rev=F,offset=0.1, CHECK=F){  
+  if(length(which(pows<=0))>0) stop("not possible")
+  if(length(pows)==0) return (list())
+  names(pows)=pows
+ 
+ 
+                 
+  if(rev){
+    warning("probably not going to work because x gets centralised before transform")
+    print("this assumes that x+offset is strictly positive")
+    
+    transf=list(invfunc =  paste0("function(y,pow,norm=",norm,",offset=",offset,") expfunc(y,pow,norm,offset)"),
+                func=paste0("function(x,pow,norm=",norm,",offset=",offset,") logfunc(x,pow,norm,offset)"), params = as.list(pows))
+    
+  }else{
+    warning("this assumes that y+offset strictly positive")
+    transf=list(
+                invfunc=paste0("function(y,pow,norm=",norm,",offset=",offset,") logfunc(y,pow,norm,offset)"),
+                func =  paste0("function(x,pow,norm=",norm,",offset=",offset,") expfunc(x,pow,norm,offset)"),
+                params = as.list(pows))
+   
+  }
+  if(CHECK){
+    ggp= .checkInverse1(transf)
+    ggp
+  }
+  transf
 }
 #.getRandomFuncs(3)
 #c(list(x=c("function(y) y","function(y) y")), random_funcs)
+expfunc<-function(y,pow, norm=1,offset=0.1){
+  y1 = pow^y
+ y1*norm-offset
+}
+#pow is positive
+logfunc<-function(x,pow, norm=1,offset=0.1){
+  x1=(x+offset)/norm; 
+  log(x1)/log(pow)
+}
 
 powfunc<-function(x,pow, norm=1, offset=0.1){
  # pow=v[1]; norm=v[2]; offset=v[3]
