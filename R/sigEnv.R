@@ -136,6 +136,7 @@ sigEnv<-R6Class("sigEnv", public = list(
  data_flags = "list",
  data_names = "list",
  data_types = "list",
+ dims = "list",
  phenos = "list",
  data_id="character",
  user="", ## default user
@@ -159,10 +160,14 @@ sigEnv<-R6Class("sigEnv", public = list(
       }
     }
   },
+ updateTransforms(transform_y){
+   stop(" this not implemented until we split out the transform_y")
+ },
   updateData=function(  user=self$user,data_flags = list(), data_names = list(), data_types = list(),phenos = list(), dims=list()){
     self$data_flags = data_flags
     self$data_names = data_names
     self$data_types = data_types
+    self$dims = dims
     self$phenos = phenos
     tbls = dbListTables(self$mydb)
     expt= data.frame(list(user=user,  flags=toJSON1(data_flags), names =toJSON1(data_names), types=toJSON1(data_types), dims = toJSON1(dims)))
@@ -330,6 +335,19 @@ sigEnv<-R6Class("sigEnv", public = list(
      flags2=flags_all[[o[[1]]]]
      flags2
  },
+get_data_flags=function( user=self$user, nmes = self$data_names, types = self$data_types, dims = self$dims){
+  query="SELECT data.*, experiment_id from data inner join experiment on experiment.data_id = data.data_id  where data.user=:user AND data.dims =:dims AND data.types=:types AND data.names =:names";
+  vn =  dbGetQuery(self$mydb, query, list(user=user, dims = toJSON1(dims),names = toJSON(nmes), types = toJSON1(types)))
+  tbl =table(vn$data_id)
+  data_ids = names(tbl); names(data_ids) = data_ids
+  vn_all = .merge1_new(lapply(data_ids, function(did){
+    vn2 = subset(vn, data_id ==did )
+    vn3 = vn2[1,]
+    vn3[['count']]=nrow(vn2)
+    vn3[names(vn3) %in% c("flags","count")]
+  }))
+   vn_all[order(vn_all$count, decreasing=T),]
+},
  clear_results=function(flags,phens,  user=self$user){
    expt_id = self$getExpt(flags=flags, phens=phens,  user=user,add_new=F)
    tbls = self$tbls()

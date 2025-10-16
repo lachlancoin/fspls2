@@ -911,6 +911,9 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
 updateTransforms = function(transform_y){
   
   self$flags[['transform_y']] = transform_y
+  for(k in 1:length(self$sigs)){
+    self$sigs[[k]]$updateTransforms(transform_y)
+  }
   for(k in 1:length(self$datas)){
     self$datas[[k]]$updateTransforms(transform_y)
   }
