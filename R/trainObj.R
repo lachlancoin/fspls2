@@ -137,6 +137,7 @@ trainObj<-R6Class("trainObj",
                         lapply(nmes_funcst, function(nme_f1){
                           nme_t1=names(self$transforms[[nme_f1]]$params); names(nme_t1) = nme_t1
                           lapply(nme_t1,function(p1){
+                            print(paste(nme_p1, nme_f1, p1))
                             yTr1 = self$yTr[[nme_p1]][[nme_f1]][[p1]]
                             subinds = dimnames(yTr1)[[1]] %in% unlist(phens1) #[[nmes_phens1]]
                             if(length(which(subinds))==0) subinds = dimnames(yTr1)[[1]] %in% phens1[nmes_phens1]

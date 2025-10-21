@@ -45,8 +45,10 @@ toJSON1<-function(flags){
         data.frame(list(experiment_id = expt_id, nvar = length(all_models5$var_names),
                         var_names = toJSON(all_models5$var_names),
                         constants_proj = toJSONM(all_models5$constants_proj),
+                        Wall = toJSONM(all_models5$Wall),
+                        mean_x = toJSON(all_models5$mean_x),
                        # transf= toJSON(all_models5$transf),
-                        betas = toJSONM(all_models5$betas), 
+                        betas_proj = toJSONM(all_models5$betas_proj), 
                         model_nme=nme1, rep=nme2,trainedOn=nme3)  ) 
         #}))
       }))
@@ -137,7 +139,7 @@ sigEnv<-R6Class("sigEnv", public = list(
  data_names = "list",
  data_types = "list",
  dims = "list",
- phenos = "list",
+ transform_y= "list",
  data_id="character",
  user="", ## default user
   initialize=function(dbDir,subnme,user="",
@@ -160,25 +162,29 @@ sigEnv<-R6Class("sigEnv", public = list(
       }
     }
   },
- updateTransforms(transform_y){
-   stop(" this not implemented until we split out the transform_y")
- },
-  updateData=function(  user=self$user,data_flags = list(), data_names = list(), data_types = list(),phenos = list(), dims=list()){
-    self$data_flags = data_flags
+ #updateTransforms(transform_y){
+#   stop(" this not implemented until we split out the transform_y")
+# },
+  updateData=function(  user=self$user,data_flags = list(), data_names = list(), data_types = list(),transform_y = list(), dims=list()){
+    self$data_flags = data_flags[grep('transform_y', names(data_flags), inv=T)]
     self$data_names = data_names
     self$data_types = data_types
     self$dims = dims
-    self$phenos = phenos
+    self$transform_y = transform_y
     tbls = dbListTables(self$mydb)
-    expt= data.frame(list(user=user,  flags=toJSON1(data_flags), names =toJSON1(data_names), types=toJSON1(data_types), dims = toJSON1(dims)))
-    if(!("data" %in% tbls)){  
+    expt= data.frame(list(user=user,  flags=toJSON1(data_flags), transform_y = toJSON1(transform_y),
+                          names =toJSON1(data_names), types=toJSON1(data_types), dims = toJSON1(dims)))
+    expt1 = expt[,names(expt)!="transform_y",drop=F]
+    transform_y1 = transform_y
+    if(!("data" %in% tbls) || !("transform_y" %in% names(dbGetQuery(self$mydb, 'SELECT * from data limit 1')))){  
       self$data_id=0
       expt$data_id=self$data_id; expt$date=date();
       try(dbWriteTable(self$mydb, "data", expt,overwrite=T,append=F))
     }else{
-      vn =  dbGetQuery(self$mydb, 'SELECT data_id from data where user=:user AND flags=:flags AND names=:names AND types=:types AND dims=:dims',expt)
+      vn =  dbGetQuery(self$mydb, 'SELECT * from data where user=:user AND flags=:flags AND names=:names AND types=:types AND dims=:dims',expt1)
       if(nrow(vn)>0){
         self$data_id = vn$data_id[[1]]
+        transform_y1 = fromJSON(vn$transform_y[[1]])
       }else{
         vn =  dbGetQuery(self$mydb, 'SELECT data_id from data')
         self$data_id = max(0,1+max(vn$data_id))
@@ -186,6 +192,7 @@ sigEnv<-R6Class("sigEnv", public = list(
         try(dbWriteTable(self$mydb, "data", expt,overwrite=F,append=T))
       }
     }
+    transform_y1
  },
  saveEval=function(eval2,flags,phens, user=self$user,replace=T){
    expt_id = self$getExpt(flags, phens,user,add_new=T)
@@ -233,9 +240,12 @@ sigEnv<-R6Class("sigEnv", public = list(
            trainedOn = vn4$trainedOn; names(trainedOn)=trainedOn
            lapply(trainedOn, function(ton){
              vn5 = subset(vn4, trainedOn==ton)
+            # print("HHH");print(vn5)
             res2 = list(
-              betas = fromJSONM(vn5$betas[[1]]),
+              betas_proj = fromJSONM(vn5$betas_proj[[1]]),
             var_names = fromJSON(vn5$var_names[[1]]),
+            Wall = fromJSONM(vn5$Wall[[1]]),
+            mean_x = fromJSON(vn5$mean_x),
             #transf = fromJSON(vn5$transf[[1]]),
             constants_proj=fromJSONM(vn5$constants_proj[[1]])
             )
@@ -374,8 +384,10 @@ get_data_flags=function( user=self$user, nmes = self$data_names, types = self$da
    return(list(msg="success"))
  },
   
-  drop_all = function(){
-    lapply(self$tbls(), function(tbl){
+  drop_all = function(exclude = c()){
+    tbls = self$tbls()
+    tbls = tbls[!(tbls %in% exclude)]
+    lapply(tbls, function(tbl){
       str = paste("DROP table ",tbl)
       try(dbExecute(self$mydb, str))
     })

@@ -1730,7 +1730,7 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
 
 
 
-.convert<-function(data,mode="rna", expand=F, max=100, factor=F){
+.convert<-function(data,mode="rna", nme="none",expand=F, max=100, factor=F){
   names(data) =gsub("x_data","data",tolower(names(data)))
   if(is.list(data$y)){
     data$y = as.matrix(data$y)
@@ -1762,7 +1762,7 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   dataset = list(data$data);
   names(dataset)=mode
   y = data$y
-  list(dataset=dataset,y=y)
+  list(dataset=dataset,y=y,nme=nme)
 }
 
 ######from rawlinson paper

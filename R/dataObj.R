@@ -11,8 +11,10 @@ lapply(fromJSON(transform_y), function(t_y){
 ## assumes Wall1 is upper diagonal
 ## uses data with mean subtracted
 ## does not add any constant term
-.eval1_<-function(x_, beta_new2, Wall2, transf, params, family,mean_x = apply(x_,2, mean,na.rm=T), CHECK=F){ 
-  x_ = t(t(x_) - mean_x)
+.eval1_<-function(x_, beta_new2, Wall2, transf, params, family,mean_x = apply(x_,2, mean,na.rm=T), CHECK=F){
+  if(length(mean_x)>0){
+    x_ = t(t(x_) - mean_x)
+  }
   #if(TRUE){
   #  yp_new = (x_ %*% Wall2) %*% beta_new2
   #  return(yp_new)
@@ -244,28 +246,46 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
   }
   m
 }
-.combineAngles1<-function(angles1,cols_incl1, incl, topn=100){ 
+  
+.combineAngles1<-function(angleH, incl, onlyAll=F, topn=100, excl=list()){ 
+  angles1=angleH$angles;cols_incl1=angleH$cols_incl 
   nme_trans = names(angles1[[1]][[1]]); names(nme_trans) = nme_trans
-  nmes_angs1 = names(angles1); names(nmes_angs1)=nmes_angs1
-  lapply(nme_trans, function(nmet){
-    df= .merge1_new(lapply(nmes_angs1, function(inc1){
-      angles2 = angles1[[inc1]]
+#  nmes_angs1 = names(angles1); names(nmes_angs1)=nmes_angs1
+  names(incl) = incl
+  comb_all2=lapply(nme_trans, function(nmet){
+    nme_pow = names(angles1[[1]][[1]][[nme_t1]]); names(nme_pow)=nme_pow
+    lapply(nme_pow, function(nme_p1){
+    comb_all=lapply(incl, function(inc1){
+      ang1 = angles1[[inc1]]
+      if(is.null(ang1)) return(NULL)
       col_incl = cols_incl1[[inc1]]
-      .merge1_new(lapply(angles2, function(angles3){
-        mat= angles3[[nmet]]
-        .merge1_new(apply(mat,1, function(x){
-            xp = sort(x, partial = topn)[topn]
-            inds = which(x <= xp & col_incl)
-            score = x[inds]
-            data.frame(cbind(score,inds))
-        }), addName="pheno")
-      }), addName="family")
-    }), addName="data_type")
-    df[order(df$score),]
+      ang2=ang1[[1]][[nme_t1]][[nme_p1]]
+      cs = colSums(ang2)
+      if(length(ang1)>1){
+        for(jk in 1:length(ang1)){
+          cs = cs+colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
+        }
+      }
+      excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1 && ex[4] ==nme_p1))]
+      if(length(excl1)>0){
+        col_incl[which(names(col_incl) %in% unlist(lapply(excl1, function(ex) ex[2])))]=F
+      }
+      cs[col_incl]
+    })
+    top_angles=whichpart1(comb_all, n=topn, return_scores=T)
+    t1 = .merge1_new(lapply(top_angles, function(ta){
+      data.frame(list(names = names(ta), value=ta))
+    }),addName="data_type")
+    t1 = t1[order(t1$value),]
+    subset(t1, value<999)
+  })
   })
 }
-.combineAngles<-function(angles,cols_incl, incl,onlyAll=F, topn=100, excl = list()){
+.combineAngles<-function(anglesH, incl,onlyAll=F, topn=100, excl = list()){
   names(incl)=incl
+  angles = lapply(anglesH, function(aa) aa$angles)
+  cols_incl = lapply(anglesH, function(aa) aa$cols_incl)
+  
   nme_trans = names(angles[[1]][[1]][[1]]); names(nme_trans) = nme_trans
   comb_all1=lapply(nme_trans, function(nme_t1){
   #nme_t1 = nme_trans[[1]]
@@ -572,12 +592,14 @@ fitModel<-function(yTr,x1,offset=NULL, family=getOption("family","binomial"),
 dataObj<-R6Class("dataObj", public = list(
   dist="environment",
   data="list",
+  
   dataNA="list",
   types="vector",
   nrow="integer",
   vars="list",
 #  var_thresh="double",
-transforms = "list",
+transforms = "list",  ## this is the functions
+#transform_y="list", ## this is the string
 default_transform="closure",
   min_minor="double",
   prev="list",
@@ -1755,7 +1777,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
   if(length(all_models_y)==0) return(NULL)
   nmes_models = names(all_models_y[[1]][[1]]) #[[1]]);
   names(nmes_models) = nmes_models
-  #numvar = numvars1[[2]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+  #numvar = numvars1[[1]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
@@ -2338,8 +2360,6 @@ updateTrain=function(phens,flags, verbose=F){ ## this updates the reps and train
   incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
   if(length(incls) == 0 )incls = list("all"=names(self$data))
   incls_all = unique(unlist(incls))
-  
-  
   if(length(self$train)!=nrep  ||  is.null(self$train[[1]]) || self$train[[1]]$diffTransforms(transforms)){ # || toJSON(self$train[[1]]$func_str)!=toJSON(transform_y)){
     self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$looc , incls_all, transforms,family=self$family)) #lapply(1:ncol,function(k)
   }
@@ -2569,11 +2589,19 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1, exc
 updateTransforms=function(transform_y){
   self$transforms =.convertToTransform(transform_y)
 },
-  initialize=function( cohort, 
+  initialize=function( cohort,  db_name,dbDir,flags,
                        transform_y=toJSON(list(x=list(invfunc="function(y) y",func="function(y) y",1), params=1)),
                       incl_full=T,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores
-    self$transforms = .convertToTransform(transform_y)
-    self$default_transform = eval(str2lang("function(x,pow) x"))
+   #print("H")
+   #print(transform_y)
+    
+  #  self$sigs =sigEnv$new(self$sigsdir,db_name, clear=F, user="")
+   # self$sigs$updateData(data_flags = self$flags, 
+    #                             data_names =cohort, 
+     #                            data_types = names(self$datas[[1]]$data),
+      #                           dims = self$dims(),
+       #                          phenos =self$datas[[1]]$pheno())
+    
     if(!is.null(memDir)){
       mem_dirp = memDir
       mem_dirp = paste(memDir,nrow(cohort$rna$matrix),sep="/")  #getOption("fspls.mem_dir", NULL)
@@ -2675,6 +2703,11 @@ updateTransforms=function(transform_y){
     
     self$vars = vars
     self$UDVP=NULL;
+    
+   
+    
+   
+    self$default_transform = eval(str2lang("function(x,pow) x"))
   }
 )
 )
