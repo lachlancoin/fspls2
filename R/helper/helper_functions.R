@@ -212,8 +212,9 @@ invrandomize<-function(y1,seed){  ## inverse randomises for the same seed
 
 .getRandomFuncs<-function(n,CHECK=F){ ## although these are same, every invocation will give different results
   if(n==0) return(list())
- inds = sample.int(1000,n, replace=T)
+ inds = sample.int(2*n,n, replace=F)
  names(inds) = inds
+ which(duplicated(inds))
  transf=list(invfunc="function(y,seed) randomize(y,seed)",func="function(x,seed) invrandomize(x,seed)",params=as.list(inds))
  if(CHECK){
    ggp= .checkInverse1(transf)
