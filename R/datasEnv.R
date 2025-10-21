@@ -49,6 +49,7 @@ datasEnv<-R6Class("datasEnv", public = list(
               flags = list(),
               dbDir="./",
                       memDir=NULL){
+    nme1="combined"
     self$flags = flags
     self$datasH = datasH
     transform_y =.readFlag(flags, "transform_y",toJSON(list(x=list(unvfunc="function(y,param) y",func="function(y,param) y", param=1))))

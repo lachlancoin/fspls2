@@ -252,7 +252,7 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
   nme_trans = names(angles1[[1]][[1]]); names(nme_trans) = nme_trans
 #  nmes_angs1 = names(angles1); names(nmes_angs1)=nmes_angs1
   names(incl) = incl
-  comb_all2=lapply(nme_trans, function(nmet){
+  comb_all2=lapply(nme_trans, function(nme_t1){
     nme_pow = names(angles1[[1]][[1]][[nme_t1]]); names(nme_pow)=nme_pow
     lapply(nme_pow, function(nme_p1){
     comb_all=lapply(incl, function(inc1){

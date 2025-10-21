@@ -165,6 +165,7 @@ dataH<-R6Class("dataH", public = list(
     family= .getFamily(d$y),
     dbDir="./",
     memDir=NULL){
+    nme=sub("/",".",nme)
     self$flags = flags
     transform_y =.readFlag(flags, "transform_y",toJSON(list(x=list(unvfunc="function(y,param) y",func="function(y,param) y", param=1))))
     ### MAKE SIGNATURE DIRECTORY
@@ -334,7 +335,7 @@ makeModels=function(vars2, inds, phens,flags){
   project=.readFlag(flags,"project",TRUE)
   useoffset=.readFlag(flags,"useoffset",TRUE)
 #  train_nme = .readFlag(flags,'train', names(datas)[1])
-  if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
+#  if(length(which(train_nme %in% names(self$datas)))==0)train_nme = names(self$datas)[[1]]
   verbose=.readFlag(flags,"verbose",FALSE)
   if(!is.null(flags[['useglm']])) stop("define useglmnet not useglm")
   useglm=.readFlag(flags,"useglmnet",TRUE)
