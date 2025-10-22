@@ -317,12 +317,16 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
   #if(family=="ordinal"){
   #  y1[y1>=1]=1
   #}
-  ap1=try(getAreaPlot(yp, y1))
+  ap1=try(summariseAreaPlot(getAreaPlot(yp, y1)))
+  
+  #ggplot(ap1, aes(x=knots, y=value, color=subpheno, size=counts))+geom_point()
   if(inherits(ap1,"try-error")){
-    return(rep(NA,3))
+   resu = (rep(NA,3))
   }
   #print(attr(ap1,"area"))
-  return(c(NA,attr(ap1,"area")[[1]],NA))
+  resu=(c(NA,attr(ap1,"area")[[1]],NA))
+  names(resu)=c("low","mid","high")
+  resu
 }
 
   
@@ -433,7 +437,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
 ##flip is doing NAs nont nonNAs
 
 
-.scoreInternal=function(yp,y1, w1, type_i, fam,thresh){
+.scoreInternal<-function(yp,y1, w1, type_i, fam,thresh){
   minlength = 1;
   if(type_i=="AUC" && fam=="ordinal") type_i = "AUC_all"
   if(type_i %in% c("correlation","rank_correlation","area","area_full","AUC","AUC_full","AUC_all","var")) minlength=2
@@ -441,19 +445,23 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
    # print('h')
     return(unlist(list(low=NA, mid=NA, high=NA)))
   }
-  if(type_i=="misclass"){
+ 
+  if(type_i %in% c("area","max_diff","max_diff_x")){
+    rms=tryCatch({
+      ap1 = getAreaPlot(yp, y1)
+      ap2=summariseAreaPlot(ap1)
+      ap2[[type_i]]
+    },error=function(w){
+      return(rep(NA,3))
+    })
+     names(rms)=c("low","mid","high")
+  }else if(type_i=="misclass"){
     if(fam=="gaussian") y1=as.numeric(factor(y1, sort(unique(y1))))-1
     yp=if(fam=="binomial") plogis(yp[,1]) else yp[,1]
     rms = -1*.misclass(yp,y1, w1,auc=T)
     names(rms) =c("low","mid","high")
-  }else if(type_i=="area"){
-    rms = 1*.areaBetween(yp[,1], y1, family=fam)[2]
-    names(rms)=names(y)[[ycol]]
-  }else if(type_i=="area_full"){
-    rms = 1*.areaBetween(yp[,1], y1, family=fam)
-    # names(rms)=names(y)[[ycol]]
-    names(rms)=c("low","mid","high")
-  }else if(type_i=="AUC"){
+ 
+ } else if(type_i=="AUC"){
     rms = 1*(.calcAUCW(yp[,1],y1, w1))
     names(rms)=c("low","mid","high")
   }else if(type_i=="AUC_full"){
@@ -740,7 +748,6 @@ calcRMSV=function(y, nonNA,      flip=F){
   #nme_p1 = nme_phens[[1]]
   aa=lapply(nme_phens, function(nme_p1){
     family=  getOption("fspls.family",strsplit(nme_p1,"\\.")[[1]][1])
-    
     fam = family
     mtype = match(family,names(types_))
     if(length(which(is.na(mtype)))>0) stop("could not find match in types_")

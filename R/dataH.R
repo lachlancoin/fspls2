@@ -258,6 +258,21 @@ dataH<-R6Class("dataH", public = list(
 #   pvs_all = pvs_all[unlist(lapply(pvs_all, length))>0]
   # pvs_all
  },
+extractPredictions=function(all_modelsh,phens=all_modelsh$phens, flags=all_modelsh$flags, CV = FALSE, liab=T){
+  self$updateLOOC(phens, flags)
+  all_models_y = all_modelsh$models
+  
+  res3 = lapply(all_models_y, function(all_models_){
+      d = self$data
+      if(is.null(d)){
+        print(d_nme)
+        stop("!!")
+      }
+       d$extractPredictions(all_models_, phens, flags, CV=CV, liab=liab)
+  })
+  predictions0=res3[unlist(lapply(res3, function(x) length(x[[1]])))>0]
+  predictions0 # 
+},
 plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x = NULL, violin=F, assoc=F){
   df4= #.merge1_new( 
    # lapply(self$datas, function(d) 

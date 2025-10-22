@@ -904,36 +904,44 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   }else{
     knots = c(0,knots,1)
   }
-  df=.merge1(lapply(levs, function(t){
+  df_l=lapply(levs, function(t){
     inds = y1==t
     tab1 = table(yp[inds])
     cdf=ecdf(yp[inds])
     mi2=match(knots, names(tab1))
-    no_dupl = !duplicated(mi2)
+   # no_dupl = !duplicated(mi2)
     #mi2 = mi2[!duplicated(mi2)]
-    tab1_col = tab1[mi2[no_dupl]]
+    tab1_col = tab1[mi2]
     tab1_col[is.na(tab1_col)]=0
-    df1 = data.frame(cbind(knots[no_dupl],cdf(knots[no_dupl]), tab1_col))
+   # df1 = data.frame(cbind(knots[no_dupl],cdf(knots[no_dupl]), tab1_col))
+    
+    df1 = data.frame(cbind(knots,cdf(knots), tab1_col))
+    
     names(df1)= c("knots","value","counts")
     df1
-  }), addName="subpheno",num_cols=c("knots","value"))
+  })
+  df=.merge1_new(df_l, addName="subpheno",num_cols=c("knots","value"))
+  df = cbind(df, "cumulative")
+  names(df)[ncol(df)] = "type"
+  df
+}
+summariseAreaPlot<-function(df){
   pw = pivot_wider(df, names_from="subpheno", id_cols="knots")
   diff=0
+  diff_v = apply(pw, 1, function(v)abs(v[2]-v[1]))
   for(k in 2:nrow(pw)){
     delta = (pw[k,1]-pw[k-1,1])
     diff = diff+((pw[k-1,2] + pw[k,2] - (pw[k-1,3] + pw[k,3]))/2) * delta
   }
   area=diff
   
-  df = cbind(df, "cumulative")
-  
-  
-  
-  names(df)[ncol(df)] = "type"
+
  
- 
-  attr(df,"area")=area
-  df
+  max_diff_x = pw$knots[which(diff_v==max(diff_v))]
+  
+ list(area=c(NA,diff[[1]],NA),
+  max_diff=c(NA,max(diff_v),NA),
+  max_diff_x= c(min(max_diff_x),median(max_diff_x), max(max_diff_x)))
 }
 .combinePv<-function(pvs){
   return(min(pvs))
@@ -953,9 +961,9 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   names(families)=families
  #j=1; model = predictions0[[2]]; train = model[[1]]; test = train[[1]]; famnme = families[[1]]; fam =test[[famnme]]; family = strsplit(famnme,"\\.")[[1]][1];  phens = dimnames(fam$y)[[2]]; names(phens)=phens
   
-  area_p=.merge1_new(lapply(predictions0, function(model){  
-    .merge1_new(lapply(model, function(train){
-      .merge1_new(lapply(train, function(test){
+  area_p=.merge1_new(lapply(predictions0, function(train){  
+    .merge1_new(lapply(train, function(model){
+      .merge1_new(lapply(model, function(test){
 #        families = names(test); names(families)=families
         .merge1_new(lapply(families, function(famnme){
           fam = test[[famnme]]
@@ -984,8 +992,8 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
         }), addName="pheno")
         }), addName="family")
       }), addName="test")
-    }), addName="train")
     }), addName="model")
+    }), addName="train")
   #attr(area_p,"family")=family
   lens = unlist(vapply(area_p$model, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]]), FUN.VALUE = c(1)))
  

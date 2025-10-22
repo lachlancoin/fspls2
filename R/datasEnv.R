@@ -423,34 +423,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     }
     vars_all
   },
-  extractPredictions=function(all_models,phens=all_models$phens, flags=all_models$flags, CV = FALSE, liab=T, data_nme  = names(self$datas)){
-    #datas = self$datas
-  #  inverse_func_str =lapply(transform_y, function(t_y)  t_y[[2]])
-    
-    self$updateLOOC(phens, flags)
-    names(data_nme) = data_nme
-    #nmes_p = names(phens); names(nmes_p) = nmes_p
-    all_models_y = all_models$models
-    #all_models_ = all_models_y[[1]];d_nme = data_nme[[1]];# nme_p = nmes_p[[1]]; phens1 = phens[[nme_p]];
-    
-    res3 = lapply(all_models_y, function(all_models_){
-      #res2 = lapply(nmes_p, function(nme_p){
-       # phens1 = phens[[nme_p]]
-        res2=lapply(data_nme, function(d_nme){
-          d = self$datas[[d_nme]]
-          if(is.null(d)){
-            print(d_nme)
-            stop("!!")
-          }
-          d$extractPredictions(all_models_, phens, flags, CV=CV, liab=liab)
-        })
-      #})
-   
-    res2[lapply(res2,length)>0]
-    })
-    predictions0=res3[unlist(lapply(res3, function(x) length(x[[1]][[1]])))>0]
-    predictions0 # 
- },
+  
 updateTransforms = function(transform_y){
   self$flags[['transform_y']] = transform_y
   for(k in 1:length(self$datasH)){
