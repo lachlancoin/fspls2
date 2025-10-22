@@ -63,6 +63,7 @@ datasets =examples[3];
 
   phens=datasAll$pheno()
   vars_all = datasAll$select(phens$all, flags, verbose=F,useDB=T)
+  ##extract the variables for the full model only
   vars_all1=.extractFullVars(vars_all)
   all_models = lapply(nmesH, function(nmeh){
     dh=datasAll$datasH[[nmeh]]
@@ -74,8 +75,8 @@ datasets =examples[3];
     dh$evaluateAllModels(all_modelsh, useDB=F)
   }), addName="data")
   
-  ggps1=.plotEval2(eval1,legend=T, grid1="subpheno", grid0="measure",
-                   shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
+  ggps1=.plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0="measure",
+                   shape_color=c("data","transf","cv_full"),sep_by=NULL, showranges=T,
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   pdf("output.pdf")
   lapply(ggps1, print)
