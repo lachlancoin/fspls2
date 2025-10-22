@@ -964,8 +964,8 @@ summariseAreaPlot<-function(df){
   area_p=.merge1_new(lapply(predictions0, function(train){  
     .merge1_new(lapply(train, function(model){
       .merge1_new(lapply(model, function(test){
-#        families = names(test); names(families)=families
-        .merge1_new(lapply(families, function(famnme){
+        families1 = names(test); names(families1)=families1
+        .merge1_new(lapply(families1, function(famnme){
           fam = test[[famnme]]
           family = strsplit(famnme,"\\.")[[1]][1]
         phens = dimnames(fam$y)[[2]]; names(phens)=phens

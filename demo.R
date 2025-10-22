@@ -44,7 +44,7 @@ if(FALSE){
 
 
 ##HOW TO EVALUATE DIFFERENT DATASETS
-options("fspls.types"= fromJSON('{"gaussian": ["correlation","rms"],"binomial":["AUC","area","max_diff","max_diff_x"],"multinomial":"AUC","ordinal" : "AUC_all"}'))
+options("fspls.types"= fromJSON('{"gaussian": ["correlation","rms"],"binomial":["AUC","area","max_diff","max_diff_x"],"multinomial":["AUC","area","max_diff","max_diff_x"],"ordinal" : "AUC_all"}'))
 
 #SET UP TRANSFORMATIONS
 pows = c(0.5,1,1.5)
@@ -76,7 +76,7 @@ datasets =examples[3];
   }), addName="data")
   
   ggps1=.plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0="measure",
-                   shape_color=c("data","transf","cv_full"),sep_by=NULL, showranges=T,
+                   shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   pdf("output.pdf")
   lapply(ggps1, print)
@@ -89,8 +89,8 @@ datasets =examples[3];
       am=dh$extractPredictions(all_models[[nmeh]], CV = F, liab=F);
     })
       
-    fam=datasAll$datasH[[1]]$data$family[[1]]
-    area_p = .getAreaPlot1(predictions0,families=fam)
+    families=datasAll$datasH[[1]]$data$family[[1]]
+    area_p = .getAreaPlot1(predictions0,families=families)
     ###area_p0$value= funcstr1(area_p0$value) only for transformed values, should put this in extractPredictions
     #aa=roc(predictions[[2]]$y, predictions[[2]]$X0)
     ggp_pred0=.plotArea(area_p, rename=F)
