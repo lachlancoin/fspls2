@@ -1,3 +1,41 @@
+
+.combineAngles1<-function(angleH, incl, flags,excl=list()){ 
+  topn = .readFlag(flags,'topn', 20)
+  onlyAll = .readFlag(flags,'only_all',F)
+  angles1=angleH$angles;cols_incl1=angleH$cols_incl 
+  nme_trans = names(angles1[[1]][[1]]); names(nme_trans) = nme_trans
+  #  nmes_angs1 = names(angles1); names(nmes_angs1)=nmes_angs1
+  names(incl) = incl
+  comb_all2=lapply(nme_trans, function(nme_t1){
+    nme_pow = names(angles1[[1]][[1]][[nme_t1]]); names(nme_pow)=nme_pow
+    lapply(nme_pow, function(nme_p1){
+      comb_all=lapply(incl, function(inc1){
+        ang1 = angles1[[inc1]]
+        if(is.null(ang1)) return(NULL)
+        col_incl = cols_incl1[[inc1]]
+        ang2=ang1[[1]][[nme_t1]][[nme_p1]]
+        cs = colSums(ang2)
+        if(length(ang1)>1){
+          for(jk in 1:length(ang1)){
+            cs = cs+colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
+          }
+        }
+        excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1 && ex[4] ==nme_p1))]
+        if(length(excl1)>0){
+          col_incl[which(names(col_incl) %in% unlist(lapply(excl1, function(ex) ex[2])))]=F
+        }
+        cs[col_incl]
+      })
+      top_angles=whichpart1(comb_all, n=topn, return_scores=T)
+      t1 = .merge1_new(lapply(top_angles, function(ta){
+        data.frame(list(names = names(ta), value=ta))
+      }),addName="data_type")
+      t1 = t1[order(t1$value),]
+      subset(t1, value<999)
+    })
+  })
+}
+
 ## this is a class which holds a data object and interacts with the coordination node
 .getAllSparseMatrices<-function(data, hasNA=T, convertToBigMatrix=F){
   rn = unlist(lapply(data, function(d1) rownames(d1)))
@@ -244,15 +282,51 @@ dataH<-R6Class("dataH", public = list(
  cats = function(maxpheno = 1e9){
    self$data$cats(maxpheno)
  },
+ res_inner=function(comb_,prev_i, flags,k){
+   nme_comb = names(comb_); names(nme_comb) = nme_comb
+  # nme_c1 = nme_comb[[1]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
+   res_inner=lapply(nme_comb, function(nme_c1){
+     nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
+     lapply(nmesp1, function(nme_p1){
+       comb = comb_[[nme_c1]][[nme_p1]]
+       if(nrow(comb)==0) return(NULL)
+       num_pvals1 = nrow(comb)
+       inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
+       nxt_vars = lapply(inds1p, function(ik){
+         b_i_name = c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
+          nv= self$getPvsAll(phens,prev_i, b_i_name,k,  prev_i$Wall,flags)
+         if(inherits(nv,"try-error")) {
+           print(paste(nme_c1, "error"))
+           return(NULL)
+         }
+         nv
+         #mStateObj$new(comb[ik],  .sumChisq(pv) , prev_i=prev_i)
+       })
+      
+     })
+   })
+res_inner   
+ },
+ combinedAngles=function(phens, varnames, incl, k, type, var_t,g_incl, qq, flags){ #phens, varnames, incl=incl, k=k, type=type
+   angleH=list(angles=
+                 self$data$getAngles1(phens,varnames,incl=incl,k=k, type=type),
+               cols_incl = self$data$cols_incl(var_t,incl, g_incl,qq, excl=varnames)) ### fix 
+   .combineAngles1(angleH, incl, flags, excl=varnames)
+ },
  getPvsAll=function(subphens, prev_i, b_i_name,k, #   prev_i = vars_l1[[nmed]]
                       Wall =lapply(subphens, function(f) matrix(nrow=0,ncol=0)),
-                      useglm=F ,inv_transform=getOption("x_transform",T),
-                      project=T, useoffset=T){
+                    flags){
+                      #useglm=F ,inv_transform=getOption("x_transform",T),
+                      #project=T, useoffset=T){
+   inv_transform=T
+   project=.readFlag(flags,"project",T)
+   useoffset=.readFlag(flags,"useoffset",T)
+   useglm = .readFlag(flags,'useglmnet',T)
+   
      d = self$data
      family = strsplit(names(subphens)[[1]],"\\.")[[1]][1]
      if(family=="multinomial") useoffset=F
-     prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, Wall,family, ypred=NULL, 
-                               inv_transform=inv_transform,
+     prev_i1 = d$makeNextModel(prev_i,b_i_name,subphens,k, family, ypred=NULL, 
                                project=project, useglm=useglm, logpthresh =0, useoffset=useoffset)
      prev_i1
 #   pvs_all = pvs_all[unlist(lapply(pvs_all, length))>0]
@@ -360,25 +434,23 @@ makeModels=function(vars2, inds, phens,flags){
   mods1 = lapply(inds1, function(k){
     # print(k)
    # lapply(datas[names(datas) %in% train_nme], function(d){
-    l3=list(
       mods = d$makeModels(phens1, vars2,k,logpthresh = logpthresh,project=project,
                           flags=flags,checkRMSV=F,
-                          useglm=useglm, useoffset=useoffset))
-    names(l3) =self$nme
-      l3
+                          useglm=useglm, useoffset=useoffset)
+    mods
     #})
     #})
   })
   if(length(mods1)==0) stop("!!")
   models=mods1
   #})
-  vars = names(models[[1]][[1]])
+  vars = names(models[[1]])
   names(vars) = vars
   models2 = lapply(vars, function(v){
     # lapply(models, function(models1){
     m3 = lapply(models, function(m){
-      m2 = lapply(m, function(m1) m1[[v]])
-      m2[unlist(lapply(m2, length))>0]
+      m[[v]]
+      #m2[unlist(lapply(m2, length))>0]
     })
     m3[unlist(lapply(m3, length))>0]
     #})
@@ -387,8 +459,7 @@ makeModels=function(vars2, inds, phens,flags){
   models2
 },
 makeAllModels=function(vars_all, phens=vars_all$phens, flags=vars_all$flags, verbose=F, max = 1e6,
-                       user="",useDB=T,
-                       db=vars_all$db){
+                       user="",useDB=T){
   sigDB = if(useDB) self$sigs else NULL
   if(!is.null(sigDB) ){
     all_models =try( sigDB$loadModels(flags,phens))
@@ -414,7 +485,7 @@ makeAllModels=function(vars_all, phens=vars_all$phens, flags=vars_all$flags, ver
   ord = order(unlist(lapply(variables, length)),decreasing=T)
   variables = variables[ord]
   var_inds = var_inds[ord]
-#   v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
+  #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
   
   for(v_nme in names(variables)){
     # print(v_nme)
@@ -480,16 +551,15 @@ makeAllModels=function(vars_all, phens=vars_all$phens, flags=vars_all$flags, ver
       
     }
   }
-  all_models_=list(models=all_models, flags = flags, phens = phens, db=db)
+  all_models_=list(models=all_models, flags = flags, phens = phens)
   #})
-  if(!is.null(sigDB) ){
+  if(useDB ){
     sigDB$saveModels (all_models_)
   }
   #combined_models
   all_models_
 },
-evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_modelsh$flags,verbose=F,useDB=T,
-                           db=all_modelsh$db, user="", inv_transform_y=!.readFlag(flags,"x_transform",T)){ ## different folds with same variables
+evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_modelsh$flags,verbose=F,useDB=T, user=""){ ## different folds with same variables
   sigDB = if(useDB) self$sigs else NULL
   if(!is.null(sigDB) ){
     eval1 = sigDB$loadEval(flags,phens,)
@@ -497,6 +567,7 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
       return(eval1)
     }
   }
+  inv_transform_y=F
   self$updateLOOC(phens, flags)
   if(length(all_modelsh$models)==0) return(NULL)
   #nme_d2 = .readFlag(flags,"test",names(self$datas))
@@ -505,7 +576,7 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
  # eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
     #print(nme1)
     d = self$data
-    eval1 = d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose, inv_transform_y=inv_transform_y) %>% tibble::add_column(data=self$nme)
+    eval1 = d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) %>% tibble::add_column(data=self$nme, trainedOn=all_modelsh$trainedOn)#%>% tibble::add_column(trainedOn=self$nam)
     #if(inherits(resd,"try-error")) {
     #  print(resd)
     #  print(paste("problem", nme1))

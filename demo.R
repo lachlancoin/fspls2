@@ -51,18 +51,18 @@ pows = c(0.5,1,1.5)
 transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=10)
 
 #SET UP FLAGS
-flags = list(pthresh = 0.5, max=10,nrep=10,batch=0,topn=20,beam=1,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
-             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T
+flags = list(pthresh = 0.5, max=10,nrep=1,batch=0,topn=10,beam=1,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
+             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T
 )
 
-datasets =examples[3];
+datasets =examples[2];
 #runAll<-function(datasets){
   datasH = lapply(datasets, function(d)dataH$new(d,nme=d$nme, flags=flags))
   nmesH = names(datasH); names(nmesH) = nmesH
   datasAll =datasEnv$new(datasH,flags=flags) 
 
-  phens=datasAll$pheno()
-  vars_all = datasAll$select(phens$all, flags, verbose=F,useDB=T)
+  phens=datasAll$pheno()$all
+  vars_all = datasAll$select(phens, flags, verbose=T,useDB=T)
   ##extract the variables for the full model only
   vars_all1=.extractFullVars(vars_all)
   all_models = lapply(nmesH, function(nmeh){

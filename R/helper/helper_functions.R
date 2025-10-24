@@ -534,6 +534,26 @@ isbigmatrix<-function(x){
   })
 }
 
+.split<-function(vn1,nme){
+  mod_nme=unique(vn1[[nme]]);names(mod_nme)=mod_nme
+  lapply(mod_nme, function(mn) vn1[vn1[[nme]]==mn,,drop=F])
+}
+.splitAll<-function(vn1, nmes, func=identity){
+  aa1=.split(vn1, nmes[1])
+  if(length(nmes)==1){
+    return(lapply(aa1,func))
+  }else{
+    lapply(aa1, .splitAll,nmes[-1], func)
+  } 
+}
+.merge_all<-function(ri, nmes, func=identity){
+  if(length(nmes)==1){
+    .merge1_new(lapply(ri,func ), addName=nmes[[1]])
+  }else{
+    .merge1_new(lapply(ri, .merge_all, nmes[-1], func), addName = nmes[1])
+  }
+}
+
 .merge1_new<-function(t,num_cols = c(), addName=NULL, checkNames=T){
   if(checkNames && length(t)>0){
     nme_aa = names(t[[1]])

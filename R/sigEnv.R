@@ -16,6 +16,7 @@ toJSON1<-function(flags){
 }
 
 
+
 .convertVarsToTable<-function(vars_all1, expt_id=0){
   .merge1_new(lapply(names(vars_all1$variables), function(nme1){
     vars1 = data.frame(list(experiment_id = expt_id, 
@@ -32,29 +33,50 @@ toJSON1<-function(flags){
   tbl2 = .convertModelsToTable(all_models2$models, 0)
   match(tbl$var_names, tbl2$var_names)
 }
-.convertModelsToTable<-function(all_models1, expt_id=0, debug=F){
-  .merge1_new(lapply(names(all_models1), function(nme1){
-    all_models2 = all_models1[[nme1]]
-    .merge1_new(lapply(names(all_models2), function(nme2){
-      all_models3 = all_models2[[nme2]]
-      .merge1_new(lapply(names(all_models3), function(nme3){
-        all_models5 = all_models3[[nme3]]
-        #.merge1_new(lapply(names(all_models4), function(nme4){
-        #  all_models5 = all_models4[[nme4]]
-        if(debug) print(paste(nme1,nme2,nme3))
-        data.frame(list(experiment_id = expt_id, nvar = length(all_models5$var_names),
-                        var_names = toJSON(all_models5$var_names),
-                        constants_proj = toJSONM(all_models5$constants_proj),
-                        Wall = toJSONM(all_models5$Wall),
-                        mean_x = toJSON(all_models5$mean_x),
-                       # transf= toJSON(all_models5$transf),
-                        betas_proj = toJSONM(all_models5$betas_proj), 
-                        model_nme=nme1, rep=nme2,trainedOn=nme3)  ) 
-        #}))
-      }))
-    }))
-  }))
+.modelToRow<-function(all_models5){
+ # print(all_models5)
+  varnames = lapply(all_models5$var_names,paste, collapse=".")
+  if(length(varnames)>0)  names(varnames)=1:length(varnames)
+ var_names = all_models5$var_names
+ names(var_names) = varnames
+  vn5=data.frame(list(
+                     var_names = toJSON(var_names),
+                     varnames = toJSON(varnames),
+                     constants_proj = toJSONM(all_models5$constants_proj),
+                     Wall = toJSONM(all_models5$Wall),
+                     nvar = length(all_models5$var_names), 
+                     mean_x = toJSON(all_models5$mean_x),
+                     pvs = toJSON(all_models5$pvs),
+                     pvs_all = toJSON(all_models5$pvs_all),
+                     # transf= toJSON(all_models5$transf),
+                     betas_proj = toJSONM(all_models5$betas_proj)
+  ))
+  vn5
 }
+.modelFromRow<-function(vn5){
+ 
+  res=list(
+    betas_proj = fromJSONM(vn5$betas_proj[[1]]),
+    var_names =fromJSON(vn5$var_names[[1]]),
+    varnames = unlist(fromJSON(vn5$varnames)),
+    Wall = fromJSONM(vn5$Wall),
+    mean_x = fromJSON(vn5$mean_x),
+    pvs = fromJSON(vn5$pvs),
+    pvs_all = fromJSON(vn5$pvs_all),
+    #transf = fromJSON(vn5$transf[[1]]),
+    constants_proj=fromJSONM(vn5$constants_proj[[1]])
+  )
+  #names(res$var_names) = res$varnames
+  #names(res$varnames)=NULL
+  res
+}
+
+
+
+
+#aa3=.splitAll(vn1, nmes,  .modelFromRow)
+
+
 
 
 ##converting to and from matrices.  can be either a matrix or an list of matrices
@@ -221,46 +243,64 @@ sigEnv<-R6Class("sigEnv", public = list(
    if(is.null(expt_id)) return(NULL)
    combined =  dbGetQuery(self$mydb, 'SELECT * from models where experiment_id=:exptid',list(exptid=expt_id))
    vn1=combined
- #  trans_y = unique(vn$transform_y); names(trans_y)=trans_y
- ##debugging
-   #vn=vn1;m_nme = vn$model_nme[[1]] ;p_g = vn$pheno_group[[1]]; rep1 = vn$rep[[1]]; ton = vn$trainedOn[[1]];
-   #vn5 = subset(vn, model_nme==m_nme & pheno_group==p_g & rep==rep1 & trainedOn==ton)
-   #all_models1 = lapply(trans_y, function(ty){
-    # vn1 = subset(vn, transform_y ==ty)
-     mod_nme = unique(vn1$model_nme); names(mod_nme)=mod_nme
-    all_models1 =  lapply(mod_nme, function(m_nme){
-      #print(m_nme)
-       vn2 = subset(vn1, model_nme==m_nme)
-       #pheno_group = unique(vn2$pheno_group); names(pheno_group)=pheno_group
-       #lapply(pheno_group, function(p_g){
-         vn3 = vn2 #subset(vn2, pheno_group==p_g)
-         reps = vn3$rep; names(reps) = reps
-         aa=lapply(reps, function(rep1){
-           vn4 = subset(vn3,rep==rep1)
-           trainedOn = vn4$trainedOn; names(trainedOn)=trainedOn
-           lapply(trainedOn, function(ton){
-             vn5 = subset(vn4, trainedOn==ton)
-            # print("HHH");print(vn5)
-            res2 = list(
-              betas_proj = fromJSONM(vn5$betas_proj[[1]]),
-            var_names = fromJSON(vn5$var_names[[1]]),
-            Wall = fromJSONM(vn5$Wall[[1]]),
-            mean_x = fromJSON(vn5$mean_x),
-            #transf = fromJSON(vn5$transf[[1]]),
-            constants_proj=fromJSONM(vn5$constants_proj[[1]])
-            )
-            res2
-           })
-           
-         })
-         aa
-     })
+   #c("model_name","rep")
+
+   all_models1 =  .splitAll(combined, c("model_name","rep"),.modelFromRow)
    #})
-   list(models=all_models1, flags = flags, phens = phens,
-        #transform_y=transform_y, 
-        db=self$subnme)
+   list(models=all_models1, flags = flags, phens = phens, trainedOn=self$subnme)
  },
- saveModels=function(all_models, 
+
+ saveAngles=function(expt_id, data_nme, comb_angs1, varnames){
+   tbls = dbListTables(self$mydb)
+   combined= list(experiment_id=expt_id, data=data_nme, angles = toJSONM(comb_angs1), varnames = toJSON(varnames))
+   #combined1 = combined[names(combined) %in% c("experiment_id","data","varnames")]
+   hasModel = "angles" %in% tbls
+   if(hasModel){
+    dbExecute(self$mydb, 'DELETE FROM angles where experiment_id =:expt_id',list(expt_id=expt_id))
+   }
+   
+   #    }))
+   try(dbWriteTable(self$mydb, "angles", data.frame(combined),overwrite=!hasModel,append=hasModel))
+ },
+ loadAngles=function(expt_id, varnames){
+   tbls = dbListTables(self$mydb)
+   r1= list(experiment_id=expt_id,  varnames = toJSON(varnames))
+   #combined1 = combined[names(combined) %in% c("experiment_id","data","varnames")]
+   hasModel = "angles" %in% tbls
+   if(!hasModel) return (NULL)
+   combined =  dbGetQuery(self$mydb, 'SELECT * from angles where experiment_id=:experiment_id and varnames=:varnames',r1)
+   inds = 1:nrow(combined); names(inds) = combined$data
+   if(length(duplicated(combined$data))>1) stop("duplicates")
+   lapply(inds, function(i){
+     fromJSONM(combined$angles[[i]])
+   })
+ },
+savePvals=function(expt_id, data_nme, ri, varnames){
+  varn1 = toJSON(varnames)
+  tbls = self$tbls()
+  combined=.merge_all(ri,c("transf","param","var") , .modelToRow)%>% tibble::add_column(prev_var=varn1, data=data_nme, experiment_id = expt_id)
+  #combined= .convertModelsToTable1(ri, expt_id=expt_id,debug=F) %>% tibble::add_column(prev_var=varn1, data=data_nme)
+  hasModel = "pvals" %in% tbls
+  if( hasModel){
+    dbExecute(self$mydb, 'DELETE FROM pvals where experiment_id =:expt_id AND data=:data AND prev_var=:prev_var' ,list(expt_id=expt_id, data=data_nme, prev_var=toJSON(varnames)))
+  }
+  #aa = .convertTableToModels(combined)
+  try(dbWriteTable(self$mydb, "pvals", combined,overwrite=!hasModel,append=hasModel))
+  invisible(list(msg="success"))
+},
+loadPvals=function(expt_id, varnames){
+  tbls = dbListTables(self$mydb)
+  r1= list(experiment_id=expt_id,  varnames = toJSON(varnames))
+  #combined1 = combined[names(combined) %in% c("experiment_id","data","varnames")]
+  hasModel = "pvals" %in% tbls
+  if(!hasModel) return (NULL)
+  combined =  dbGetQuery(self$mydb, 'SELECT * from pvals where experiment_id=:experiment_id and prev_var=:varnames',r1)
+  #aa=.convertTableToModels1(combined)
+  aa= .splitAll(combined, c("data","transf","param","var"),.modelFromRow)
+aa 
+},
+
+ saveModels=function(all_models, trainedOn=all_models$trainedOn,
                      flags=all_models$flags, phens=all_models$phens,  user=self$user,replace=T){
    debug=getOption("fspls.debug",FALSE)
    #transform_y=""
@@ -271,9 +311,10 @@ sigEnv<-R6Class("sigEnv", public = list(
    if(replace && hasModel){
      dbExecute(self$mydb, 'DELETE FROM models where experiment_id =:expt_id',list(expt_id=expt_id))
    }
+   combined=.merge_all(all_models1,c("model_name","rep") , .modelToRow)%>% tibble::add_column(experiment_id = expt_id)
    
-    combined= .convertModelsToTable(all_models1, expt_id=expt_id,debug=debug)
-   
+  #  combined= .convertModelsToTable(all_models1, expt_id=expt_id,debug=debug)
+   #.merge_all(combined,c("data","transf","param","var"), .ro)
    #    }))
   try(dbWriteTable(self$mydb, "models", combined,overwrite=!hasModel,append=hasModel))
    return(list(msg="success"))
@@ -310,8 +351,11 @@ sigEnv<-R6Class("sigEnv", public = list(
  },
   loadVars = function(flags,phens,user=self$user){ ##extracts variables
     expt_id = self$getExpt(flags, phens, user=user,add_new=F)
+    if(!("vars" %in% self$tbls())) return (NULL)
     if(is.null(expt_id)) return(NULL)
     vn1 =  dbGetQuery(self$mydb, 'SELECT * from vars where experiment_id=:exptid',list(exptid=expt_id))
+    if(nrow(vn1)==0) return(NULL)
+    
     #ty = trans_y[[1]]
       vn1 = vn1[!duplicated(vn1$model),,drop=F]
       if(max(table(vn1$model))>1) warning("not unique")

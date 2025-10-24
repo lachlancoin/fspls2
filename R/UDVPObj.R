@@ -117,10 +117,12 @@ getW=function(){
   W = Vinv %*% Dinv %*% t(U)
   W
 },
-getWall=function(x, W_all1){
+getWall=function(x, Wall1){
   UDV=self
-  W = W_all1
-  if(nrow(W)==0){
+  W = Wall1
+  if(is.null(Wall1)){
+    Wall=matrix(nrow=0, ncol=0)
+  }else if(nrow(W)==0){
     Wall=matrix(1)
   }else{
     

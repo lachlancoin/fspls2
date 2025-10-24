@@ -651,6 +651,7 @@ updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, li
     family =getOption("fspls.family",strsplit(kk1,"\\.")[[1]][1])
     # if(family=="multinomial") levs1=dimnames(self$y[[kk1]])[[2]]
     #  if(family=="ordinal")levs1 = min(self$y[[kk1]][,kk], na.rm=T):max(self$y[[kk1]][,kk],na.rm=T) 
+    if(!is.null(inv_func)) stop("this should be null")
     self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, inv_func,family=family, liab=liab, x_transform = !inv_transform_y)
    
   }

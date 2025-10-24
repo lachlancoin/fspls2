@@ -170,7 +170,7 @@ trainObj<-R6Class("trainObj",
                      # names(self$products) = names(data$data)
                      # phens = data$pheno()
                     #  phensi = data$phensi(phens)
-                   #   self$prev[[k]] = stateObj$new(phensi, data, self,k, self$mean_y,var=var, varnames=varnames, W_all = W_all)
+                   #   self$prev[[k]] = stateObj$new(phensi, data, self,k, self$mean_y,var=var, varnames=varnames, Wall = Wall)
                     },
                     
                     calcMean=function( looc_incl_k_ij, weights){

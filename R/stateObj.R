@@ -2,12 +2,12 @@
 
 
 .calcWall_2<-function(data,  var){
-  prev_i = list(W_all =matrix(nrow=0, ncol=0) , var = c() )
+  prev_i = list(Wall =matrix(nrow=0, ncol=0) , var = c() )
   for(k in 1:length(var)){
-    W_all2 = .calcWall_1(data, var[[k]], prev_i)
-    prev_i = list(W_all = W_all2, var = var[1:k])
+    Wall2 = .calcWall_1(data, var[[k]], prev_i)
+    prev_i = list(Wall = Wall2, var = var[1:k])
   }
-  prev_i$W_all
+  prev_i$Wall
 }
 #colk is family col
 
@@ -42,7 +42,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     name="character",
                     name_prev="character",
                     betas_proj="vector", #list of vector
-                    W_all="matrix",  ##list of matrix,
+                    Wall="matrix",  ##list of matrix,
                     constants_proj="list",
                     constants = "list",
                    betas="list",
@@ -60,7 +60,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                                           prev_i = NULL,
                                           b_i = NULL,b_i_name=NULL,
                                           var = list(), varnames = list(),
-                                          W_all = matrix(nrow=0, ncol=0),
+                                          Wall = matrix(nrow=0, ncol=0),
                                          mean_x = NULL, pvs = c(),
                                          useoffset=T
                                          ){
@@ -73,7 +73,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                       self$nonNA = data$looc$incl[,k];
                       train = data$train
                       self$tbls = tbls
-                      self$W_all = W_all
+                      self$Wall = Wall
                       #if(length(phensi)>1) stop("!!")
                       family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
                       names(family)=names(phensi)
@@ -141,7 +141,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                         #self$betas=self$betas_proj  ## now these are the same
                         
 #                          self$betas=lapply(self$betas_proj, function(bp){
- #                           b2 = self$W_all %*% bp
+ #                           b2 = self$Wall %*% bp
   #                        } )
                       }
                     },
@@ -157,22 +157,22 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                   },
                    # self$betas=lapply(nme_betas_new, function(b_n) {
                    #    bp = self$betas_proj[[b_n]]
-                   #    W_all_new %*% bp
+                   #    Wall_new %*% bp
                    #  })
 ##simplifies and translates into original space
                   simplify=function(){
                     nmebp= names(self$betas_proj); names(nmebp)=nmebp
                     self$betas=lapply(nmebp, function(bp){
-                      self$W_all[[bp]] %*% self$betas_proj[[bp]]
+                      self$Wall[[bp]] %*% self$betas_proj[[bp]]
                     })
                    # self$setOffset() 
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj,
                          constants = self$constants,
                          betas_proj = self$betas_proj,
-                         Wall = self$W_all,
+                         Wall = self$Wall,
                          mean_x = self$mean_x,tbls = self$tbls,
-                     #    W_all = self$W_all,
+                     #    Wall = self$Wall,
                          var_names = self$var_names) #, pvs = self$pvs_proj)
                   },
                   updateConst=function(phensi,ypred, data,  useglm=F, verbose=F,update=F
