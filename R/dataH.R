@@ -282,9 +282,11 @@ dataH<-R6Class("dataH", public = list(
  cats = function(maxpheno = 1e9){
    self$data$cats(maxpheno)
  },
- res_inner=function(comb_,prev_i, flags,k){
+ res_inner=function(comb_,prev_i, flags,k, expt_id){
+  prev_i2 = self$sigs$loadPrev(expt_id, prev_i, k, data_nme = self$nme)
+  if(is.null(prev_i2)) prev_i2 = prev_i
    nme_comb = names(comb_); names(nme_comb) = nme_comb
-  # nme_c1 = nme_comb[[1]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
+   #nme_c1 = nme_comb[[1]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
    res_inner=lapply(nme_comb, function(nme_c1){
      nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
      lapply(nmesp1, function(nme_p1){
@@ -294,20 +296,41 @@ dataH<-R6Class("dataH", public = list(
        inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
        nxt_vars = lapply(inds1p, function(ik){
          b_i_name = c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
-          nv= self$getPvsAll(phens,prev_i, b_i_name,k,  prev_i$Wall,flags)
+          nv= self$getPvsAll(phens,prev_i2, b_i_name,k,  prev_i2$Wall,flags)
          if(inherits(nv,"try-error")) {
            print(paste(nme_c1, "error"))
            return(NULL)
          }
          nv
-         #mStateObj$new(comb[ik],  .sumChisq(pv) , prev_i=prev_i)
        })
       
      })
    })
 res_inner   
  },
+anglesAndPv=function(phens, prev_i, incl, k, type, var_t,g_incl, qq, flags, expt_id, saveAngles=F, verbose=F){
+  ##only update if changed
+  #self$updateLOOC(phens, flags, verbose=verbosee
+  #self$updateTrain(phens, flags,verbose=verbose)
+  varnames = prev_i$var_names
+ 
+  comb_=self$combinedAngles(phens, varnames, incl, k, type,var_t, g_incl, qq, flags)
+  if(saveAngles) return(comb_)
+    #self$sigs$saveAngles(expt_id, data_nme, comb_angs1,varnames ) 
+  ri = self$res_inner(comb_,prev_i,flags,k, expt_id)
+  self$sigs$savePvals(expt_id, self$nme, ri, varnames,k,useCurrVarnames=T)
+  ri_out=lapply(ri, function(ri1){
+    lapply(ri1, function(ri2){
+      lapply(ri2, function(ri3){
+        ri4 = ri3$simplify()
+        list(pvs = ri3$pvs, pvs_all = ri3$pvs_all, var_names = ri3$var_names)
+      })
+    })
+  })
+  ri_out
+},
  combinedAngles=function(phens, varnames, incl, k, type, var_t,g_incl, qq, flags){ #phens, varnames, incl=incl, k=k, type=type
+  
    angleH=list(angles=
                  self$data$getAngles1(phens,varnames,incl=incl,k=k, type=type),
                cols_incl = self$data$cols_incl(var_t,incl, g_incl,qq, excl=varnames)) ### fix 
@@ -551,7 +574,7 @@ makeAllModels=function(vars_all, phens=vars_all$phens, flags=vars_all$flags, ver
       
     }
   }
-  all_models_=list(models=all_models, flags = flags, phens = phens)
+  all_models_=list(models=all_models, flags = flags, phens = phens, trainedOn=self$nme)
   #})
   if(useDB ){
     sigDB$saveModels (all_models_)

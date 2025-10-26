@@ -1469,7 +1469,7 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=!getOption("x
     ypred$updateYP(data, prev_i1, nonNA, inv_transform_y=inv_transform_y,flip=FALSE, liab=F)
     if(verbose){
       ##no longer works, rethink because of transform_func
-      new_const = prev_i1$updateConst(subphens,ypred, data, transform_func, useglm=useglm,verbose=verbose, update=F)
+      new_const = prev_i1$updateConst(subphens,ypred, data,k, transform_func, useglm=useglm,verbose=verbose, update=F)
       ypred$updateYP(data, prev_i1, nonNA,  inv_transform_y = inv_transform_y,flip=FALSE, liab=T)
     }
     rmsv=(ypred$calcRMSV(self$y, nonNA,     flip=FALSE))
@@ -1516,7 +1516,7 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=!getOption("x
     }
     mean_x = self$mean__x(b_i) #[[b_i[[1]]]][b_i[2]]
     
-    prev_i1=stateObj$new(subphens,data, betas_proj,constants_proj, tbls, k,prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, Wall = Wall2,pvs =pvs, useoffset=useoffset)
+    prev_i1=stateObj$new(subphens,data, betas_proj,constants_proj, tbls, prev_i , b_i,b_i_name=b_i_name, mean_x = mean_x, Wall = Wall2,pvs =pvs, useoffset=useoffset)
   #  prev_i1$setOffset() 
     if(is.null(prev_i)) return(prev_i1)
     #prev_i1$setOffset()
@@ -1657,9 +1657,10 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x 
 },
 
 extractPredictions=function(all_models_,phens1, flags, CV = FALSE,liab=T,
-                            inv_transform=.readFlag(flags, "x_transform",T) ,
+                           
                             ypred = self$ypred(phens1)){
   d = self
+  inv_transform=T
   inv_transform_y = !inv_transform
   nmesp = names(phens1)
   names(nmesp)= nmesp
@@ -1672,18 +1673,19 @@ extractPredictions=function(all_models_,phens1, flags, CV = FALSE,liab=T,
     full_model = all_models1[["full"]]
     nmesm = names(all_models1)[!full_ind];
     inds=as.numeric(nmesm)
-    nmes_models = names(all_models1[[1]]);
-    names(nmes_models) = nmes_models
+#    nmes_models = names(all_models1[[1]]);
+ #   names(nmes_models) = nmes_models
   #  ypred = ypredObj$new(d,NULL, d$family)
-    evals = lapply(nmes_models, function(nmes1){
+    #evals = lapply(nmes_models, function(nmes1){
     #  dim(ypred$ypreds[[1]])
+    evals = NULL
       if(!is.null(full_model) && ! CV){
         nonNA =self$looc$incl[,self$nreps()]
-        prev_i1 = full_model[[nmes1]]
+        prev_i1 = full_model#[[nmes1]]
        # inv_func=transform_func[[prev_i1$transf]]
         ypred$updateYP(d,prev_i1, nonNA, inv_transform_y=inv_transform_y, flip=FALSE, liab=liab )
 
-        return(lapply(nmesp, function(nmesp1){
+        evals = (lapply(nmesp, function(nmesp1){
           phens1[[nmesp1]]
           yy2 = d$y[[nmesp1]]
           mi  = match(phens1[[nmesp1]],dimnames(yy2)[[2]])
@@ -1695,23 +1697,21 @@ extractPredictions=function(all_models_,phens1, flags, CV = FALSE,liab=T,
         inds = as.numeric(nmesm)
         for(j in 1:length(nmesm)){
           nonNA =self$looc$incl[,inds[[j]]]
-          prev_i1 = all_models1[[j]][[nmes1]]
+          prev_i1 = all_models1[[j]]
         #  inv_func=transform_func[[prev_i1$transf]]
           ypred$updateYP(self, prev_i1, nonNA,inv_transform_y=inv_transform_y, flip=TRUE, liab=liab)
 #          d$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
         }
         nonNA=self$getNonNAInds(inds)
-        return(lapply(nmesp, function(nmesp1){
+        evals=(lapply(nmesp, function(nmesp1){
           yy2 = d$y[[nmesp1]]
           mi  = match(phens1[[nmesp1]],dimnames(yy2)[[2]])
         list(y=d$y[[nmesp1]][!nonNA,mi,drop=F], ypred=ypred$ypreds[[nmesp1]][!nonNA,,drop=F]) 
         }))
        
       }
-      return(NULL)
       #     rbind(res1,res2)
       #    }),addName="variable")
-    })
     #,addName="trainedOn")
     #}),addName="fullmodel")
   
@@ -1825,7 +1825,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
       }
       #data_ind = which(names(self$data)==b_i[[1]])
       #b_i1 = c(data_ind, which(dimnames(self$data[[data_ind]])[[2]]==b_i[2]))
-      nxt_v= lapply(best_i, function(b_i) stateObj$new(self, self$train[[k]], k,prev_i,self$convert(b_i1)))
+      nxt_v= lapply(best_i, function(b_i) stateObj$new(self, self$train[[k]], prev_i,self$convert(b_i1)))
          lapply(nxt_v, function(nv) nv$updateConst(self, self$train[[k]],k))
       #                       nxt_v = nxt_v[!unlist(lapply(nxt_v, is.null))]
       names(nxt_v) = unlist(lapply(nxt_v,  function(nv)paste(unlist(lapply(nv$var, function(vv){
@@ -2371,7 +2371,7 @@ updateLOOC=function(phens,flags,varn=c(), force=F, verbose=F){
   for(k in 1:nrep){
     #  print(k)
     #    phensi,data, betas_new, constants_proj,  k, #mean_y,
-    self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,NULL,k, var=var, varnames=varn, Wall = Wall)
+    self$prev[[k]] = stateObj$new(phensi, self,NULL,NULL,NULL, var=var, varnames=varn, Wall = Wall)
   }
  
   self$train = NULL #lapply(1:nrep, function(k) return(NULL)) #lapply(1:ncol,function(k)

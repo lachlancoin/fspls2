@@ -38,7 +38,7 @@ if(FALSE){
   example_files= grep("_data.rds",dir("data", full=T),v=T)
   names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
   examples = lapply(example_files, readRDS)
-  for(k in 1:length(examples)) examples[[k]]$nme = names(examples)[[k]]
+  for(k2 in 1:length(examples)) examples[[k2]]$nme = names(examples)[[k2]]
 }
 
 
@@ -60,14 +60,16 @@ datasets =examples[2];
   datasH = lapply(datasets, function(d)dataH$new(d,nme=d$nme, flags=flags))
   nmesH = names(datasH); names(nmesH) = nmesH
   datasAll =datasEnv$new(datasH,flags=flags) 
-
   phens=datasAll$pheno()$all
+  datasAll$update(phens, flags)
+  
+  #datasAll$clear_db(drop=T, exclude=c(), recursive=T)# this clears the attached dbs
   vars_all = datasAll$select(phens, flags, verbose=T,useDB=T)
   ##extract the variables for the full model only
   vars_all1=.extractFullVars(vars_all)
   all_models = lapply(nmesH, function(nmeh){
     dh=datasAll$datasH[[nmeh]]
-   am=dh$makeAllModels(vars_all,useDB=T)
+   am=dh$makeAllModels(vars_all,useDB=F)
   })
   eval1= .merge1_new(lapply(nmesH, function(nmeh){
     all_modelsh = all_models[[nmeh]]

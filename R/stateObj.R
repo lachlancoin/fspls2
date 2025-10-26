@@ -46,7 +46,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     constants_proj="list",
                     constants = "list",
                    betas="list",
-                    nonNA="logical",
+                    #nonNA="logical",
                     mean_x="numeric",
                    tbls="list",
                    pvs="list",
@@ -56,7 +56,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                                           betas_proj, 
                                           constants_proj,
                                           tbls,
-                                         k, #mean_y,
+                                      #   k, #mean_y,
                                           prev_i = NULL,
                                           b_i = NULL,b_i_name=NULL,
                                           var = list(), varnames = list(),
@@ -70,7 +70,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                       self$sumPv = .sumChisq(unlist(pvs))
                       self$constants_proj=constants_proj
                       self$constants = NULL
-                      self$nonNA = data$looc$incl[,k];
+                    
                       train = data$train
                       self$tbls = tbls
                       self$Wall = Wall
@@ -175,7 +175,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                      #    Wall = self$Wall,
                          var_names = self$var_names) #, pvs = self$pvs_proj)
                   },
-                  updateConst=function(phensi,ypred, data,  useglm=F, verbose=F,update=F
+                  updateConst=function(phensi,ypred, data,  k,useglm=F, verbose=F,update=F
                                        ){
                     #if(length(phensi)>1) stop("!!")
                     family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
@@ -183,7 +183,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     non_na_x = data$getNonNA(self$var) 
                     constants_proj = vector("list", length(phensi))
                     names(constants_proj) = names(phensi)
-                    na_k=non_na_x & self$nonNA
+                    na_k=non_na_x & data$looc$incl[,k];
                   for(kk1 in 1:length(phensi)){
                     if(verbose)print(names(phensi)[[kk1]])
                     #kk1 = 1;  

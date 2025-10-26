@@ -54,21 +54,25 @@ toJSON1<-function(flags){
   vn5
 }
 .modelFromRow<-function(vn5){
- 
+ if(nrow(vn5)>1) {
+   print(vn5);
+   stop()
+   warning("only expecting one row")
+ }
   res=list(
     betas_proj = fromJSONM(vn5$betas_proj[[1]]),
     var_names =fromJSON(vn5$var_names[[1]]),
-    varnames = unlist(fromJSON(vn5$varnames)),
-    Wall = fromJSONM(vn5$Wall),
-    mean_x = fromJSON(vn5$mean_x),
-    pvs = fromJSON(vn5$pvs),
-    pvs_all = fromJSON(vn5$pvs_all),
+    varnames = unlist(fromJSON(vn5$varnames[[1]])),
+    Wall = fromJSONM(vn5$Wall[[1]]),
+    mean_x = fromJSON(vn5$mean_x[[1]]),
+    pvs = fromJSON(vn5$pvs[[1]]),
+    pvs_all = fromJSON(vn5$pvs_all[[1]]),
     #transf = fromJSON(vn5$transf[[1]]),
     constants_proj=fromJSONM(vn5$constants_proj[[1]])
   )
   #names(res$var_names) = res$varnames
   #names(res$varnames)=NULL
-  res
+  res[unlist(lapply(res, length))>0]
 }
 
 
@@ -250,9 +254,9 @@ sigEnv<-R6Class("sigEnv", public = list(
    list(models=all_models1, flags = flags, phens = phens, trainedOn=self$subnme)
  },
 
- saveAngles=function(expt_id, data_nme, comb_angs1, varnames){
+ saveAngles=function(expt_id, data_nme, comb_angs1, varnames,k){
    tbls = dbListTables(self$mydb)
-   combined= list(experiment_id=expt_id, data=data_nme, angles = toJSONM(comb_angs1), varnames = toJSON(varnames))
+   combined= list(experiment_id=expt_id, data=data_nme, angles = toJSONM(comb_angs1), varnames = toJSON(varnames),k=k)
    #combined1 = combined[names(combined) %in% c("experiment_id","data","varnames")]
    hasModel = "angles" %in% tbls
    if(hasModel){
@@ -262,40 +266,67 @@ sigEnv<-R6Class("sigEnv", public = list(
    #    }))
    try(dbWriteTable(self$mydb, "angles", data.frame(combined),overwrite=!hasModel,append=hasModel))
  },
- loadAngles=function(expt_id, varnames){
+ loadAngles=function(expt_id, varnames,k){
    tbls = dbListTables(self$mydb)
-   r1= list(experiment_id=expt_id,  varnames = toJSON(varnames))
+   r1= list(experiment_id=expt_id,  k=k,varnames = toJSON(varnames))
    #combined1 = combined[names(combined) %in% c("experiment_id","data","varnames")]
    hasModel = "angles" %in% tbls
    if(!hasModel) return (NULL)
-   combined =  dbGetQuery(self$mydb, 'SELECT * from angles where experiment_id=:experiment_id and varnames=:varnames',r1)
+   combined =  dbGetQuery(self$mydb, 'SELECT * from angles where experiment_id=:experiment_id and varnames=:varnames and k=:k',r1)
    inds = 1:nrow(combined); names(inds) = combined$data
    if(length(duplicated(combined$data))>1) stop("duplicates")
    lapply(inds, function(i){
      fromJSONM(combined$angles[[i]])
    })
  },
-savePvals=function(expt_id, data_nme, ri, varnames){
+savePvals=function(expt_id, data_nme, ri, varnames,k,useCurrVarnames=F){
+  #print(paste("saving pv",expt_id, k, data_nme, toJSON(varnames), useCurrVarnames))
   varn1 = toJSON(varnames)
   tbls = self$tbls()
-  combined=.merge_all(ri,c("transf","param","var") , .modelToRow)%>% tibble::add_column(prev_var=varn1, data=data_nme, experiment_id = expt_id)
+  combined=.merge_all(ri,c("transf","param","var") , .modelToRow)%>% tibble::add_column(prev_var=varn1, data=data_nme, experiment_id = expt_id,k=k)
+  if(useCurrVarnames) combined$prev_var= combined$var_names
+  #apply(combined, 2, function(x) length(table(x))/length(x))
+  ##follow to check
+ # aa= .splitAll(combined, c("data","transf","param","var"),.modelFromRow)
+  
   #combined= .convertModelsToTable1(ri, expt_id=expt_id,debug=F) %>% tibble::add_column(prev_var=varn1, data=data_nme)
   hasModel = "pvals" %in% tbls
   if( hasModel){
-    dbExecute(self$mydb, 'DELETE FROM pvals where experiment_id =:expt_id AND data=:data AND prev_var=:prev_var' ,list(expt_id=expt_id, data=data_nme, prev_var=toJSON(varnames)))
+    li1 = list(expt_id=expt_id, k=k,data=data_nme, prev_var=toJSON(varnames))
+    if(useCurrVarnames) li1$prev_var==unlist(lapply(combined$var_names, toJSON))
+    dbExecute(self$mydb, 'DELETE FROM pvals where experiment_id =:expt_id AND data=:data AND prev_var=:prev_var AND k=:k' ,
+           li1)
   }
+  
   #aa = .convertTableToModels(combined)
   try(dbWriteTable(self$mydb, "pvals", combined,overwrite=!hasModel,append=hasModel))
   invisible(list(msg="success"))
 },
-loadPvals=function(expt_id, varnames){
+pvals=function(expt_id){
+  combined =  dbGetQuery(self$mydb, 'SELECT * from pvals where experiment_id=:experiment_id ',list(experiment_id=expt_id))
+  combined
+},
+loadPrev=function(expt_id, prev_i, k, data_nme = self$subnme){
   tbls = dbListTables(self$mydb)
-  r1= list(experiment_id=expt_id,  varnames = toJSON(varnames))
+  #combined1 = combined[names(combined) %in% c("experiment_id","data","varnames")]
+  hasModel = "pvals" %in% tbls
+  if(!hasModel) return(prev_i)
+  r1= list(experiment_id=expt_id,  varnames = toJSON(prev_i$var_names),k=k, data = data_nme)
+  combined =  dbGetQuery(self$mydb, 'SELECT * from pvals where experiment_id=:experiment_id and prev_var=:varnames and k=:k and data =:data',r1)
+  if(nrow(combined)==0) return(prev_i)
+  prev_i2=.modelFromRow(combined[1,])
+  prev_i2
+},
+loadPvals=function(expt_id, varnames,k){
+  if(!is.null(varnames) && is.null(names(varnames))) names(varnames) = lapply(varnames, paste, collapse=".")
+  tbls = dbListTables(self$mydb)
+  r1= list(experiment_id=expt_id,  varnames = toJSON(varnames),k=k)
   #combined1 = combined[names(combined) %in% c("experiment_id","data","varnames")]
   hasModel = "pvals" %in% tbls
   if(!hasModel) return (NULL)
-  combined =  dbGetQuery(self$mydb, 'SELECT * from pvals where experiment_id=:experiment_id and prev_var=:varnames',r1)
+  combined =  dbGetQuery(self$mydb, 'SELECT * from pvals where experiment_id=:experiment_id and prev_var=:varnames and k=:k',r1)
   #aa=.convertTableToModels1(combined)
+  
   aa= .splitAll(combined, c("data","transf","param","var"),.modelFromRow)
 aa 
 },

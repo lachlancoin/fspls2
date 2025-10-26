@@ -983,7 +983,8 @@ summariseAreaPlot<-function(df){
   
   area_p=.merge1_new(lapply(predictions0, function(train){  
     .merge1_new(lapply(train, function(model){
-      .merge1_new(lapply(model, function(test){
+      test=model
+     # .merge1_new(lapply(model, function(test){
         families1 = names(test); names(families1)=families1
         .merge1_new(lapply(families1, function(famnme){
           fam = test[[famnme]]
@@ -1011,7 +1012,7 @@ summariseAreaPlot<-function(df){
           #}),addName="subpheno")
         }), addName="pheno")
         }), addName="family")
-      }), addName="test")
+    #  }), addName="test")
     }), addName="model")
     }), addName="train")
   #attr(area_p,"family")=family
