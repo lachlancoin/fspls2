@@ -63,6 +63,8 @@ datasets =examples[2];
   phens=datasAll$pheno()$all
   datasAll$update(phens, flags)
   
+  expt_id = datasAll$sigs$getExpt(flags, phens, add_new=T)
+  vars_all0=datasH[[1]]$select(datasAll, phens , flags, expt_id )
   #datasAll$clear_db(drop=T, exclude=c(), recursive=T)# this clears the attached dbs
   vars_all = datasAll$select(phens, flags, verbose=T,useDB=T)
   ##extract the variables for the full model only

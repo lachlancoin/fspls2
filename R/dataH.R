@@ -286,6 +286,51 @@ dataH<-R6Class("dataH", public = list(
  cats = function(maxpheno = 1e9){
    self$data$cats(maxpheno)
  },
+ update=function(phens, flags, verbose=F){
+     self$updateLOOC(phens, flags, verbose=verbose)
+     self$updateTrain(phens, flags,verbose=verbose)
+   ##updated after updateLOOC
+   nreps1 =self$nreps()
+   nreps = 1:nreps1
+   names(nreps) = nreps
+   nreps
+ },
+ select=function(datasAll, phens,flags,expt_id, verbose=F, useDB=T ){#c(y="function(y) y","function(y) y")
+   nreps = self$update(phens, flags, verbose=verbose);
+   if( useDB ){
+     vars_all = self$sigs$loadVars(flags, phens)
+     if(!is.null(vars_all)) return(vars_all)
+   }
+   vars_l_todo = datasAll$getTodo(flags, phens)
+   variables=lapply(nreps, function(k1){
+     if(verbose) print(paste("cv",k1,"of",length(nreps)))
+     self$select_k(datasAll, phens,flags, k1, expt_id,
+                   vars_l_todo=vars_l_todo,verbose=verbose)
+   })
+   vars_all=datasAll$post_process(variables,beam=1)
+   vars_all$flags = flags; vars_all$phens = phens;  
+   if(length(vars_all$variables)==0) return(vars_all)
+   if(useDB){
+     self$sigs$saveVars(vars_all,replace=T)
+   }
+   vars_all
+ },
+ select_k=function(datasAll,phens,flags, k1,expt_id,
+                   vars_l_todo = datasAll$getTodo(flags, phens),
+                   verbose=F){
+   stop_y = .readFlag(flags, 'stop_y',"rand")
+   logpvthresh = log(.readFlag(flags,"pthresh",0.1))
+  saveAngles=F
+  # vars_l = datasAll$nextVars(expt_id, flags)
+   while(length(vars_l_todo$todo1)>0){
+     vars_l = vars_l_todo$vars_l
+     #                 comb_ = self$datasH[[data_nme]]$multiAnglesAndPv(phens,k1,flags,expt_id, vars_l_todo , saveAngles=saveAngles, verbose=verbose)
+     comb_ = self$multiAnglesAndPv(phens, k1,flags,expt_id, vars_l_todo, saveAngles=saveAngles, verbose=verbose)
+     datasAll$savePvals(expt_id,k1, self$nme, vars_l,comb_)
+     vars_l_todo = datasAll$nextVars(vars_l_todo, expt_id, k1,logpvthresh)
+   }
+  vars_l_todo$vars_l 
+ },
  res_inner=function(comb_,prev_i, flags,k, expt_id){
   prev_i2 = self$sigs$loadPrev(expt_id, prev_i, k, data_nme = self$nme)
   if(is.null(prev_i2)) prev_i2 = prev_i
@@ -312,12 +357,19 @@ dataH<-R6Class("dataH", public = list(
    })
 res_inner   
  },
-multiAnglesAndPv=function(phens, vars_l, incl, k1, g_incl, qq_t, flags, expt_id, saveAngles=F, verbose=F){
-    lapply(vars_l, function(prev_i){
+multiAnglesAndPv=function(phens,  k1,flags, expt_id, vars_l_todo,
+                          saveAngles=F, verbose=F){
+  if(is.null(expt_id)) stop("expt_id is NULL")
+  vars_l = vars_l_todo$vars_l
+  todo1=vars_l_todo$todo1[[1]]
+  incl=todo1$incl
+  g_incl = todo1$g_incl
+  qq_t = todo1$qq
+   invisible( lapply(vars_l, function(prev_i){
       varnames = prev_i$var_names; 
       comb_ = self$anglesAndPv(phens, prev_i, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
       comb_
-    })
+    }))
 },
 anglesAndPv=function(phens, prev_i, incl, k1, g_incl, qq_t, flags, expt_id, saveAngles=F, verbose=F){
   varnames = prev_i$var_names

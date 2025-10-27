@@ -227,20 +227,25 @@ datasEnv<-R6Class("datasEnv", public = list(
   func_str = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
   lapply(func_str, function(xx) result)
   },
-updateAngles=function(vars_l, logpvthresh, expt_id, k1, stop_y="rand", verbose=F){
-  ##pulls pvalues from DB
-  angles_all = lapply(vars_l, function(vars_l1){
-    varnames = vars_l1$var_names; 
-    res_inner2 = self$sigs$loadPvals(expt_id, varnames,k1) ## reconstruct ri
-    nxt_vars1=.mergeResInner(res_inner2)
-    nxt_vars1 =nxt_vars1[unlist(lapply(nxt_vars1, length))>0]
-    if(length(nxt_vars1)==0) return(NULL)
-    nxt_vars1
-  })
-  angles_all = angles_all[unlist(lapply(angles_all, length))>0]
-  if(length(angles_all)==0){
-    return(NULL)
-  }
+ 
+ nextVars=function(vars_l_todo, expt_id, k1,logpvthresh,stop_y="rand", verbose=F){
+   vars_l = vars_l_todo$vars_l
+   todo1 = vars_l_todo$todo1
+   angles_all = lapply(vars_l, function(vars_l1){
+     varnames = vars_l1$var_names; 
+     res_inner2 = self$sigs$loadPvals(expt_id, varnames,k1) ## reconstruct ri
+     nxt_vars1=.mergeResInner(res_inner2)
+     nxt_vars1 =nxt_vars1[unlist(lapply(nxt_vars1, length))>0]
+     if(length(nxt_vars1)==0) return(NULL)
+     nxt_vars1
+   })
+   
+   angles_all = angles_all[unlist(lapply(angles_all, length))>0]
+   if(length(angles_all)==0){
+  
+     vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1[-1])
+     return(vars_l_todo)
+   }
       ang1 = unlist(unlist(unlist(angles_all, rec=F),rec=F),rec=F)
       logpvs = unlist(lapply(ang1, function(a1)a1[["cum_pv"]]))
       logpvs_all = unlist(lapply(ang1, function(a1)a1[["cumpv_all"]]))
@@ -264,25 +269,61 @@ updateAngles=function(vars_l, logpvthresh, expt_id, k1, stop_y="rand", verbose=F
   if(stop_random){
     if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
   }
-  
-  if((!stop_random && logpv<=logpvthresh)   ){
+  ##ADD MORE RESTRICTIONS .. eg maxsize
+      #     while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! vars_l_todo$stop_random){
+  if((!stop_random && logpv<=logpvthresh  ) ){
     if(verbose){
       print(head(sort(logpvs_all[gp])))
       print(names(vars_l))
-  #    print(paste("logpv",logpv,min(logpvs_all), jj1))
-    
     }
     dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1[[1]]$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
     ang1 = ang1[!duplicated(dupls)]
-    return(ang1)
+    vars_l_todo = list(stop=F, vars_l = ang1, todo1 = vars_l_todo$todo1)
+    return(vars_l_todo)
   }
-  return (NULL)
+      vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
+      return(vars_l_todo)
+},
+savePvals=function(expt_id,k1, data_nme, vars_l, comb_){
+  for(varn1 in names(vars_l)){ 
+    self$sigs$savePvals(expt_id, data_nme, comb_[[varn1]], vars_l[[varn1]]$var_names,k1, useCurrVarnames = F)
+  }
+},
+saveAngles=function(expt_id,k1, data_nme, vars_l, comb_){
+  for(varn1 in names(vars_l)){ 
+    self$saveAngles(expt_id, data_nme, comb_[[varn1]], vars_l[[varn1]]$var_names,k1)
+  }
+},
+
+getTodo=function(flags, phens, logpv = -100){
+  incls = fromJSON(.readFlag(flags,'data_types',toJSON(names(self$datasH[[1]]$data$data))))
+  genes_incls=fromJSON(.readFlag(flags,"genes_incls",'{"all":["all"]}')) #,getOption("genes_incls",NULL)
+  quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
+  names(incls) = incls;
+  todo1 = unlist(unlist(lapply(incls, function(incl){
+    lapply(genes_incls, function(g_incl){
+      lapply(quantiles, function(qq){
+        list(incl = incl, g_incl = g_incl, qq = qq)    
+      })
+    })
+  }), rec=F), rec=F)
+  Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0))
+  # var_thresh = var_thresh[match(names(var_thresh), train_nme)]
+  vars_l_todo =
+    list(
+      todo1 = todo1,
+      jj=0,
+      logpv=logpv,
+      vars_l = list(empty=stateObj$new(phens, NULL,NULL,NULL,NULL, var=c(), varnames=c(), Wall =Wall0)),
+      stop=F
+    )
+  
+  vars_l_todo
 },
 # self$select_k(phens,flags, k1,   var_thresh, quantiles)
- select_k=function(phens,flags, k1,   quantiles,expt_id,
+ select_k=function(phens,flags, k1,   expt_id,
                      verbose=F){
-   incls = fromJSON(.readFlag(flags,'data_types',toJSON(names(self$datasH[[1]]$data$data))))
-   genes_incls=fromJSON(.readFlag(flags,"genes_incls",'{"all":["all"]}')) #,getOption("genes_incls",NULL)
+  
    train_nme = .readFlag(flags,'train', names(self$datasH))
    names(train_nme)=train_nme
    beam = .readFlag(flags,"beam",1)
@@ -290,34 +331,24 @@ updateAngles=function(vars_l, logpvthresh, expt_id, k1, stop_y="rand", verbose=F
    minsize=.readFlag(flags,'min',0)
    stop_y = .readFlag(flags, 'stop_y',"rand")
    logpvthresh = log(.readFlag(flags,"pthresh",1e-5))
-   Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0))
-   vars_l =list(empty=stateObj$new(phens, NULL,NULL,NULL,NULL, var=c(), varnames=c(), Wall =Wall0))
   # var_thresh = var_thresh[match(names(var_thresh), train_nme)]
    saveAngles=F
-   logpv=-100
-   stop_random=F
-   incls_all = unique(unlist(incls))
  #  loadPv=.readFlag(flags, "loadPV",F)
   
-   jj1=0
+  vars_l_todo = self$getTodo(flags, phens)
    #vars_l1 = vars_l[[1]];   k1=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];#nme_c1 = names(transform_y)[[1]]
-   for(incl in incls){
-     if(verbose) print(incl)
-     for(g_incl in genes_incls){
-       for(qq in 1:length(quantiles)){
-         qq_t = quantiles[[qq]]
-         while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! stop_random){
-           updateV = T  ## whether to update vars each iteration  , should only be F for debugging
-           {
+   while(length(vars_l_todo$todo1)>0){
+     todo = vars_l_todo$todo1[[1]]
+     g_incl = todo$g_incl; incl = todo$incl; qq_t = todo$qq
+     vars_l = vars_l_todo$vars_l
+     logpv = vars_l_todo$logpv
               invisible(lapply(train_nme, function(data_nme){
-                 comb_ = self$datasH[[data_nme]]$multiAnglesAndPv(phens, vars_l, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
-                 for(varn1 in names(vars_l)){ 
+                 comb_ = self$datasH[[data_nme]]$multiAnglesAndPv(phens,k1,flags,expt_id, vars_l_todo , saveAngles=saveAngles, verbose=verbose)
                   if(saveAngles){
-                     self$sigs$saveAngles(expt_id, data_nme, comb_[[varn1]],vars_l[[varn1]]$var_names,k1 )  ## how do we get varnames
+                     self$saveAngles(expt_id, k1, data_nme, vars_l, comb_ )  ## how do we get varnames
                    }else{
-                    self$sigs$savePvals(expt_id, data_nme, comb_[[varn1]], vars_l[[varn1]]$var_names,k1, useCurrVarnames = F)
+                     self$savePvals(expt_id,k1, data_nme, vars_l, comb_)
                    }
-                 }
               }))
              if(saveAngles){  ## this is if separating angles from pval calc
                invisible(lapply(vars_l, function(vars_l1){
@@ -331,34 +362,15 @@ updateAngles=function(vars_l, logpvthresh, expt_id, k1, stop_y="rand", verbose=F
                  })
                }))
              }
-             ang1 = self$updateAngles(vars_l, logpvthresh,expt_id, k1, stop_y=stop_y, verbose=verbose)
-             if(!is.null(ang1) ){
-               if(updateV){
-                vars_l = ang1[1:min(length(ang1),beam)]
-                jj1 = jj1+1
-               }
-             }else{
-               stop_random=T
-             }
-            
+             vars_l_todo = self$nextVars(vars_l_todo, expt_id, k1,logpvthresh,stop_y=stop_y, verbose=verbose)
            }
-           
-         }
-       }
-     }
-   }
-   vars_l
+   vars_l_todo$vars_l
  },
 update=function(phens, flags, verbose=F){
-  for(dh in self$datasH){ ##needed for nreps
-    dh$updateLOOC(phens, flags, verbose=verbose)
-    dh$updateTrain(phens, flags,verbose=verbose)
-  }
-  ##updated after updateLOOC
-  nreps1 =self$datasH[[1]]$nreps()
-  nreps = 1:nreps1
-  names(nreps) = nreps
-  nreps
+  nreps = lapply(self$datasH, function(dh){
+    dh$update(phens, flags)
+  })
+  nreps[[1]]
 },
   select=function(phens,flags, verbose=F, useDB=T ){#c(y="function(y) y","function(y) y")
     nreps = self$update(phens, flags, verbose=verbose);
@@ -368,13 +380,12 @@ update=function(phens, flags, verbose=F){
       if(!is.null(vars_all)) return(vars_all)
     }
     expt_id=self$sigs$getExpt(flags=flags, phens = phens, add_new=T)
-    quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
      variables=lapply(nreps, function(k1){
        if(verbose) print(paste("cv",k1,"of",length(nreps)))
-      self$select_k(phens,flags, k1,   quantiles,expt_id, verbose=verbose)
+      self$select_k(phens,flags, k1,   expt_id, verbose=verbose)
     })
     vars_all=self$post_process(variables,beam=1)
-    vars_all$flags = flags; vars_all$phens = phens;  vars_all$transform_y = transform_y ;
+    vars_all$flags = flags; vars_all$phens = phens; # vars_all$transform_y = transform_y ;
     if(length(vars_all$variables)==0) return(vars_all)
     if(useDB){
       self$sigs$saveVars(vars_all,replace=T)
