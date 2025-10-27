@@ -153,7 +153,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       d$getVariance();      
     })
   },
- post_process=function(variables){
+ post_process=function(variables,beam=1){
    full_index = length(variables)
    vars_all = list()
    vars_all1 = list()
@@ -163,7 +163,8 @@ datasEnv<-R6Class("datasEnv", public = list(
   # func_inds = lapply(variables, function(vv) attr(vv,"func_ind"))
    for(repn in names(variables)){
      full = repn==full_index
-     var1 = variables[[repn]]
+     
+     var1 = variables[[repn]][[beam]]   ### only taking the top1
      var2 = var1$var_names
      if(length(var2)>0){
        names(var2) = names(var1$var_names)
@@ -226,11 +227,60 @@ datasEnv<-R6Class("datasEnv", public = list(
   func_str = fromJSON(.readFlag(flags,"transform_y",'{"y":"function(y) y"}'))
   lapply(func_str, function(xx) result)
   },
-
+updateAngles=function(vars_l, logpvthresh, expt_id, k1, stop_y="rand", verbose=F){
+  ##pulls pvalues from DB
+  angles_all = lapply(vars_l, function(vars_l1){
+    varnames = vars_l1$var_names; 
+    res_inner2 = self$sigs$loadPvals(expt_id, varnames,k1) ## reconstruct ri
+    nxt_vars1=.mergeResInner(res_inner2)
+    nxt_vars1 =nxt_vars1[unlist(lapply(nxt_vars1, length))>0]
+    if(length(nxt_vars1)==0) return(NULL)
+    nxt_vars1
+  })
+  angles_all = angles_all[unlist(lapply(angles_all, length))>0]
+  if(length(angles_all)==0){
+    return(NULL)
+  }
+      ang1 = unlist(unlist(unlist(angles_all, rec=F),rec=F),rec=F)
+      logpvs = unlist(lapply(ang1, function(a1)a1[["cum_pv"]]))
+      logpvs_all = unlist(lapply(ang1, function(a1)a1[["cumpv_all"]]))
+      ord = order(logpvs)
+      names(ord) = names(logpvs)
+      ord_all = order(logpvs_all)
+      ang1 = ang1[ord_all]
+      logpvs = logpvs[ord_all]
+      logpvs_all = logpvs_all[ord_all]
+      if(!is.null(stop_y)){
+        gp1=grep(stop_y, names(logpvs))
+        gp=grep(stop_y, names(logpvs), inv=T)
+        
+        # print("HERE")
+        #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
+        stop_random= min(logpvs[gp1])<=min(logpvs[gp])
+        #print(head(sort(ord[stop_ind])))
+      }
+      logpv =min(logpvs)
+      
+  if(stop_random){
+    if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
+  }
+  
+  if((!stop_random && logpv<=logpvthresh)   ){
+    if(verbose){
+      print(head(sort(logpvs_all[gp])))
+      print(names(vars_l))
+  #    print(paste("logpv",logpv,min(logpvs_all), jj1))
+    
+    }
+    dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1[[1]]$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
+    ang1 = ang1[!duplicated(dupls)]
+    return(ang1)
+  }
+  return (NULL)
+},
 # self$select_k(phens,flags, k1,   var_thresh, quantiles)
  select_k=function(phens,flags, k1,   quantiles,expt_id,
                      verbose=F){
-   sigDB =self$sigs
    incls = fromJSON(.readFlag(flags,'data_types',toJSON(names(self$datasH[[1]]$data$data))))
    genes_incls=fromJSON(.readFlag(flags,"genes_incls",'{"all":["all"]}')) #,getOption("genes_incls",NULL)
    train_nme = .readFlag(flags,'train', names(self$datasH))
@@ -247,7 +297,7 @@ datasEnv<-R6Class("datasEnv", public = list(
    logpv=-100
    stop_random=F
    incls_all = unique(unlist(incls))
-   loadPv=.readFlag(flags, "loadPV",F)
+ #  loadPv=.readFlag(flags, "loadPV",F)
   
    jj1=0
    #vars_l1 = vars_l[[1]];   k1=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];#nme_c1 = names(transform_y)[[1]]
@@ -255,102 +305,49 @@ datasEnv<-R6Class("datasEnv", public = list(
      if(verbose) print(incl)
      for(g_incl in genes_incls){
        for(qq in 1:length(quantiles)){
+         qq_t = quantiles[[qq]]
          while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! stop_random){
            updateV = T  ## whether to update vars each iteration  , should only be F for debugging
            {
-             angles_all = lapply(vars_l, function(vars_l1){
-               prev_i = vars_l1
-               varnames = vars_l1$var_names; 
-               qq_t = quantiles[[qq]]
-               
-               nxt_vars1 =  tryCatch({
-                 res_inner1=lapply(train_nme, function(data_nme){
-                   comb_ = self$datasH[[data_nme]]$anglesAndPv(phens, prev_i, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
-                   if(saveAngles){
-                     sigDB$saveAngles(expt_id, data_nme, comb_,varnames,k1 ) 
+              invisible(lapply(train_nme, function(data_nme){
+                 comb_ = self$datasH[[data_nme]]$multiAnglesAndPv(phens, vars_l, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
+                 for(varn1 in names(vars_l)){ 
+                  if(saveAngles){
+                     self$sigs$saveAngles(expt_id, data_nme, comb_[[varn1]],vars_l[[varn1]]$var_names,k1 )  ## how do we get varnames
                    }else{
-                     sigDB$savePvals(expt_id, data_nme, comb_, varnames,k1, useCurrVarnames = F)
-                    
+                    self$sigs$savePvals(expt_id, data_nme, comb_[[varn1]], vars_l[[varn1]]$var_names,k1, useCurrVarnames = F)
                    }
-                   comb_
+                 }
+              }))
+             if(saveAngles){  ## this is if separating angles from pval calc
+               invisible(lapply(vars_l, function(vars_l1){
+                 varnames = vars_l1$var_names
+                 comb_= .mergeComb( self$sigs$loadAngles(expt_id,varnames), flags) ## reconstruct comb_angs1
+                 res_inner1 = lapply(train_nme, function(data_nme){
+                   prev_i = vars_l1[[data_nme]]
+                   ri = self$datasH[[data_nme]]$res_inner(comb_,prev_i,flags,k1,expt_id)
+                   self$sigs$savePvals(expt_id, data_nme, ri, varnames,useCurrVarnames=F)
+                   ri
                  })
-                 if(saveAngles){  ## this is if separating angles from pval calc
-                   comb_= .mergeComb( sigDB$loadAngles(expt_id,varnames), flags) ## reconstruct comb_angs1
-                   res_inner1 = lapply(train_nme, function(data_nme){
-                     prev_i = vars_l1[[data_nme]]
-                     ri = self$datasH[[data_nme]]$res_inner(comb_,prev_i,flags,k1,expt_id)
-                     sigDB$savePvals(expt_id, data_nme, ri, varnames,useCurrVarnames=F)
-                     ri
-                   })
-                 }
-                 if(loadPv){ #preferred
-                   res_inner2 = sigDB$loadPvals(expt_id, varnames,k1) ## reconstruct ri
-                   res_inner=.mergeResInner(res_inner2)
-                 }else{
-                   res_inner=.mergeResInner(res_inner1)
-                 }
-                 res_inner
-               },error=function(w){
-                 print(w)
-                 #print("error")
-                 return(NULL)
-               })
-               nxt_vars1 =nxt_vars1[unlist(lapply(nxt_vars1, length))>0]
-               if(length(nxt_vars1)==0) return(NULL)
-               nxt_vars1
-               
-             })
-             angles_all = angles_all[unlist(lapply(angles_all, length))>0]
-             if(length(angles_all)==0){
-               stop_random=T;
-               next;
+               }))
              }
-             ang1 = unlist(unlist(unlist(angles_all, rec=F),rec=F),rec=F)
-             logpvs = unlist(lapply(ang1, function(a1)a1[["cum_pv"]]))
-             logpvs_all = unlist(lapply(ang1, function(a1)a1[["cumpv_all"]]))
-             ord = order(logpvs)
-             names(ord) = names(logpvs)
-             ord_all = order(logpvs_all)
-             ang1 = ang1[ord_all]
-             logpvs = logpvs[ord_all]
-             logpvs_all = logpvs_all[ord_all]
-             if(!is.null(stop_y)){
-               gp1=grep(stop_y, names(logpvs))
-               gp=grep(stop_y, names(logpvs), inv=T)
-               
-               # print("HERE")
-               #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
-               stop_random= min(logpvs[gp1])<=min(logpvs[gp])
-               #print(head(sort(ord[stop_ind])))
+             ang1 = self$updateAngles(vars_l, logpvthresh,expt_id, k1, stop_y=stop_y, verbose=verbose)
+             if(!is.null(ang1) ){
+               if(updateV){
+                vars_l = ang1[1:min(length(ang1),beam)]
+                jj1 = jj1+1
+               }
+             }else{
+               stop_random=T
              }
-             
-             
-             #print("HERE ALL")
-             if(stop_random){
-               if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
-             }
-             logpv =min(logpvs)
-             
-             
-             #logpv<=logpvthresh || length(vars_l[[1]][[1]]$var) < minsize 
-             if((!stop_random && logpv<=logpvthresh) || length(vars_l[[1]][[1]]$var)<minsize  ){
-               dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1[[1]]$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
-               ang1 = ang1[!duplicated(dupls)]
-               if(updateV) vars_l = ang1[1:min(length(ang1),beam)]
-             }
-             if(verbose){
-               print(head(sort(logpvs_all[gp])))
-               print(names(vars_l))
-               print(paste("logpv",logpv,min(logpvs_all), jj1))
-               if(updateV) jj1 = jj1+1
-             }
+            
            }
            
          }
        }
      }
    }
-   vars_l[[1]] 
+   vars_l
  },
 update=function(phens, flags, verbose=F){
   for(dh in self$datasH){ ##needed for nreps
@@ -366,21 +363,21 @@ update=function(phens, flags, verbose=F){
   select=function(phens,flags, verbose=F, useDB=T ){#c(y="function(y) y","function(y) y")
     nreps = self$update(phens, flags, verbose=verbose);
     sigDB =self$sigs
-    if(!is.null(sigDB) && useDB ){
-      vars_all = sigDB$loadVars(flags, phens)
+    if(!is.null(self$sigs) && useDB ){
+      vars_all = self$sigs$loadVars(flags, phens)
       if(!is.null(vars_all)) return(vars_all)
     }
-    expt_id=sigDB$getExpt(flags=flags, phens = phens, add_new=T)
+    expt_id=self$sigs$getExpt(flags=flags, phens = phens, add_new=T)
     quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
      variables=lapply(nreps, function(k1){
        if(verbose) print(paste("cv",k1,"of",length(nreps)))
       self$select_k(phens,flags, k1,   quantiles,expt_id, verbose=verbose)
     })
-    vars_all=self$post_process(variables)
+    vars_all=self$post_process(variables,beam=1)
     vars_all$flags = flags; vars_all$phens = phens;  vars_all$transform_y = transform_y ;
     if(length(vars_all$variables)==0) return(vars_all)
     if(useDB){
-      sigDB$saveVars(vars_all,replace=T)
+      self$sigs$saveVars(vars_all,replace=T)
     }
     vars_all
   },

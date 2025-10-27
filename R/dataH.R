@@ -312,6 +312,13 @@ dataH<-R6Class("dataH", public = list(
    })
 res_inner   
  },
+multiAnglesAndPv=function(phens, vars_l, incl, k1, g_incl, qq_t, flags, expt_id, saveAngles=F, verbose=F){
+    lapply(vars_l, function(prev_i){
+      varnames = prev_i$var_names; 
+      comb_ = self$anglesAndPv(phens, prev_i, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
+      comb_
+    })
+},
 anglesAndPv=function(phens, prev_i, incl, k1, g_incl, qq_t, flags, expt_id, saveAngles=F, verbose=F){
   varnames = prev_i$var_names
  
