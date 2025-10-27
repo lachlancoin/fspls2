@@ -2392,14 +2392,14 @@ randomise=function(n= nrow(self$y[[1]]),
   }
 },
   
-cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1, excl = list()){ #incl, g_incl,qq
+cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = list()){ #incl, g_incl,qq
   norm = self$norm
  names(incl) = incl
  useall = length(g_incl)==1 & g_incl[[1]]=="all"
   lapply(incl, function(norm_nme){
      varthreshs = var_threshs[[norm_nme]]
       norm1 = norm[[norm_nme]]
-      varthresh = var_threshs[[norm_nme]][qq]
+      varthresh = var_threshs[[norm_nme]]
       variance = self$vars[[norm_nme]]
      # varthresh = var_thresh[[norm_nme]]
       var_res = variance>=varthresh

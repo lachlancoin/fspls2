@@ -15,10 +15,9 @@
    })
 }
 .mergeResInner<-function(res_inner1){
-#  nme_comb = names(comb_); names(nme_comb) = nme_comb
   nme_comb = names(res_inner1[[1]]);names(nme_comb) = nme_comb
   res_inner=lapply(nme_comb, function(nme_c1){
-#    nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
+    #nme_c1 = nme_comb[[1]]; nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
     nmesp1 = names(res_inner1[[1]][[nme_c1]]);names(nmesp1) = nmesp1
     lapply(nmesp1, function(nme_p1){
     #  comb = comb_[[nme_c1]][[nme_p1]]
@@ -33,23 +32,18 @@
         nv = lapply(res_inner1, function(ri){
           ri[[nme_c1]][[nme_p1]][[vn]]
         })
-    attr(nv,"cumpv")= .sumChisq(unlist(lapply(nv, function(nv1){
+        nv1 = list(var_names =nv[[1]]$var_names,
+            cum_pv= .sumChisq(unlist(lapply(nv, function(nv1){
       unlist(nv1$pvs)
-    })))
-    attr(nv,"cumpv_all")= .sumChisq(unlist(lapply(nv, function(nv1){
+    }))),
+       cumpv_all= .sumChisq(unlist(lapply(nv, function(nv1){
       unlist(nv1$pvs_all)
-    })))
-    nv
+    }))))
+    nv1
       })
   nxt_vars = nxt_vars[unlist(lapply(nxt_vars, length))>0]
   if(length(nxt_vars)==0) return(NULL)
-  pvs_list = unlist(lapply(nxt_vars, function(nv) attr(nv,"cumpv")))
-  # pvs_list_all = unlist(lapply(nxt_vars, function(nv) attr(nv,"cumpv_all")))
-  #print(pvs_list)
-  #subinds1 = pvs_list<=logpvthresh
-  #if(length(which(subinds1)==0)) return(NULL)
-  #nxt_vars = nxt_vars[subinds1]
-  #pvs_list = pvs_list[subinds1]
+  pvs_list = unlist(lapply(nxt_vars, function(nv) nv$cum_pv))
   nxt_vars[order(pvs_list)] 
     })
   })
@@ -170,10 +164,10 @@ datasEnv<-R6Class("datasEnv", public = list(
    for(repn in names(variables)){
      full = repn==full_index
      var1 = variables[[repn]]
-     var2 = var1[[1]]$var_names
+     var2 = var1$var_names
      if(length(var2)>0){
-       names(var2) = var1[[1]]$varnames
-       cumpv = attr(var1,"cumpv")#lapply(var1, function(vv) attr(vv,"cumpv"))
+       names(var2) = names(var1$var_names)
+       cumpv = var1$cum_pv#lapply(var1, function(vv) attr(vv,"cumpv"))
        varn = paste(names(var2),collapse=";") #paste(names(var2), collapse=";")
        if(is.null(vars_all[[varn]])){
          vars_all[[varn]] = list()
@@ -234,7 +228,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   },
 
 # self$select_k(phens,flags, k1,   var_thresh, quantiles)
- select_k=function(phens,flags, k1,   var_thresh,quantiles,expt_id,
+ select_k=function(phens,flags, k1,   quantiles,expt_id,
                      verbose=F){
    sigDB =self$sigs
    incls = fromJSON(.readFlag(flags,'data_types',toJSON(names(self$datasH[[1]]$data$data))))
@@ -247,9 +241,8 @@ datasEnv<-R6Class("datasEnv", public = list(
    stop_y = .readFlag(flags, 'stop_y',"rand")
    logpvthresh = log(.readFlag(flags,"pthresh",1e-5))
    Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0))
-   vars_l =list(empty=lapply(train_nme,function(xx) stateObj$new(phens, NULL,NULL,NULL,NULL, var=c(), varnames=c(), Wall =Wall0)))
-   #k1=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];#nme_c1 = names(transform_y)[[1]]
-   var_thresh = var_thresh[match(names(var_thresh), train_nme)]
+   vars_l =list(empty=stateObj$new(phens, NULL,NULL,NULL,NULL, var=c(), varnames=c(), Wall =Wall0))
+  # var_thresh = var_thresh[match(names(var_thresh), train_nme)]
    saveAngles=F
    logpv=-100
    stop_random=F
@@ -257,21 +250,22 @@ datasEnv<-R6Class("datasEnv", public = list(
    loadPv=.readFlag(flags, "loadPV",F)
   
    jj1=0
-   #vars_l1 = vars_l[[1]]
+   #vars_l1 = vars_l[[1]];   k1=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];#nme_c1 = names(transform_y)[[1]]
    for(incl in incls){
      if(verbose) print(incl)
      for(g_incl in genes_incls){
        for(qq in 1:length(quantiles)){
-         while( (length(vars_l[[1]][[1]]$var) < minsize || logpv<logpvthresh) && length(vars_l[[1]][[1]]$var)<maxsize && ! stop_random){
+         while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! stop_random){
            updateV = T  ## whether to update vars each iteration  , should only be F for debugging
            {
              angles_all = lapply(vars_l, function(vars_l1){
+               prev_i = vars_l1
+               varnames = vars_l1$var_names; 
+               qq_t = quantiles[[qq]]
+               
                nxt_vars1 =  tryCatch({
-                 varnames = vars_l1[[1]]$var_names; type = self$datasH[[1]]$type
                  res_inner1=lapply(train_nme, function(data_nme){
-                   prev_i = vars_l1[[data_nme]]
-                   var_t = var_thresh[[data_nme]]
-                   comb_ = self$datasH[[data_nme]]$anglesAndPv(phens, prev_i, incl, k1, type, var_t, g_incl, qq, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
+                   comb_ = self$datasH[[data_nme]]$anglesAndPv(phens, prev_i, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
                    if(saveAngles){
                      sigDB$saveAngles(expt_id, data_nme, comb_,varnames,k1 ) 
                    }else{
@@ -312,8 +306,8 @@ datasEnv<-R6Class("datasEnv", public = list(
                next;
              }
              ang1 = unlist(unlist(unlist(angles_all, rec=F),rec=F),rec=F)
-             logpvs = unlist(lapply(ang1, function(a1)attr(a1,"cumpv")))
-             logpvs_all = unlist(lapply(ang1, function(a1)attr(a1,"cumpv_all")))
+             logpvs = unlist(lapply(ang1, function(a1)a1[["cum_pv"]]))
+             logpvs_all = unlist(lapply(ang1, function(a1)a1[["cumpv_all"]]))
              ord = order(logpvs)
              names(ord) = names(logpvs)
              ord_all = order(logpvs_all)
@@ -363,29 +357,24 @@ update=function(phens, flags, verbose=F){
     dh$updateLOOC(phens, flags, verbose=verbose)
     dh$updateTrain(phens, flags,verbose=verbose)
   }
+  ##updated after updateLOOC
+  nreps1 =self$datasH[[1]]$nreps()
+  nreps = 1:nreps1
+  names(nreps) = nreps
+  nreps
 },
   select=function(phens,flags, verbose=F, useDB=T ){#c(y="function(y) y","function(y) y")
-    self$update(phens, flags, verbose=verbose);
+    nreps = self$update(phens, flags, verbose=verbose);
     sigDB =self$sigs
     if(!is.null(sigDB) && useDB ){
       vars_all = sigDB$loadVars(flags, phens)
       if(!is.null(vars_all)) return(vars_all)
     }
-    expt_id1=sigDB$getExpt(flags=flags, phens = phens, add_new=T)
-   
-    nreps1 =self$datasH[[1]]$nreps()
-    nreps = 1:nreps1
-    names(nreps) = nreps
+    expt_id=sigDB$getExpt(flags=flags, phens = phens, add_new=T)
     quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
-    var_thresh = lapply(self$datasH, function(dh){
-      lapply(dh$data$vars, function(v) quantile(v, quantiles))
-    })
      variables=lapply(nreps, function(k1){
        if(verbose) print(paste("cv",k1,"of",length(nreps)))
-       #if(verbose) print(paste(k1,length(nreps)))
-       
-      var2 = self$select_k(phens,flags, k1,   var_thresh, quantiles,expt_id1, verbose=verbose)
-      var2
+      self$select_k(phens,flags, k1,   quantiles,expt_id, verbose=verbose)
     })
     vars_all=self$post_process(variables)
     vars_all$flags = flags; vars_all$phens = phens;  vars_all$transform_y = transform_y ;

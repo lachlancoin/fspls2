@@ -191,6 +191,7 @@ dataH<-R6Class("dataH", public = list(
  type="character",  
  flags="list",
  transform_y="character",
+ #var_t = "list",
  nme="character",
   initialize=function(
     d,
@@ -245,6 +246,9 @@ dataH<-R6Class("dataH", public = list(
   },
  updateTransform=function(transform_y){
    stop("not working yet, need to consider whats happening in db")
+ },
+ var_thresh = function(qq_t){
+  lapply(self$data$vars, function(v) quantile(v, qq_t))
  },
  clear_db=function(drop=F, exclude="vars"){
    if(drop){
@@ -308,17 +312,14 @@ dataH<-R6Class("dataH", public = list(
    })
 res_inner   
  },
-anglesAndPv=function(phens, prev_i, incl, k, type, var_t,g_incl, qq, flags, expt_id, saveAngles=F, verbose=F){
-  ##only update if changed
-  #self$updateLOOC(phens, flags, verbose=verbosee
-  #self$updateTrain(phens, flags,verbose=verbose)
+anglesAndPv=function(phens, prev_i, incl, k1, g_incl, qq_t, flags, expt_id, saveAngles=F, verbose=F){
   varnames = prev_i$var_names
  
-  comb_=self$combinedAngles(phens, varnames, incl, k, type,var_t, g_incl, qq, flags)
+  comb_=self$combinedAngles(phens, varnames, incl, k1,  g_incl, qq_t, flags)
   if(saveAngles) return(comb_)
     #self$sigs$saveAngles(expt_id, data_nme, comb_angs1,varnames ) 
-  ri = self$res_inner(comb_,prev_i,flags,k, expt_id)
-  self$sigs$savePvals(expt_id, self$nme, ri, varnames,k,useCurrVarnames=T)
+  ri = self$res_inner(comb_,prev_i,flags,k1, expt_id)
+  self$sigs$savePvals(expt_id, self$nme, ri, varnames,k1,useCurrVarnames=T)
   ri_out=lapply(ri, function(ri1){
     lapply(ri1, function(ri2){
       lapply(ri2, function(ri3){
@@ -329,11 +330,12 @@ anglesAndPv=function(phens, prev_i, incl, k, type, var_t,g_incl, qq, flags, expt
   })
   ri_out
 },
- combinedAngles=function(phens, varnames, incl, k, type, var_t,g_incl, qq, flags){ #phens, varnames, incl=incl, k=k, type=type
-  
+ combinedAngles=function(phens, varnames, incl, k, g_incl, qq_t, flags){ #phens, varnames, incl=incl, k=k, type=type
+  type=self$type
+  var_t = self$var_thresh(qq_t)
    angleH=list(angles=
                  self$data$getAngles1(phens,varnames,incl=incl,k=k, type=type),
-               cols_incl = self$data$cols_incl(var_t,incl, g_incl,qq, excl=varnames)) ### fix 
+               cols_incl = self$data$cols_incl(var_t,incl, g_incl,excl=varnames)) ### fix 
    .combineAngles1(angleH, incl, flags, excl=varnames)
  },
  getPvsAll=function(subphens, prev_i, b_i_name,k, #   prev_i = vars_l1[[nmed]]
