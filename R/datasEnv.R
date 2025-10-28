@@ -1,3 +1,52 @@
+post_process<-function(variables, flags, phens){
+  full_index = length(variables)
+  beams = 1:length(variables[[full_index]])
+  names(beams)=beams
+  vars_combined=lapply(beams, function(beam){
+    vars_all = list()
+    vars_all1 = list()
+    vars_all2 = list()
+    #vars_all3 = list() #funcstr
+    names(variables) = 1:length(variables)
+    # func_inds = lapply(variables, function(vv) attr(vv,"func_ind"))
+    
+    for(repn in names(variables)){
+      full = repn==full_index
+      
+      var1 = variables[[repn]][[beam]]   ### only taking the top1
+      var2 = var1$var_names
+      if(length(var2)>0){
+        names(var2) = names(var1$var_names)
+        cumpv = var1$cum_pv#lapply(var1, function(vv) attr(vv,"cumpv"))
+        varn = paste(names(var2),collapse=";") #paste(names(var2), collapse=";")
+        if(is.null(vars_all[[varn]])){
+          vars_all[[varn]] = list()
+          vars_all1[[varn]] = var2
+          vars_all2[[varn]] = list()
+          # vars_all3[[varn]] =list(repn) 
+          # names(vars_all3[[varn]]) = func_str1
+        }else{
+          #vars_all3[[varn]]=c( vars_all3[[varn]],repn)
+        }
+        repn1 = as.list(as.numeric(repn))
+        repn2 = as.list(cumpv)
+        names(repn1) = if(full) "full" else repn
+        names(repn2) = if(full) "full" else repn
+        if(is.null(vars_all[[varn]])){
+          vars_all[[varn]] =repn1
+          vars_all2[[varn]] =repn2
+          # vars_all3[[varn]]
+        }else{
+          vars_all[[varn]] = c(vars_all[[varn]] , repn1)
+          vars_all2[[varn]] = c(vars_all2[[varn]] , repn2)
+        }
+      }
+    }
+    list(variables = vars_all1, inds = vars_all,cumpv=vars_all2, beam=beam,flags = flags,phens = phens )# ,transf= vars_all3) 
+  })
+  vars_combined
+}
+
 .extractFullVars<-function(vars_all0){
   lapply(vars_all0, function(vars_all){
   subinds = which(unlist(lapply(vars_all$inds, function(x) length(grep('full',names(x)))))>0)
@@ -155,54 +204,6 @@ datasEnv<-R6Class("datasEnv", public = list(
       d$getVariance();      
     })
   },
- post_process=function(variables, flags, phens){
-   full_index = length(variables)
-   beams = 1:length(variables[[full_index]])
-   names(beams)=beams
-   vars_combined=lapply(beams, function(beam){
-   vars_all = list()
-   vars_all1 = list()
-   vars_all2 = list()
-   #vars_all3 = list() #funcstr
-   names(variables) = 1:length(variables)
-  # func_inds = lapply(variables, function(vv) attr(vv,"func_ind"))
-   
-   for(repn in names(variables)){
-     full = repn==full_index
-     
-     var1 = variables[[repn]][[beam]]   ### only taking the top1
-     var2 = var1$var_names
-     if(length(var2)>0){
-       names(var2) = names(var1$var_names)
-       cumpv = var1$cum_pv#lapply(var1, function(vv) attr(vv,"cumpv"))
-       varn = paste(names(var2),collapse=";") #paste(names(var2), collapse=";")
-       if(is.null(vars_all[[varn]])){
-         vars_all[[varn]] = list()
-         vars_all1[[varn]] = var2
-         vars_all2[[varn]] = list()
-        # vars_all3[[varn]] =list(repn) 
-        # names(vars_all3[[varn]]) = func_str1
-       }else{
-         #vars_all3[[varn]]=c( vars_all3[[varn]],repn)
-       }
-       repn1 = as.list(as.numeric(repn))
-       repn2 = as.list(cumpv)
-       names(repn1) = if(full) "full" else repn
-       names(repn2) = if(full) "full" else repn
-       if(is.null(vars_all[[varn]])){
-         vars_all[[varn]] =repn1
-         vars_all2[[varn]] =repn2
-         # vars_all3[[varn]]
-       }else{
-         vars_all[[varn]] = c(vars_all[[varn]] , repn1)
-         vars_all2[[varn]] = c(vars_all2[[varn]] , repn2)
-       }
-     }
-   }
-    list(variables = vars_all1, inds = vars_all,cumpv=vars_all2, beam=beam,flags = flags,phens = phens )# ,transf= vars_all3) 
-   })
-   vars_combined
- },
   convert1=function(variables, phens){
     nreps1 =unlist(lapply(self$datas, function(x) ncol(x$looc$incl)))
     inds = lapply(variables, function(v){
@@ -392,7 +393,7 @@ update=function(phens, flags, verbose=F){
        if(verbose) print(paste("cv",k1,"of",length(nreps)))
       self$select_k(phens,flags, k1,   expt_id, verbose=verbose)
     })
-    vars_all=self$post_process(variables,flags, phens)
+    vars_all=post_process(variables,flags, phens)
     # vars_all$transform_y = transform_y ;
     #if(length(vars_all[[1]]$variables)==0) return(vars_all)
     if(useDB){

@@ -309,7 +309,7 @@ dataH<-R6Class("dataH", public = list(
      self$select_k(datasAll, phens,flags, k1, expt_id,
                    vars_l_todo=vars_l_todo,verbose=verbose)
    })
-   vars_all=datasAll$post_process(variables,flags,phens)
+   vars_all=post_process(variables,flags,phens)
 #   if(length(vars_all$variables)==0) return(vars_all)
    if(useDB){
      self$sigs$saveVars(vars_all,replace=T)   #saving local
