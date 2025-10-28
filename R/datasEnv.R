@@ -1,9 +1,11 @@
-.extractFullVars<-function(vars_all){
+.extractFullVars<-function(vars_all0){
+  lapply(vars_all0, function(vars_all){
   subinds = which(unlist(lapply(vars_all$inds, function(x) length(grep('full',names(x)))))>0)
   list(variables = vars_all$variables[subinds], inds = vars_all$inds[subinds], cumpv = vars_all$cumpv[subinds],
        transf = vars_all$transf[subinds],
        flags = vars_all$flags,
        phens=vars_all$phens, transform_y = vars_all$transform_y)
+  })
 }
 .mergeComb<-function(comb_all1, flags){
    topn = .readFlag(flags,'topn', 20);num_pvals = min(topn, 20)
@@ -153,14 +155,18 @@ datasEnv<-R6Class("datasEnv", public = list(
       d$getVariance();      
     })
   },
- post_process=function(variables,beam=1){
+ post_process=function(variables, flags, phens){
    full_index = length(variables)
+   beams = 1:length(variables[[full_index]])
+   names(beams)=beams
+   vars_combined=lapply(beams, function(beam){
    vars_all = list()
    vars_all1 = list()
    vars_all2 = list()
    #vars_all3 = list() #funcstr
    names(variables) = 1:length(variables)
   # func_inds = lapply(variables, function(vv) attr(vv,"func_ind"))
+   
    for(repn in names(variables)){
      full = repn==full_index
      
@@ -191,12 +197,10 @@ datasEnv<-R6Class("datasEnv", public = list(
          vars_all[[varn]] = c(vars_all[[varn]] , repn1)
          vars_all2[[varn]] = c(vars_all2[[varn]] , repn2)
        }
-       
-       
-       
      }
    }
-   vars_combined = list(variables = vars_all1, inds = vars_all,cumpv=vars_all2)# ,transf= vars_all3) 
+    list(variables = vars_all1, inds = vars_all,cumpv=vars_all2, beam=beam,flags = flags,phens = phens )# ,transf= vars_all3) 
+   })
    vars_combined
  },
   convert1=function(variables, phens){
@@ -228,7 +232,7 @@ datasEnv<-R6Class("datasEnv", public = list(
   lapply(func_str, function(xx) result)
   },
  
- nextVars=function(vars_l_todo, expt_id, k1,logpvthresh,stop_y="rand", verbose=F){
+ nextVars=function(vars_l_todo, expt_id, k1,logpvthresh,beam,stop_y="rand", verbose=F){
    vars_l = vars_l_todo$vars_l
    todo1 = vars_l_todo$todo1
    angles_all = lapply(vars_l, function(vars_l1){
@@ -261,7 +265,7 @@ datasEnv<-R6Class("datasEnv", public = list(
         
         # print("HERE")
         #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
-        stop_random= min(logpvs[gp1])<=min(logpvs[gp])
+        stop_random= min(gp1)<=min(gp)
         #print(head(sort(ord[stop_ind])))
       }
       logpv =min(logpvs)
@@ -276,12 +280,17 @@ datasEnv<-R6Class("datasEnv", public = list(
       print(head(sort(logpvs_all[gp])))
       print(names(vars_l))
     }
-    dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1[[1]]$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
+    dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
     ang1 = ang1[!duplicated(dupls)]
+    ang1 = ang1[1:min(length(ang1),beam)]
     vars_l_todo = list(stop=F, vars_l = ang1, todo1 = vars_l_todo$todo1)
     return(vars_l_todo)
   }
-      vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
+      if(length(todo1)==1){
+        print("could consider saving the vars at this point to the DB.  Maybe also need to record dataset included")
+      }
+
+            vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
       return(vars_l_todo)
 },
 savePvals=function(expt_id,k1, data_nme, vars_l, comb_){
@@ -323,7 +332,6 @@ getTodo=function(flags, phens, logpv = -100){
 # self$select_k(phens,flags, k1,   var_thresh, quantiles)
  select_k=function(phens,flags, k1,   expt_id,
                      verbose=F){
-  
    train_nme = .readFlag(flags,'train', names(self$datasH))
    names(train_nme)=train_nme
    beam = .readFlag(flags,"beam",1)
@@ -362,7 +370,7 @@ getTodo=function(flags, phens, logpv = -100){
                  })
                }))
              }
-             vars_l_todo = self$nextVars(vars_l_todo, expt_id, k1,logpvthresh,stop_y=stop_y, verbose=verbose)
+             vars_l_todo = self$nextVars(vars_l_todo, expt_id, k1,logpvthresh,beam,stop_y=stop_y, verbose=verbose)
            }
    vars_l_todo$vars_l
  },
@@ -384,9 +392,9 @@ update=function(phens, flags, verbose=F){
        if(verbose) print(paste("cv",k1,"of",length(nreps)))
       self$select_k(phens,flags, k1,   expt_id, verbose=verbose)
     })
-    vars_all=self$post_process(variables,beam=1)
-    vars_all$flags = flags; vars_all$phens = phens; # vars_all$transform_y = transform_y ;
-    if(length(vars_all$variables)==0) return(vars_all)
+    vars_all=self$post_process(variables,flags, phens)
+    # vars_all$transform_y = transform_y ;
+    #if(length(vars_all[[1]]$variables)==0) return(vars_all)
     if(useDB){
       self$sigs$saveVars(vars_all,replace=T)
     }

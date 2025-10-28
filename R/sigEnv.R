@@ -23,6 +23,7 @@ toJSON1<-function(flags){
                             model = nme1,
                             variables=toJSON(vars_all1$variables[[nme1]]), 
                             inds = toJSON(vars_all1$inds[[nme1]]), 
+                            beam = vars_all1$beam,
                       #      transf=toJSON(vars_all1$transf[[nme1]]),
                             cumpv = toJSON(vars_all1$cumpv[[nme1]])))
   }))
@@ -249,7 +250,7 @@ sigEnv<-R6Class("sigEnv", public = list(
    vn1=combined
    #c("model_name","rep")
 
-   all_models1 =  .splitAll(combined, c("model_name","rep"),.modelFromRow)
+   all_models1 =  .splitAll(combined, c("beam","model_name","rep"),.modelFromRow)
    #})
    list(models=all_models1, flags = flags, phens = phens, trainedOn=self$subnme)
  },
@@ -331,23 +332,19 @@ loadPvals=function(expt_id, varnames,k){
 aa 
 },
 
- saveModels=function(all_models, trainedOn=all_models$trainedOn,
-                     flags=all_models$flags, phens=all_models$phens,  user=self$user,replace=T){
+ saveModels=function(all_models_, trainedOn=all_models_$trainedOn,
+                     flags=all_models_$flags, phens=all_models_$phens,  user=self$user,replace=T){
    debug=getOption("fspls.debug",FALSE)
-   #transform_y=""
-   all_models1 = all_models$models
    tbls = dbListTables(self$mydb)
    hasModel = "models" %in% tbls
    expt_id = self$getExpt(flags, phens,  user,add_new=T)
    if(replace && hasModel){
      dbExecute(self$mydb, 'DELETE FROM models where experiment_id =:expt_id',list(expt_id=expt_id))
    }
-   combined=.merge_all(all_models1,c("model_name","rep") , .modelToRow)%>% tibble::add_column(experiment_id = expt_id)
-   
-  #  combined= .convertModelsToTable(all_models1, expt_id=expt_id,debug=debug)
-   #.merge_all(combined,c("data","transf","param","var"), .ro)
-   #    }))
-  try(dbWriteTable(self$mydb, "models", combined,overwrite=!hasModel,append=hasModel))
+   #transform_y=""
+     all_models1 = all_models_$models
+     combined=.merge_all(all_models1,c("beam","model_name","rep") , .modelToRow)%>% tibble::add_column(experiment_id = expt_id)
+      try(dbWriteTable(self$mydb, "models", combined,overwrite=!hasModel,append=hasModel))
    return(list(msg="success"))
  },
  getExpt=function(flags=NULL,phens=NULL, user=self$user, select="experiment_id",
@@ -384,13 +381,16 @@ aa
     expt_id = self$getExpt(flags, phens, user=user,add_new=F)
     if(!("vars" %in% self$tbls())) return (NULL)
     if(is.null(expt_id)) return(NULL)
-    vn1 =  dbGetQuery(self$mydb, 'SELECT * from vars where experiment_id=:exptid',list(exptid=expt_id))
-    if(nrow(vn1)==0) return(NULL)
-    
-    #ty = trans_y[[1]]
+    vn0 =  dbGetQuery(self$mydb, 'SELECT * from vars where experiment_id=:exptid',list(exptid=expt_id))
+    if(nrow(vn0)==0) return(NULL)
+    beams = vn0$beam; names(beams)=beams
+    lapply(beams, function(bm){
+      vn1 = subset(vn0, beam==bm)
       vn1 = vn1[!duplicated(vn1$model),,drop=F]
       if(max(table(vn1$model))>1) warning("not unique")
       models = unique(vn1$model); names(models) = models
+      
+      ## add beam
       res2 = list(
       variables = lapply(models, function(mod)  fromJSON(vn1$variables[vn1$model==mod])) ,# lapply(vn1$variables[vn1$model==mod], function(x) fromJSON(x))),
       inds = lapply(models, function(mod) fromJSON(vn1$inds[vn1$model==mod])), #lapply(vn1$inds[vn1$model==mod], function(x) fromJSON(x))),
@@ -399,9 +399,11 @@ aa
       ),
       flags=flags,
       phens =phens, 
+      beam = bm,
       db=self$subnme
       )
       res2
+    })
   },
  phens=function( user=self$user, flags =NULL){
    transform_y1  = self$getExpt(flags=NULL, phens=phens,  user=user,add_new=F, select="phens")
@@ -443,19 +445,23 @@ get_data_flags=function( user=self$user, nmes = self$data_names, types = self$da
    if ("eval" %in% tbls) dbExecute(self$mydb, 'DELETE FROM eval where experiment_id =:expt_id',list(expt_id=expt_id))   
    if ("experiment" %in% tbls) dbExecute(self$mydb, 'DELETE FROM experiment where experiment_id =:expt_id',list(expt_id=expt_id))   
  },
- saveVars = function(vars_all,flags=vars_all$flags,phens=vars_all$phens,
+ saveVars = function(vars_all,
                        user=self$user, replace=T){
    tbls = self$tbls()
    hasVars = "vars" %in% tbls
+   flags=vars_all[[1]]$flags;
+   phens=vars_all[[1]]$phens
    expt_id = self$getExpt(flags=flags, phens=phens,  user=user,add_new=T)
    if(replace & hasVars){
      dbExecute(self$mydb, 'DELETE FROM vars where experiment_id =:expt_id',list(expt_id=expt_id))
    }
-   vars_all1 = vars_all
+   for(vars_all1 in vars_all){
    res1 = .convertVarsToTable(vars_all1, expt_id=expt_id)
    
    #}))
    try(dbWriteTable(self$mydb, "vars", res1,overwrite=!hasVars,append=hasVars))
+   hasVars=T
+   }
    return(list(msg="success"))
  },
   

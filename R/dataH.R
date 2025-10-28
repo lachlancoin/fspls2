@@ -295,7 +295,9 @@ dataH<-R6Class("dataH", public = list(
    names(nreps) = nreps
    nreps
  },
- select=function(datasAll, phens,flags,expt_id, verbose=F, useDB=T ){#c(y="function(y) y","function(y) y")
+ select=function(datasAll, phens,flags,
+                 expt_id=datasAll$sigs$getExpt(flags, phens, add_new=T), 
+                 verbose=F, useDB=T ){#c(y="function(y) y","function(y) y")
    nreps = self$update(phens, flags, verbose=verbose);
    if( useDB ){
      vars_all = self$sigs$loadVars(flags, phens)
@@ -307,11 +309,10 @@ dataH<-R6Class("dataH", public = list(
      self$select_k(datasAll, phens,flags, k1, expt_id,
                    vars_l_todo=vars_l_todo,verbose=verbose)
    })
-   vars_all=datasAll$post_process(variables,beam=1)
-   vars_all$flags = flags; vars_all$phens = phens;  
-   if(length(vars_all$variables)==0) return(vars_all)
+   vars_all=datasAll$post_process(variables,flags,phens)
+#   if(length(vars_all$variables)==0) return(vars_all)
    if(useDB){
-     self$sigs$saveVars(vars_all,replace=T)
+     self$sigs$saveVars(vars_all,replace=T)   #saving local
    }
    vars_all
  },
@@ -320,6 +321,7 @@ dataH<-R6Class("dataH", public = list(
                    verbose=F){
    stop_y = .readFlag(flags, 'stop_y',"rand")
    logpvthresh = log(.readFlag(flags,"pthresh",0.1))
+   beam= log(.readFlag(flags,"beam",1))
   saveAngles=F
   # vars_l = datasAll$nextVars(expt_id, flags)
    while(length(vars_l_todo$todo1)>0){
@@ -327,7 +329,7 @@ dataH<-R6Class("dataH", public = list(
      #                 comb_ = self$datasH[[data_nme]]$multiAnglesAndPv(phens,k1,flags,expt_id, vars_l_todo , saveAngles=saveAngles, verbose=verbose)
      comb_ = self$multiAnglesAndPv(phens, k1,flags,expt_id, vars_l_todo, saveAngles=saveAngles, verbose=verbose)
      datasAll$savePvals(expt_id,k1, self$nme, vars_l,comb_)
-     vars_l_todo = datasAll$nextVars(vars_l_todo, expt_id, k1,logpvthresh)
+     vars_l_todo = datasAll$nextVars(vars_l_todo, expt_id, k1,logpvthresh,beam)
    }
   vars_l_todo$vars_l 
  },
@@ -542,7 +544,7 @@ makeModels=function(vars2, inds, phens,flags){
   #  print(names(models2))
   models2
 },
-makeAllModels=function(vars_all, phens=vars_all$phens, flags=vars_all$flags, verbose=F, max = 1e6,
+makeAllModels=function(vars_all0, phens=vars_all0[[1]]$phens, flags=vars_all0[[1]]$flags, verbose=F, max = 1e6,
                        user="",useDB=T){
   sigDB = if(useDB) self$sigs else NULL
   if(!is.null(sigDB) ){
@@ -556,6 +558,9 @@ makeAllModels=function(vars_all, phens=vars_all$phens, flags=vars_all$flags, ver
   self$updateLOOC(phens,flags)
   logpthresh= log(.readFlag(flags,"pthresh",1e-3))
   project=.readFlag(flags,"project",TRUE)
+  beams = names(vars_all0); names(beams)=beams
+  all_models_full=lapply(beams, function(beam){
+    vars_all = vars_all0[[beam]]
   vars = vars_all#[[nme_v_all]]
   all_models = list()
   variables = vars$variables
@@ -635,8 +640,10 @@ makeAllModels=function(vars_all, phens=vars_all$phens, flags=vars_all$flags, ver
       
     }
   }
-  all_models_=list(models=all_models, flags = flags, phens = phens, trainedOn=self$nme)
-  #})
+  all_models
+
+  })
+  all_models_=list(models=all_models_full, flags = flags, phens = phens, trainedOn=self$nme, beam = beam)
   if(useDB ){
     sigDB$saveModels (all_models_)
   }
@@ -660,8 +667,9 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
  # eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
     #print(nme1)
     d = self$data
-    eval1 = d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) %>% tibble::add_column(data=self$nme, trainedOn=all_modelsh$trainedOn)#%>% tibble::add_column(trainedOn=self$nam)
-    #if(inherits(resd,"try-error")) {
+    eval1 =   .merge1_new(lapply(all_models_y, function(all_models_y1){
+   d$evaluateAllModels(all_models_y1,phens,flags, verbose=verbose) %>% tibble::add_column(data=self$nme, trainedOn=all_modelsh$trainedOn)#%>% tibble::add_column(trainedOn=self$nam)
+  }), addName="beam")  #if(inherits(resd,"try-error")) {
     #  print(resd)
     #  print(paste("problem", nme1))
     #  stop("!!")

@@ -51,7 +51,7 @@ pows = c(0.5,1,1.5)
 transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=10)
 
 #SET UP FLAGS
-flags = list(pthresh = 0.5, max=10,nrep=1,batch=0,topn=10,beam=1,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
+flags = list(pthresh = 0.5, max=10,nrep=1,batch=0,topn=10,beam=2,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
              transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T
 )
 
@@ -63,8 +63,8 @@ datasets =examples[2];
   phens=datasAll$pheno()$all
   datasAll$update(phens, flags)
   
-  expt_id = datasAll$sigs$getExpt(flags, phens, add_new=T)
-  vars_all0=datasH[[1]]$select(datasAll, phens , flags, expt_id )
+  
+  vars_all0=datasH[[1]]$select(datasAll, phens , flags)
   #datasAll$clear_db(drop=T, exclude=c(), recursive=T)# this clears the attached dbs
   vars_all = datasAll$select(phens, flags, verbose=T,useDB=T)
   ##extract the variables for the full model only
@@ -79,7 +79,7 @@ datasets =examples[2];
     dh$evaluateAllModels(all_modelsh, useDB=F)
   }), addName="data")
   
-  ggps1=.plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0="measure",
+  ggps1=.plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0="measure",linetype="beam", ##"full_model"
                    shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   pdf("output.pdf")
