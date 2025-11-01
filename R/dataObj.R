@@ -2319,8 +2319,9 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
   },
 
 ## gets ready for training - updates train, prev looc
-updateTrain=function(phens,flags, verbose=F){ ## this updates the reps and train  ## called after updateLOOC
-  transforms = self$transforms
+updateTrain=function(phens,flags, transform_y= flags$transform_y, verbose=F){ ## this updates the reps and train  ## called after updateLOOC
+  transforms =         .convertToTransform(transform_y)
+    self$transforms = transforms
   nrep = ncol(self$looc$incl)
   if(verbose) print("update train")
   incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
@@ -2556,7 +2557,6 @@ updateTransforms=function(transform_y){
   self$transforms =.convertToTransform(transform_y)
 },
   initialize=function( cohort,  db_name,dbDir,flags,
-                       transform_y=toJSON(list(x=list(invfunc="function(y) y",func="function(y) y",1), params=1)),
                       incl_full=T,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores
    #print("H")
    #print(transform_y)

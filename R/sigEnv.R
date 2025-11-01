@@ -1,8 +1,15 @@
+##used to filter 
+data_keys = fromJSON(getOption("data_keys",'["bigmatrix", "all_v_all","merge","duplicate_ordinal","genes_incls"]'))
 
-.orderFlags<-function(flags){
+expt_keys = fromJSON(getOption("expt_keys",'["project", "useoffset","useglmnet","pthresh","genes_incls","transform_y","batch","beam","nrep","stop_y","max","min","topn"]'))
+
+
+.orderFlags<-function(flags, keys =c()){
+  if(length(keys)>0) flags = flags[names(flags) %in% keys]
   flags[order(names(flags))]
 }
-toJSON1<-function(flags){
+toJSON1<-function(flags, keys = c()){
+  if(length(keys)>0) flags = flags[names(flags) %in% keys]
   if(typeof(flags)!="list") return(toJSON(sort(flags)))
   toJSON(.orderFlags(flags))
 }
@@ -163,13 +170,10 @@ sigEnv<-R6Class("sigEnv", public = list(
    sigsdir = "character",
  subnme="character",
  data_flags = "list",
- data_names = "list",
- data_types = "list",
  dims = "list",
- transform_y= "list",
- data_id="character",
+ #data_id="character",
  user="", ## default user
-  initialize=function(dbDir,subnme,user="",
+  initialize=function(dbDir,subnme,flags, dims, user="",
                       clear=FALSE){ #there is duplication in phenosdir and dbDir .. fix later
     if(!file.exists(dbDir)) dir.create(dbDir,recursive=T)
     self$subnme = subnme
@@ -179,8 +183,13 @@ sigEnv<-R6Class("sigEnv", public = list(
     self$dbfile=paste(self$sigsdir,paste("signatures",subnme,"sqlite",sep="."),sep="/")
     self$mydb=  dbConnect(RSQLite::SQLite(),self$dbfile,flags=SQLITE_RWC )
     if(clear) self$drop_all();
-    self$data_id=NULL
+    self$data_flags =.orderFlags(flags[names(flags) %in% data_keys])
+    self$dims = dims
+  #  self$data_id = self$getDataID(flags,dims, add_new=T)
   },
+ data_id=function(){
+   self$getDataID(self$data_flags, self$dims)   
+ },
   updateFlags=function(flags, flags1,phens = NULL, user=self$user){
     expt_id = self$getExpt(flags=flags1, phens = phens,  user=user,add_new=F)
     if(length(expt_id)>0){
@@ -192,35 +201,6 @@ sigEnv<-R6Class("sigEnv", public = list(
  #updateTransforms(transform_y){
 #   stop(" this not implemented until we split out the transform_y")
 # },
-  updateData=function(  user=self$user,data_flags = list(), data_names = list(), data_types = list(),transform_y = list(), dims=list()){
-    self$data_flags = data_flags[grep('transform_y', names(data_flags), inv=T)]
-    self$data_names = data_names
-    self$data_types = data_types
-    self$dims = dims
-    self$transform_y = transform_y
-    tbls = dbListTables(self$mydb)
-    expt= data.frame(list(user=user,  flags=toJSON1(data_flags), transform_y = toJSON1(transform_y),
-                          names =toJSON1(data_names), types=toJSON1(data_types), dims = toJSON1(dims)))
-    expt1 = expt[,names(expt)!="transform_y",drop=F]
-    transform_y1 = transform_y
-    if(!("data" %in% tbls) || !("transform_y" %in% names(dbGetQuery(self$mydb, 'SELECT * from data limit 1')))){  
-      self$data_id=0
-      expt$data_id=self$data_id; expt$date=date();
-      try(dbWriteTable(self$mydb, "data", expt,overwrite=T,append=F))
-    }else{
-      vn =  dbGetQuery(self$mydb, 'SELECT * from data where user=:user AND flags=:flags AND names=:names AND types=:types AND dims=:dims',expt1)
-      if(nrow(vn)>0){
-        self$data_id = vn$data_id[[1]]
-        transform_y1 = fromJSON(vn$transform_y[[1]])
-      }else{
-        vn =  dbGetQuery(self$mydb, 'SELECT data_id from data')
-        self$data_id = max(0,1+max(vn$data_id))
-        expt$data_id=self$data_id; expt$date=date();
-        try(dbWriteTable(self$mydb, "data", expt,overwrite=F,append=T))
-      }
-    }
-    transform_y1
- },
  saveEval=function(eval2,flags,phens, user=self$user,replace=T){
    expt_id = self$getExpt(flags, phens,user,add_new=T)
    hasEval="eval" %in% self$tbls()
@@ -255,7 +235,9 @@ sigEnv<-R6Class("sigEnv", public = list(
    list(models=all_models1, flags = flags, phens = phens, trainedOn=self$subnme)
  },
 
- saveAngles=function(expt_id, data_nme, comb_angs1, varnames,k){
+ saveAngles=function(flags,phens, data_nme, comb_angs1, varnames,k){
+   expt_id = self$getExpt(flags, phens)
+   
    tbls = dbListTables(self$mydb)
    combined= list(experiment_id=expt_id, data=data_nme, angles = toJSONM(comb_angs1), varnames = toJSON(varnames),k=k)
    #combined1 = combined[names(combined) %in% c("experiment_id","data","varnames")]
@@ -280,7 +262,8 @@ sigEnv<-R6Class("sigEnv", public = list(
      fromJSONM(combined$angles[[i]])
    })
  },
-savePvals=function(expt_id, data_nme, ri, varnames,k,useCurrVarnames=F){
+savePvals=function(flags,phens, data_nme, ri, varnames,k,useCurrVarnames=F){
+  expt_id = self$getExpt(flags, phens)
   #print(paste("saving pv",expt_id, k, data_nme, toJSON(varnames), useCurrVarnames))
   varn1 = toJSON(varnames)
   tbls = self$tbls()
@@ -301,7 +284,7 @@ savePvals=function(expt_id, data_nme, ri, varnames,k,useCurrVarnames=F){
   
   #aa = .convertTableToModels(combined)
   try(dbWriteTable(self$mydb, "pvals", combined,overwrite=!hasModel,append=hasModel))
-  invisible(list(msg="success"))
+  invisible(list(msg="success", expt_id = expt_id))
 },
 pvals=function(expt_id){
   combined =  dbGetQuery(self$mydb, 'SELECT * from pvals where experiment_id=:experiment_id ',list(experiment_id=expt_id))
@@ -347,13 +330,50 @@ aa
       try(dbWriteTable(self$mydb, "models", combined,overwrite=!hasModel,append=hasModel))
    return(list(msg="success"))
  },
+#      vn =  dbGetQuery(self$mydb, 'SELECT * from data where user=:user AND flags=:flags AND names=:names AND types=:types AND dims=:dims',expt1)
+# expt= data.frame(list(user=user,  flags=toJSON1(data_flags), transform_y = toJSON1(transform_y),
+# names =toJSON1(data_names), types=toJSON1(data_types), dims = toJSON1(dims)))
+getDataID=function(flags,dims,  add_new=F, select="data_id", user=self$user){
+  flags = .orderFlags(flags, data_keys)
+  expt_new = data.frame(list(data_id = 0,user=user, date=date(), 
+                             flags=toJSON(flags),dims=toJSON(dims)
+  ))
+    if(!("data" %in% self$tbls()) || add_new  ){
+     
+      if(!("data" %in% self$tbls()) ||length(which(is.na(match(names(expt_new),names(self$datas()))))!=0) ){
+        try(dbWriteTable(self$mydb, "data", expt_new[c(),,drop=F],overwrite=T,append=F))
+      }
+    }
+  str1 = paste('SELECT',select,'from data')
+  str = paste(str1,'where user=:user')
+  expt = data.frame(list(user=user ))
+
+  
+  if(!is.null(flags)) { str = paste(str, "AND flags=:flags"); expt$flags=toJSON1(flags) }
+  if(!is.null(dims)){str = paste(str, "AND dims=:dims"); expt$dims=toJSON1(dims) }
+  
+  vn =  dbGetQuery(self$mydb, str,expt)
+  expt_id = NULL
+  if(nrow(vn)==0 ){
+    vn =  dbGetQuery(self$mydb,str1)
+    expt_id = max(0, vn[,1]+1)
+    expt_new$data_id = expt_id
+    try(dbWriteTable(self$mydb, "data", expt_new,overwrite=F,append=T))
+    vn =  dbGetQuery(self$mydb, str,expt)
+  }
+  if(nrow(vn)==0) return(NULL)
+  vn[1,1]
+},
  getExpt=function(flags=NULL,phens=NULL, user=self$user, select="experiment_id",
                   add_new =F){  #check c
    #transform_y = ""
-   if(is.null(self$data_id)) stop("no data_id")
+   if(!is.null(flags)){
+     flags = .orderFlags(flags, expt_keys)
+   }
+   data_id = self$data_id();
    expt_new = NULL; 
    if(!("experiment" %in% self$tbls()) || add_new){
-       expt_new = data.frame(list(experiment_id=0,data_id = self$data_id,user=user, date=date(), 
+       expt_new = data.frame(list(experiment_id=0,data_id =data_id,user=user, date=date(), 
                                   flags=toJSON(flags),phens=toJSON(phens)
                                     ))
        if(!("experiment" %in% self$tbls()) ){
@@ -362,7 +382,7 @@ aa
    }
    str1 = paste('SELECT',select,'from experiment')
    str = paste(str1,'where data_id=:data_id AND user=:user')
-   expt = data.frame(list(data_id = self$data_id,user=user ))
+   expt = data.frame(list(data_id = data_id,user=user ))
    if(!is.null(flags)) { str = paste(str, "AND flags=:flags"); expt$flags=toJSON(flags) }
    if(!is.null(phens)){str = paste(str, "AND phens=:phens"); expt$phens=toJSON(phens) }
    vn =  dbGetQuery(self$mydb, str,expt)
@@ -510,13 +530,14 @@ get_data_flags=function( user=self$user, nmes = self$data_names, types = self$da
    
  },
   experiments = function(user=NULL,all_cols=F, phens = NULL){
-    did1 = list(data_id=self$data_id)
+    data_id = self$data_id()
+    did1 = list(data_id=data_id)
     if(is.null(user)){
    vn =  dbGetQuery(self$mydb, 'SELECT * from experiment where data_id=:data_id', did1)
     }else if(is.null(phens)){
-      vn =  dbGetQuery(self$mydb, 'SELECT * from experiment where user=:user AND data_id=:data_id',list(user=user, data_id = self$data_id))
+      vn =  dbGetQuery(self$mydb, 'SELECT * from experiment where user=:user AND data_id=:data_id',list(user=user, data_id = data_id))
     }else{
-      vn =  dbGetQuery(self$mydb, 'SELECT * from experiment where user=:user AND data_id=:data_id AND phens =:phens',list(user=user, data_id = self$data_id, 
+      vn =  dbGetQuery(self$mydb, 'SELECT * from experiment where user=:user AND data_id=:data_id AND phens =:phens',list(user=user, data_id = data_id, 
                                                                                                                           phens=toJSON(phens) ))
     }
     if(all_cols) return(vn)

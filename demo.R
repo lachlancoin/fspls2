@@ -57,25 +57,29 @@ flags = list(pthresh = 0.5, max=10,nrep=1,batch=0,topn=10,beam=2,all_v_all=F,  p
 
 datasets =examples[2];
 #runAll<-function(datasets){
-  datasH = lapply(datasets, function(d)dataH$new(d,nme=d$nme, flags=flags))
+  
+datasH = lapply(datasets, function(d)dataH$new(d,nme=d$nme, flags=flags))
+#lapply(datasH, function(dh)dh$clear_db(T))
   nmesH = names(datasH); names(nmesH) = nmesH
-  datasAll =datasEnv$new(datasH,flags=flags) 
-  phens=datasAll$pheno()$all
-  datasAll$update(phens, flags)
-  
-  
-  vars_all0=datasH[[1]]$select(datasAll, phens , flags, verbose=T)
-  #datasAll$clear_db(drop=T, exclude=c(), recursive=T)# this clears the attached dbs
-  vars_all = datasAll$select(phens, flags, verbose=T,useDB=T)
+  datasAll =analysisEnv$new(flags=flags) 
+  #datasAll$clear_db(drop=T, datasH = datasH)
+  #types=NULL, dims = NULL, transform_y = NULL,
+  #dims = lapply(datasH, function(x) x$dims())
+  phens=datasH[[1]]$pheno()$all
+  flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
+  lapply(datasH, function(dh) dh$update(phens, flags))
+   dh = datasH[[1]] 
+  vars_all=dh$select(datasAll, phens , flags, verbose=T)
+ # datasAll$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
+  #vars_all = datasAll$select(datasH,phens, flags, verbose=T,useDB=T)
   ##extract the variables for the full model only
   vars_all1=.extractFullVars(vars_all)
-  all_models = lapply(nmesH, function(nmeh){
-    dh=datasAll$datasH[[nmeh]]
-   am=dh$makeAllModels(vars_all,useDB=F)
+  all_models = lapply(datasH, function(dh){
+    dh$makeAllModels(vars_all,useDB=F)
   })
   eval1= .merge1_new(lapply(nmesH, function(nmeh){
     all_modelsh = all_models[[nmeh]]
-    dh = datasAll$datasH[[nmeh]]
+    dh = datasH[[nmeh]]
     dh$evaluateAllModels(all_modelsh, useDB=F)
   }), addName="data")
   
