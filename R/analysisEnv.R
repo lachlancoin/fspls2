@@ -179,13 +179,16 @@ analysisEnv<-R6Class("analysisEnv", public = list(
   
  
  
- savePvalsAndNextVars=function(vars_l_todo,comb_,data, expt_id, k1,logpvthresh,beam,stop_y="rand", verbose=F){
-    self$savePvals(expt_id,k1, data, vars_l_todo$vars_l,comb_)
-    self$nextVars(vars_l_todo, expt_id, k1,logpvthresh,beam, stop_y = stop_y, verbose=verbose)
+ savePvalsAndNextVars=function(flags,phens, vars_l_todo,comb_,data_nme, k1,logpvthresh,beam,stop_y="rand", verbose=F){
+   #savePvals=function(flags,phens,k1, data_nme, vars_l, comb_){
+     
+    self$savePvals(flags,phens,k1, data_nme, vars_l_todo$vars_l,comb_)
+    self$nextVars(flags,phens, vars_l_todo,  k1,logpvthresh,beam, stop_y = stop_y, verbose=verbose)
  },
- nextVars=function(vars_l_todo, expt_id, k1,logpvthresh,beam,stop_y="rand", verbose=F){
+ nextVars=function(flags, phens, vars_l_todo,  k1,logpvthresh,beam,stop_y="rand", verbose=F){
    vars_l = vars_l_todo$vars_l
    todo1 = vars_l_todo$todo1
+   expt_id=self$sigs$getExpt(flags, phens, add_new=T)
    angles_all = lapply(vars_l, function(vars_l1){
      varnames = vars_l1$var_names; 
      res_inner2 = self$sigs$loadPvals(expt_id, varnames,k1) ## reconstruct ri
@@ -246,7 +249,9 @@ analysisEnv<-R6Class("analysisEnv", public = list(
 },
 savePvals=function(flags,phens,k1, data_nme, vars_l, comb_){
   for(varn1 in names(vars_l)){ 
-    self$sigs$savePvals(flags, phens, data_nme, comb_[[varn1]], vars_l[[varn1]]$var_names,k1, useCurrVarnames = F)
+    ri=comb_[[varn1]]
+    varnames=vars_l[[varn1]]$var_names
+    self$sigs$savePvals(flags, phens, data_nme, ri, varnames,k1, useCurrVarnames = F)
   }
 },
 saveAngles=function(flags,phens,k1, data_nme, vars_l, comb_){
@@ -279,74 +284,10 @@ getTodo=function(flags, phens, logpv = -100){
     )
   
   vars_l_todo
-},
+}
 # self$select_k(phens,flags, k1,   var_thresh, quantiles)
- select_k=function(datasH, phens,flags, k1,   expt_id,
-                     verbose=F){
-   beam = .readFlag(flags,"beam",1)
-   maxsize=.readFlag(flags,'max',500)
-   minsize=.readFlag(flags,'min',0)
-   stop_y = .readFlag(flags, 'stop_y',"rand")
-   logpvthresh = log(.readFlag(flags,"pthresh",1e-5))
-  # var_thresh = var_thresh[match(names(var_thresh), train_nme)]
-   saveAngles=F
- #  loadPv=.readFlag(flags, "loadPV",F)
-  train_nme = names(datasH); names(train_nme) =train_nme
-  vars_l_todo = self$getTodo(flags, phens)
-   #vars_l1 = vars_l[[1]];   k1=1;  qq =1; incl = incls[[1]]; data_nme = train_nme[[1]];g_incl  = genes_incls[[1]];#nme_c1 = names(transform_y)[[1]]
-   while(length(vars_l_todo$todo1)>0){
-     todo = vars_l_todo$todo1[[1]]
-     g_incl = todo$g_incl; incl = todo$incl; qq_t = todo$qq
-     vars_l = vars_l_todo$vars_l
-     logpv = vars_l_todo$logpv
-              invisible(lapply(train_nme, function(data_nme){
-                 comb_ = datasH[[data_nme]]$multiAnglesAndPv(phens,k1,flags,expt_id, vars_l_todo , saveAngles=saveAngles, verbose=verbose)
-                  if(saveAngles){
-                     self$saveAngles(expt_id, k1, data_nme, vars_l, comb_ )  ## how do we get varnames
-                   }else{
-                     self$savePvals(expt_id,k1, data_nme, vars_l, comb_)
-                   }
-              }))
-             if(saveAngles){  ## this is if separating angles from pval calc
-               invisible(lapply(vars_l, function(vars_l1){
-                 varnames = vars_l1$var_names
-                 comb_= .mergeComb( self$sigs$loadAngles(expt_id,varnames), flags) ## reconstruct comb_angs1
-                 res_inner1 = lapply(train_nme, function(data_nme){
-                   prev_i = vars_l1[[data_nme]]
-                   ri = datasH[[data_nme]]$res_inner(comb_,prev_i,flags,k1,expt_id)
-                   self$sigs$savePvals(expt_id, data_nme, ri, varnames,useCurrVarnames=F)
-                   ri
-                 })
-               }))
-             }
-             vars_l_todo = self$nextVars(vars_l_todo, expt_id, k1,logpvthresh,beam,stop_y=stop_y, verbose=verbose)
-           }
-   vars_l_todo$vars_l
- },
 
-  select=function(datasH, phens,flags, verbose=F, useDB=T ){#c(y="function(y) y","function(y) y")
-      nreps = lapply(datasH, function(dh){
-        dh$update(phens, flags)
-      })
-    nreps =  nreps[[1]]
-    sigDB =self$sigs
-    if(!is.null(self$sigs) && useDB ){
-      vars_all = self$sigs$loadVars(flags, phens)
-      if(!is.null(vars_all)) return(vars_all)
-    }
-    expt_id=self$sigs$getExpt(flags=flags, phens = phens, add_new=T)
-     variables=lapply(nreps, function(k1){
-       if(verbose) print(paste("cv",k1,"of",length(nreps)))
-      self$select_k(datasH, phens,flags, k1,   expt_id, verbose=verbose)
-    })
-    vars_all=post_process(variables,flags, phens)
-    # vars_all$transform_y = transform_y ;
-    #if(length(vars_all[[1]]$variables)==0) return(vars_all)
-    if(useDB){
-      self$sigs$saveVars(vars_all,replace=T)
-    }
-    vars_all
-  }
+
   
 
 

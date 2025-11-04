@@ -303,7 +303,7 @@ dataH<-R6Class("dataH", public = list(
    nreps
  },
  select=function(datasAll, phens,flags,
-                 expt_id=self$sigs$getExpt(flags, phens, add_new=T),  ## expt_id specific to this database .. might be diff for global
+                 ## expt_id specific to this database .. might be diff for global
                  verbose=F, useDB=T ){#c(y="function(y) y","function(y) y")
    if(is.null(flags[['data_types']])) stop("cannot be NULL")
    nreps = self$update(phens, flags, verbose=verbose);
@@ -312,10 +312,11 @@ dataH<-R6Class("dataH", public = list(
      if(!is.null(vars_all)) return(vars_all)
    }
    vars_l_todo = datasAll$getTodo(flags, phens)
+   expt_id=self$sigs$getExpt(flags, phens, add_new=T)
    variables=lapply(nreps, function(k1){
      if(verbose) print(paste("cv",k1,"of",length(nreps)))
      self$select_k(datasAll, phens,flags, k1, expt_id,
-                   vars_l_todo=vars_l_todo,verbose=verbose)
+                   vars_l_todo,verbose=verbose)
    })
    vars_all=post_process(variables,flags,phens)
 #   if(length(vars_all$variables)==0) return(vars_all)
@@ -325,7 +326,7 @@ dataH<-R6Class("dataH", public = list(
    vars_all
  },
  select_k=function(datasAll,phens,flags, k1,expt_id,
-                   vars_l_todo = datasAll$getTodo(flags, phens),
+                   vars_l_todo ,
                    verbose=F){
    stop_y = .readFlag(flags, 'stop_y',"rand")
    logpvthresh = log(.readFlag(flags,"pthresh",0.1))
@@ -335,8 +336,8 @@ dataH<-R6Class("dataH", public = list(
    while(length(vars_l_todo$todo1)>0){
      
      comb_ = self$multiAnglesAndPv(phens, k1,flags,expt_id, vars_l_todo, saveAngles=saveAngles, verbose=verbose)
-     
-     vars_l_todo=datasAll$savePvalsAndNextVars(flags,phens,vars_l_todo,comb_,self$nme,  k1,logpvthresh,beam)
+     data_nme=self$nme
+     vars_l_todo=datasAll$savePvalsAndNextVars(flags,phens,vars_l_todo,comb_,data_nme,  k1,logpvthresh,beam)
      #datasAll$savePvals(expt_id,k1, self$nme, vars_l_todo$vars_l,comb_)
      #vars_l_todo = datasAll$nextVars(vars_l_todo, expt_id, k1,logpvthresh,beam)
    }
@@ -553,7 +554,8 @@ makeModels=function(vars2, inds, phens,flags){
   #  print(names(models2))
   models2
 },
-makeAllModels=function(vars_all0, phens=vars_all0[[1]]$phens, flags=vars_all0[[1]]$flags, verbose=F, max = 1e6,
+makeAllModels=function(vars_all0, 
+                       phens=vars_all0[[1]]$phens, flags=vars_all0[[1]]$flags, verbose=F, max = 1e6,
                        user="",useDB=T){
   sigDB = if(useDB) self$sigs else NULL
   if(!is.null(sigDB) ){
@@ -652,7 +654,7 @@ makeAllModels=function(vars_all0, phens=vars_all0[[1]]$phens, flags=vars_all0[[1
   all_models
 
   })
-  all_models_=list(models=all_models_full, flags = flags, phens = phens, trainedOn=self$nme, beam = beam)
+  all_models_=list(models=all_models_full, flags = flags, phens = phens, trainedOn=self$nme)
   if(useDB ){
     sigDB$saveModels (all_models_)
   }

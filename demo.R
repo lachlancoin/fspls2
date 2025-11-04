@@ -1,7 +1,9 @@
 
 ##SET APPROPRIATE LIB PATHS 
-#.libPaths("~/R/x86_64-pc-linux-gnu-library/4.1/")
+.libPaths("~/R/x86_64-pc-linux-gnu-library/4.1/")
+
 options(bigmemory.allow.dimnames=TRUE)
+{
 library(jsonlite)
 library(R6)
 library(Matrix)
@@ -18,7 +20,7 @@ library(DBI);
 library(RSQLite);
 library(cowplot)
 library(bigmemory)
-
+}
 
 ##SHOULD RUN FROM FSPLS2 directory
 if(rev(strsplit(getwd(),"/")[[1]])[1]!="fspls2")stop("not in right directory")
@@ -62,15 +64,13 @@ datasH = lapply(datasets, function(d)dataH$new(d,nme=d$nme, flags=flags))
 #lapply(datasH, function(dh)dh$clear_db(T))
   nmesH = names(datasH); names(nmesH) = nmesH
   datasAll =analysisEnv$new(flags=flags) 
-  #datasAll$clear_db(drop=T, datasH = datasH)
-  #types=NULL, dims = NULL, transform_y = NULL,
-  #dims = lapply(datasH, function(x) x$dims())
+  #datasAll$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
   phens=datasH[[1]]$pheno()$all
   flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
   lapply(datasH, function(dh) dh$update(phens, flags))
    dh = datasH[[1]] 
   vars_all=dh$select(datasAll, phens , flags, verbose=T)
- # datasAll$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
+ 
   #vars_all = datasAll$select(datasH,phens, flags, verbose=T,useDB=T)
   ##extract the variables for the full model only
   vars_all1=.extractFullVars(vars_all)

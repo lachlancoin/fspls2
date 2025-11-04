@@ -6,6 +6,7 @@ expt_keys = fromJSON(getOption("expt_keys",'["project", "useoffset","useglmnet",
 
 .orderFlags<-function(flags, keys =c()){
   if(length(keys)>0) flags = flags[names(flags) %in% keys]
+  if(length(flags)==0) return(flags)
   flags[order(names(flags))]
 }
 toJSON1<-function(flags, keys = c()){
@@ -262,12 +263,15 @@ sigEnv<-R6Class("sigEnv", public = list(
      fromJSONM(combined$angles[[i]])
    })
  },
+#    self$sigs$savePvals(flags, phens, data_nme, ri, varnames,k1, useCurrVarnames = F)
+
 savePvals=function(flags,phens, data_nme, ri, varnames,k,useCurrVarnames=F){
-  expt_id = self$getExpt(flags, phens)
+  expt_id = self$getExpt(flags, phens,add_new=T)
   #print(paste("saving pv",expt_id, k, data_nme, toJSON(varnames), useCurrVarnames))
   varn1 = toJSON(varnames)
   tbls = self$tbls()
   combined=.merge_all(ri,c("transf","param","var") , .modelToRow)%>% tibble::add_column(prev_var=varn1, data=data_nme, experiment_id = expt_id,k=k)
+  #if(getOption("verbose",F)) print(combined);
   if(useCurrVarnames) combined$prev_var= combined$var_names
   #apply(combined, 2, function(x) length(table(x))/length(x))
   ##follow to check
