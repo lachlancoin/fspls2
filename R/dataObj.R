@@ -2408,7 +2408,9 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
         var_res = var_res & (names(norm1) %in% g_incl)
       }
       excl1 = excl[unlist(lapply(excl, function(e1)e1[[1]]==norm_nme))]
-      var_res = var_res[!(names(var_res) %in% unlist( lapply(excl1, function(e1) e1[[2]])))]
+      var_res[(names(var_res) %in% unlist( lapply(excl1, function(e1) e1[[2]])))]=FALSE
+      
+      #var_res = var_res[!(names(var_res) %in% unlist( lapply(excl1, function(e1) e1[[2]])))]
       var_res
   })
 },
