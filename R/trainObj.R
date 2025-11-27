@@ -74,7 +74,7 @@ trainObj<-R6Class("trainObj",
                           funcs =  funcst[[f_k]][[1]] #eval(str2lang(funcst[[f_k]]))
                           params = funcst[[f_k]][[3]]; names(params)=params
                           for(g_k in 1:length(params)){
-                            pow1 = params[[1]]
+                            pow1 = params[[g_k]]
                               meansy = rep(0, ncols)
                               for(j in inds_to_do_1){
                                  v = funcs(y1[[colk]][,j], pow1)
@@ -106,9 +106,12 @@ trainObj<-R6Class("trainObj",
                   #    })
                   #    nonNA
                   #  },
-                    update=function(data,k,subphens){
-                      if(toJSON(subphens)==toJSON(self$subphens) && k == self$k){
+                    update=function(data,k,subphens, force=F){
+                      
+                      if(!force && toJSON(subphens)==toJSON(self$subphens) && k == self$k){
+                        if(length(which(unlist(lapply(self$products, is.null))))==0){
                         print("not updating"); return(NULL)
+                        }
                       }
                      
                       self$subphens = subphens

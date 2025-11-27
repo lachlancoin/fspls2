@@ -226,11 +226,11 @@ dataH<-R6Class("dataH", public = list(
     pheno_balance=.readFlag(flags,"pheno_balance",NULL)
     varn = getOption("varn",c())
     #invisible(lapply(1:length(datas), function(ik) {
-      y1 = d$y #ys[[ik]] #dists[[ik]]$updateYdb(cats[['cats']])
      # family = families[[ik]]
-      
+      if(!is.null(y)){  ## could be null in an evaluation only mode
       ##need to work on all_v_all
-      self$data$updateY(y1, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
+          self$data$updateY(y, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
+      }
       self$sigsdir=paste(dbDir,"fspls_signatures1",sep="/")
       dir.create(self$sigsdir, recursive=F, showWarnings=F)
       dims1 = list(self$data$dims()); names(dims1) = self$nme
@@ -293,9 +293,9 @@ dataH<-R6Class("dataH", public = list(
  cats = function(maxpheno = 1e9){
    self$data$cats(maxpheno)
  },
- update=function(phens, flags, verbose=F){
-     self$updateLOOC(phens, flags, verbose=verbose)
-     self$updateTrain(phens, flags,verbose=verbose)
+ update=function(phens, flags, verbose=F, force=F){
+     self$updateLOOC(phens, flags, verbose=verbose,force=force)
+     self$updateTrain(phens, flags,verbose=verbose, force=force)
    ##updated after updateLOOC
    nreps1 =self$nreps()
    nreps = 1:nreps1
@@ -304,9 +304,9 @@ dataH<-R6Class("dataH", public = list(
  },
  select=function(datasAll, phens,flags,
                  ## expt_id specific to this database .. might be diff for global
-                 verbose=F, useDB=T ){#c(y="function(y) y","function(y) y")
-   if(is.null(flags[['data_types']])) stop("cannot be NULL")
-   nreps = self$update(phens, flags, verbose=verbose);
+                 verbose=F, useDB=T, force=F ){#c(y="function(y) y","function(y) y")
+   if(is.null(flags[['data_types']])) flags[['data_types']] = names(self$data$data)
+   nreps = self$update(phens, flags, verbose=verbose,force=force);
    if( useDB ){
      vars_all = self$sigs$loadVars(flags, phens)
      if(!is.null(vars_all)) return(vars_all)
@@ -315,9 +315,10 @@ dataH<-R6Class("dataH", public = list(
    expt_id=self$sigs$getExpt(flags, phens, add_new=T)
    variables=lapply(nreps, function(k1){
      if(verbose) print(paste("cv",k1,"of",length(nreps)))
-     self$select_k(datasAll, phens,flags, k1, expt_id,
-                   vars_l_todo,verbose=verbose)
+     self$select_k(datasAll, phens,flags, k1, expt_id, vars_l_todo,verbose=verbose)
+              
    })
+#   self$sigs$clearPvals(expt_id)
    vars_all=post_process(variables,flags,phens)
 #   if(length(vars_all$variables)==0) return(vars_all)
    if(useDB){
@@ -334,10 +335,10 @@ dataH<-R6Class("dataH", public = list(
   saveAngles=F
   # vars_l = datasAll$nextVars(expt_id, flags)
    while(length(vars_l_todo$todo1)>0){
-     
-     comb_ = self$multiAnglesAndPv(phens, k1,flags,expt_id, vars_l_todo, saveAngles=saveAngles, verbose=verbose)
+     comb2 = self$multiAnglesAndPv(phens, k1,flags,expt_id, vars_l_todo, saveAngles=saveAngles, verbose=verbose)
      data_nme=self$nme
-     vars_l_todo=datasAll$savePvalsAndNextVars(flags,phens,vars_l_todo,comb_,data_nme,  k1,logpvthresh,beam)
+     vars_l_todo=datasAll$savePvalsAndNextVars(flags,phens,vars_l_todo,comb2,data_nme,  k1,logpvthresh,beam)
+     if(verbose) print(vars_l_todo$vars_l)
      #datasAll$savePvals(expt_id,k1, self$nme, vars_l_todo$vars_l,comb_)
      #vars_l_todo = datasAll$nextVars(vars_l_todo, expt_id, k1,logpvthresh,beam)
    }
@@ -377,15 +378,15 @@ multiAnglesAndPv=function(phens,  k1,flags, expt_id, vars_l_todo,
   incl=todo1$incl
   g_incl = todo1$g_incl
   qq_t = todo1$qq
-   invisible( lapply(vars_l, function(prev_i){
+   comb2=invisible( lapply(vars_l, function(prev_i){
       varnames = prev_i$var_names; 
       comb_ = self$anglesAndPv(phens, prev_i, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
       comb_
     }))
+   comb2
 },
 anglesAndPv=function(phens, prev_i, incl, k1, g_incl, qq_t, flags, expt_id, saveAngles=F, verbose=F){
   varnames = prev_i$var_names
- 
   comb_=self$combinedAngles(phens, varnames, incl, k1,  g_incl, qq_t, flags)
   if(saveAngles) return(comb_)
     #self$sigs$saveAngles(expt_id, data_nme, comb_angs1,varnames ) 
@@ -508,10 +509,10 @@ getVariance=function(varnames){
   d = self$data
     d$getVariance();      
 },
-updateTrain=function( phens, flags,  verbose=F){
-    self$data$updateTrain( phens,flags,verbose=verbose)
+updateTrain=function( phens, flags,  verbose=F, force=F){
+    self$data$updateTrain( phens,flags,verbose=verbose, force=force)
 },
-updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
+updateLOOC=function( phens, flags,varn=c(),verbose=F, force=F){
   self$data$updateLOOC( phens,flags,varn=varn,force=force, verbose=verbose); ### update training object - updates all
 },
 makeModels=function(vars2, inds, phens,flags){
