@@ -7,7 +7,7 @@ options(bigmemory.allow.dimnames=TRUE)
 library(jsonlite)
 library(R6)
 library(Matrix)
-library(glmnet)
+#library(glmnet)
 library(tidyr)
 library(MASS);
 library(ggplot2)
@@ -54,7 +54,7 @@ transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=10)
 
 #SET UP FLAGS
 flags = list(pthresh = 0.001, max=3,nrep=1,batch=0,topn=10,beam=2,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
-             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T
+             transform_y = toJSON(transform_y), useoffset=T,useglmnet=F,loadPV=T
 )
 
 datasets =examples[2];
@@ -69,7 +69,7 @@ datasH = lapply(datasets, function(d)dataH$new(d,nme=d$nme, flags=flags))
   flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
   lapply(datasH, function(dh) dh$update(phens, flags))
    dh = datasH[[1]] 
-  vars_all=dh$select(datasAll, phens , flags, verbose=T)
+  vars_all=dh$select(datasAll, phens , flags, verbose=T, useDB=F)
  
   #vars_all = datasAll$select(datasH,phens, flags, verbose=T,useDB=T)
   ##extract the variables for the full model only

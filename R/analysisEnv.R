@@ -227,6 +227,7 @@ analysisEnv<-R6Class("analysisEnv", public = list(
   if(stop_random){
     if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
   }
+  
   ##ADD MORE RESTRICTIONS .. eg maxsize
       #     while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! vars_l_todo$stop_random){
   if((!stop_random && logpv<=logpvthresh  ) ){
