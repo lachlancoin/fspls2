@@ -53,7 +53,7 @@ ids = ids[mi2[!is.na(mi2)],,drop=F]
 meta_data = meta_data[mi1[!is.na(mi1)],,drop=F];
 rownames(meta_data) = meta_data$Sequencing_Sample_ID
 counts = counts[!is.na(mi1),,drop=F]
-
+counts = counts ^(0.5);  ## variance stabilising transformation of count data
 subind = which(dimnames(meta_data)[[2]] %in% c("comp_outcome"))[1]
 y=as.matrix(meta_data[,..subind,drop=F])
 rownames(y) = rownames(meta_data)
@@ -66,8 +66,7 @@ validation = which(ids$validation==1)
 
 
 
-###optional normalisation
-#counts = apply(counts, c(1,2), function(x) log(x+0.1))
+
 
 nitric_data = list(nme="NITRIC", dataset = list(rna = counts[discovery,,drop=F]), y=y[discovery,,drop=F])
 nitric_validation= list(nme="NITRIC", dataset = list(rna = counts[validation,,drop=F]), y=y[validation,,drop=F])
@@ -87,7 +86,7 @@ flags = list(pthresh = 0.05, max=10,nrep=1,batch=0,topn=20,beam=1,all_v_all=F,  
              
 )
 
-flags$quantiles = '[0.5]' 
+#flags$quantiles = '[0.5]' 
 
 datasets = list(NITRIC=nitric_data)
 datasets_val = list(validation = nitric_validation);
