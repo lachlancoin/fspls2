@@ -163,7 +163,7 @@ trainObj<-R6Class("trainObj",
                          # lapply(yTr_, function(yTr1){ ##NEED TO ADD POWS
                             # print(dim(yTr1))
                             #  print(dim(x))
-                            resu1=if(isbigmatrix(x) && typeof(yTr1)!="S4") dgemm(A=yTr1,B=x) else yTr1 %*% x
+                            resu1=if(is.big.matrix(x) && typeof(yTr1)!="S4") dgemm(A=yTr1,B=x) else yTr1 %*% x
                             dimnames(resu1) = list(dimnames(yTr1)[[1]],dimnames(x)[[2]])
                             resu1
                             })

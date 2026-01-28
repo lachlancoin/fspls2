@@ -40,6 +40,7 @@
 .getAllSparseMatrices<-function(data, hasNA=T, convertToBigMatrix=F){
   rn = unlist(lapply(data, function(d1) rownames(d1)))
   rn = rn[!duplicated(rn)]
+  print("getting sparse matrices")
   lapply(data, function(mat){
     .getSparseMatrices(mat, hasNA=hasNA, convertToBigMatrix = convertToBigMatrix,rn = rn)
   })
@@ -57,7 +58,7 @@
   newNA = length(which(is.na(mi0))>0)
   
   if(!hasNA& !newNA){
-    if(convertToBigMatrx){
+    if(convertToBigMatrix){
       m2=matrix(0, nrow = nrow(mat), ncol = ncol(mat))
       res1 = list(matrix = as.big.matrix(mat),
                   matrixNA = as.big.matrix(m2)

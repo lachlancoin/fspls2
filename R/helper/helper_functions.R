@@ -517,7 +517,15 @@ sparse_levs<-function(X){
   res
 }
 isbigmatrix<-function(x){
-  typeof(x)!="S4"
+  is.big.matrix(x)
+}
+is.big.matrix<-function(x){
+  
+  if ("bigmemory" %in% .packages()) {
+    return(bigmemory::is.big.matrix(x))
+  }
+  
+  return(FALSE)
 }
 
 .fixBeforeMerge<-function(t){

@@ -1913,7 +1913,7 @@ getVariance=function(){
   inds = 1:length(self$data)
   names(inds) = names(self$data)
   lapply(inds, function(ik){
-    if(typeof(self$data[[ik]])=="S4"){
+    if(!is.big.matrix(self$data[[ik]])){
     return(sparse_variance(self$data[[ik]]))
     }else{
       return(biganalytics::apply(self$data[[ik]], 2,var, na.rm=T))
@@ -2631,7 +2631,7 @@ updateTransforms=function(transform_y){
     self$mean_x = lapply(self$data, function(d1){
       mx = attr(d1,"mean_x")
       if(is.null(mx)){
-        mx =if(typeof(d1)=="S4")  (ym[,1:nrow(d1),drop=F] %*% d1)[1,]/sum(ym) else    dgemm( A=ym[,1:nrow(d1),drop=F], B=d1)[1,]/sum(ym)
+        mx =if(!is.big.matrix(d1))  (ym[,1:nrow(d1),drop=F] %*% d1)[1,]/sum(ym) else    dgemm( A=ym[,1:nrow(d1),drop=F], B=d1)[1,]/sum(ym)
         #mx =if(typeof(d1)=="S4")  (ym %*% d1)[1,]/sum(ym) else    dgemm( A=ym, B=d1)[1,]/sum(ym)
       }
       mx
@@ -2642,7 +2642,7 @@ updateTransforms=function(transform_y){
     self$norm = lapply(self$data, function(d1) {
       normm = attr(d1,"norm")
       if(is.null(normm)){
-        if(typeof(d1)=="S4"){ ## this not efficient
+        if(!is.big.matrix(d1)){ ## this not efficient
           means = rowMeans(d1)
           
          # normm=   -1 *apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
