@@ -179,10 +179,10 @@ analysisEnv<-R6Class("analysisEnv", public = list(
   
  
  
- savePvalsAndNextVars=function(flags,phens, vars_l_todo,comb2,data_nme, k1,logpvthresh,beam,stop_y="rand", verbose=F){
+ savePvalsAndNextVars=function(flags,phens, vars_l_todo,comb_,data_nme, k1,logpvthresh,beam,stop_y="rand", verbose=F){
    #savePvals=function(flags,phens,k1, data_nme, vars_l, comb_){
      
-    self$savePvals(flags,phens,k1, data_nme, vars_l_todo$vars_l,comb2)
+    self$savePvals(flags,phens,k1, data_nme, vars_l_todo$vars_l,comb_)
     self$nextVars(flags,phens, vars_l_todo,  k1,logpvthresh,beam, stop_y = stop_y, verbose=verbose)
  },
  nextVars=function(flags, phens, vars_l_todo,  k1,logpvthresh,beam,stop_y="rand", verbose=F){
@@ -265,7 +265,7 @@ getTodo=function(flags, phens, logpv = -100){
   incls = fromJSON(.readFlag(flags,'data_types','{}'))
   genes_incls=fromJSON(.readFlag(flags,"genes_incls",'{"all":["all"]}')) #,getOption("genes_incls",NULL)
   quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
- # names(incls) = incls;
+  names(incls) = incls;
   todo1 = unlist(unlist(lapply(incls, function(incl){
     lapply(genes_incls, function(g_incl){
       lapply(quantiles, function(qq){

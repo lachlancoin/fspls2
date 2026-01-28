@@ -2044,6 +2044,7 @@ getNorm=function(W,var,ik,type){
   return(norm)
 },
 getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
+  
   assoc=(type %in% c("assoc","assoc1"))
   W = if(type %in% c("slow","assoc"))self$projOut(ik) else self$projOut1(ik)
   ##NOTE PROJOUT1 ALSO SUBTRACTS MEAN, BUT FOR PROJOUT WE HAVE TO ADJUST FOR MEAN
@@ -2318,7 +2319,7 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
   },
 
 ## gets ready for training - updates train, prev looc
-updateTrain=function(phens,flags, transform_y= flags$transform_y, verbose=F, force=F){ ## this updates the reps and train  ## called after updateLOOC
+updateTrain=function(phens,flags, transform_y= flags$transform_y, verbose=F){ ## this updates the reps and train  ## called after updateLOOC
   transforms =         .convertToTransform(transform_y)
     self$transforms = transforms
   nrep = ncol(self$looc$incl)
@@ -2336,7 +2337,7 @@ updateTrain=function(phens,flags, transform_y= flags$transform_y, verbose=F, for
   within=T
   for(k in 1:length(self$train)){
     if(verbose) print(paste("update",k))
-    self$train[[k]]$update(self,k,phens, force=force)
+    self$train[[k]]$update(self,k,phens)
   }
   reweight=.readFlag(flags,"reweight",FALSE)
   if(reweight){

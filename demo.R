@@ -53,8 +53,8 @@ pows = c(0.5,1,1.5)
 transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=10)
 
 #SET UP FLAGS
-flags = list(pthresh = 0.001, max=3,nrep=1,batch=0,topn=10,beam=2,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
-             transform_y = toJSON(transform_y), useoffset=T,useglmnet=F,loadPV=T
+flags = list(pthresh = 0.5, max=10,nrep=1,batch=0,topn=10,beam=2,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
+             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T
 )
 
 datasets =examples[2];
@@ -64,7 +64,7 @@ datasH = lapply(datasets, function(d)dataH$new(d,nme=d$nme, flags=flags))
 #lapply(datasH, function(dh)dh$clear_db(T))
   nmesH = names(datasH); names(nmesH) = nmesH
   datasAll =analysisEnv$new(flags=flags) 
- #datasAll$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
+  #datasAll$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
   phens=datasH[[1]]$pheno()$all
   flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
   lapply(datasH, function(dh) dh$update(phens, flags))

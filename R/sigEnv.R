@@ -65,6 +65,7 @@ toJSON1<-function(flags, keys = c()){
 .modelFromRow<-function(vn5){
  if(nrow(vn5)>1) {
    print(vn5);
+   stop()
    warning("only expecting one row")
  }
   res=list(
@@ -263,11 +264,7 @@ sigEnv<-R6Class("sigEnv", public = list(
    })
  },
 #    self$sigs$savePvals(flags, phens, data_nme, ri, varnames,k1, useCurrVarnames = F)
-clearPvals=function(expt_id){ ## clear up after done
-  li1 = list(expt_id=expt_id)
-  dbExecute(self$mydb, 'DELETE FROM pvals where experiment_id =:expt_id' ,
-            li1)
-},
+
 savePvals=function(flags,phens, data_nme, ri, varnames,k,useCurrVarnames=F){
   expt_id = self$getExpt(flags, phens,add_new=T)
   #print(paste("saving pv",expt_id, k, data_nme, toJSON(varnames), useCurrVarnames))
@@ -282,12 +279,9 @@ savePvals=function(flags,phens, data_nme, ri, varnames,k,useCurrVarnames=F){
   
   #combined= .convertModelsToTable1(ri, expt_id=expt_id,debug=F) %>% tibble::add_column(prev_var=varn1, data=data_nme)
   hasModel = "pvals" %in% tbls
-  if( hasModel && FALSE){
-    print("deleting from pvals")
+  if( hasModel){
     li1 = list(expt_id=expt_id, k=k,data=data_nme, prev_var=toJSON(varnames))
-  
     if(useCurrVarnames) li1$prev_var==unlist(lapply(combined$var_names, toJSON))
-    print(li1)
     dbExecute(self$mydb, 'DELETE FROM pvals where experiment_id =:expt_id AND data=:data AND prev_var=:prev_var AND k=:k' ,
            li1)
   }
@@ -307,10 +301,7 @@ loadPrev=function(expt_id, prev_i, k, data_nme = self$subnme){
   if(!hasModel) return(prev_i)
   r1= list(experiment_id=expt_id,  varnames = toJSON(prev_i$var_names),k=k, data = data_nme)
   combined =  dbGetQuery(self$mydb, 'SELECT * from pvals where experiment_id=:experiment_id and prev_var=:varnames and k=:k and data =:data',r1)
-  if(nrow(combined)==0) {
-    warning("could not find prev_i")
-    return(prev_i)
-  }
+  if(nrow(combined)==0) return(prev_i)
   prev_i2=.modelFromRow(combined[1,])
   prev_i2
 },
