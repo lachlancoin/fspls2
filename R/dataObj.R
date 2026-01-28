@@ -1792,7 +1792,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
   if(length(all_models_y)==0) return(NULL)
   nmes_models = names(all_models_y[[1]][[1]]) #[[1]]);
   names(nmes_models) = nmes_models
-  #numvar = numvars1[[2]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+#numvar = numvars1[[2]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){

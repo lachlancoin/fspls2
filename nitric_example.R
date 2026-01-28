@@ -34,6 +34,7 @@ setwd("~/Data/Jingni")  ## where data is located
 .slug<-function(str){
   gsub("-","_",str)
 }
+
 ids = data.table::fread("ids_discovery_and_validation.csv.gz")
 ids$Sequencing_Sample_ID = .slug(ids$Sequencing_Sample_ID)
 meta_data = data.table::fread("NITRIC_Metadata_09112023.csv.gz")
@@ -49,43 +50,75 @@ meta_data$Sequencing_Sample_ID = .slug(meta_data$Sequencing_Sample_ID)
 mi1 = match(sample_names,meta_data$Sequencing_Sample_ID)
 mi2 = match(sample_names, ids$Sequencing_Sample_ID)
 
-ids = ids[mi2[!is.na(mi2)],,drop=F]
-meta_data = meta_data[mi1[!is.na(mi1)],,drop=F];
-rownames(meta_data) = meta_data$Sequencing_Sample_ID
+ids1 = ids[mi2[!is.na(mi2)],,drop=F]
+meta_data1 = meta_data[mi1[!is.na(mi1)],,drop=F];
+rownames(meta_data1) = meta_data1$Sequencing_Sample_ID
+
+levs = unique(meta_data1$Sampling_time)
+pre_inds = which(meta_data1$Sampling_time==levs[1])
+post_inds = which(meta_data1$Sampling_time==levs[2])
+
 counts = counts[!is.na(mi1),,drop=F]
 counts = counts ^(0.5);  ## variance stabilising transformation of count data
+
+
+meta_pre = meta_data1[pre_inds,]
+meta_post = meta_data1[post_inds,]
+mi3 = match(meta_pre$record_id, meta_post$record_id)
+
+meta_pre1 = meta_pre[!is.na(mi3),]
+meta_post1 = meta_post[mi3[!is.na(mi3)],]
+rownames(meta_pre1) = meta_pre1$record_id
+rownames(meta_post1) = meta_post1$record_id
+counts_pre1 = counts[pre_inds,][!is.na(mi3),]
+counts_post1 = counts[post_inds,][mi3[!is.na(mi3)],]
+rownames(counts_pre1) = rownames(meta_pre1)
+rownames(counts_post1) = rownames(meta_post1)
+
+counts_diff = counts_post1 - counts_pre1
+
+ids1_pre = ids1[pre_inds,][!is.na(mi3),]
+
 subind = which(dimnames(meta_data)[[2]] %in% c("comp_outcome"))[1]
-y=as.matrix(meta_data[,..subind,drop=F])
-rownames(y) = rownames(meta_data)
+y_pre=as.matrix(meta_pre1[,..subind,drop=F])
+y_post =as.matrix(meta_post1[,..subind,drop=F])
+y = y_post
+rownames(y) = meta_pre1$record_id
 
 
-discovery = which(ids$validation==0)
-validation = which(ids$validation==1)
-
-
-
-
-
-
-
-nitric_data = list(nme="NITRIC", dataset = list(rna = counts[discovery,,drop=F]), y=y[discovery,,drop=F])
-nitric_validation= list(nme="NITRIC", dataset = list(rna = counts[validation,,drop=F]), y=y[validation,,drop=F])
+discovery = which(ids1_pre$validation==0)
+validation = which(ids1_pre$validation==1)
+print(length(discovery))
+print(length(validation))
 
 
 
 
+
+nitric_data = list(nme="NITRIC", 
+              dataset = list(pre = counts_pre1[discovery,], post = counts_post1[discovery,], diff = counts_diff[discovery,]), 
+              y=y[discovery,,drop=F])
+nitric_validation= list(nme="NITRIC", 
+                        dataset = list(pre = counts_pre1[validation,], post = counts_post1[validation,], diff = counts_diff[validation,]), 
+                        y=y[validation,,drop=F])
+
+
+
+dim(nitric_data$y)
 
 ## NOW RUN FSPLS
 #pows = c(0.5,1,1.5,2.0)
 pows = c(1)
 transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=10)
-
+nmes_ = names(nitric_data$dataset)
 #SET UP FLAGS
 flags = list(pthresh = 0.05, max=10,nrep=1,batch=0,topn=20,beam=1,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
-             pheno_balance = T,transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T
+             pheno_balance = T,transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T,
+            data_types = toJSON(list("pre"=grep("pre",nmes_,v=T),"all"=nmes_))
              
 )
-
+#optional - not set datatypes
+##flags$data_types=NULL
 #flags$quantiles = '[0.5]' 
 
 datasets = list(NITRIC=nitric_data)
@@ -99,6 +132,7 @@ datasAll =datasEnv$new(datasets,flags=flags, hasNA=F)
 datasAll_validation =datasEnv$new(datasets_val,flags=flags, hasNA=F) 
 
 datasAll$updateTransforms(toJSON(transform_y))
+
 phens=datasAll$pheno()$all
 options("x_transform"="NA")
 ## FIND VARIABLES
@@ -114,12 +148,14 @@ all_models = datasAll$makeAllModels(vars_all,flags=flags)
 eval1 = datasAll$evaluateAllModels(all_models)
 
 eval_validation = datasAll_validation$evaluateAllModels(all_models)
+eval2 = rbind(eval1, eval_validation)
+
 
 
 # sigs$saveEval(eval0, flags, phens, "")
 #eval1 = sigs$loadEval(flags,phens,"")
 #eval = subset(eval, model!="avg")
-ggps1=.plotEval2(eval_validation,legend=T, grid1="subpheno", grid0="measure",
+ggps1=.plotEval2(eval2,legend=T, grid1="subpheno", grid0="measure",
                  shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
                  scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
 ggps1
