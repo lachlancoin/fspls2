@@ -4,7 +4,8 @@
 ##SHOULD BE RUN FROM WHERE GIT CLONED TO
 .libPaths("~/R/x86_64-pc-linux-gnu-library/4.1/")
 options(bigmemory.allow.dimnames=TRUE)
-library(jsonlite)
+{
+  library(jsonlite)
 library(R6)
 library(Matrix)
 library(glmnet)
@@ -23,11 +24,12 @@ library(RSQLite);
 library(cowplot)
 
 library(bigmemory)
-
+}
 #library(wCorr)
 ##LOAD CODE
 ##SHOULD RUN FROM FSPLS2 directory
-if(rev(strsplit(getwd(),"/")[[1]])[1]!="fspls2")stop("not in right directory")
+setwd("/home/unimelb.edu.au/lcoin/github/fspls2_main")
+#if(rev(strsplit(getwd(),"/")[[1]])[1]!="fspls2")stop("not in right directory")
 src1=grep(".R$",dir("./R",rec=T),v=T)
 
 invisible(try(lapply(paste("./R",src1,sep="/"), function(x) {print(x);source(x)})))
@@ -51,7 +53,7 @@ options("fspls.types"=
 pows = c(0.5,1,1.5)
 pows = seq(0.1,1.9,by=.1)
 pows = 1
-transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=5)
+transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=10)
 #transform_y=list(x=c("function(y) y","function(y) y"),exp= c("function(y) sign(y)*y^2", "function(y) sign(y)*abs(y)^(1/2)"))
 
 runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
@@ -66,7 +68,7 @@ runAll<-function(datasets, randomise=F,pthresh = 0.001, duplicate=F,
 #  flags[['transform']] =toJSON(getXTransform(c(seq(-1,-0.2,by=0.2),seq(0.1,0.9,by=.1), seq(1,2,by=.5))))#  '{"x" :"function(x) x", "log":"function(x) log1p(x)"}'
   
 
-  datasAll =datasEnv$new(datasets,flags=flags) 
+  datasAll =datasEnv$new(datasets,hasNA=F, flags=flags) 
   datasAll$updateTransforms(toJSON(transform_y))
   #sigs = datasAll$getSigDB(nme1="combined",reload=T)
   

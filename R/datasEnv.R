@@ -147,13 +147,14 @@ getFullModels<-function(all_models){
   newNA = length(which(is.na(mi0))>0)
   
   if(!hasNA& !newNA){
-    if(convertToBigMatrx){
+    if(convertToBigMatrix){
       m2=matrix(0, nrow = nrow(mat), ncol = ncol(mat))
       res1 = list(matrix = as.big.matrix(mat),
                   matrixNA = as.big.matrix(m2)
       )
     }else{
-   res1 = list(matrix = mat,
+      mat1 = if(typeof(mat)=="S4") mat1 else Matrix(mat);
+   res1 = list(matrix = mat1,
                matrixNA = Matrix(0,nrow(mat) , ncol(mat), sparse = T)
                     )
     }
@@ -830,12 +831,16 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
               func_ind = c(func_ind,ang1[[1]][[1]]$var[[1]][3])
             }
           }
+          #print("HERE names logpvs");
+          #print(stop_y)
+          
           if(!is.null(stop_y)){
             gp1=grep(stop_y, names(logpvs))
             gp=grep(stop_y, names(logpvs), inv=T)
-         
-           # print("HERE")
-            #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
+         if(verbose){
+            print("HERE")
+            print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
+         }
             stop_random= min(logpvs[gp1])<=min(logpvs[gp])
             #print(head(sort(ord[stop_ind])))
           }
