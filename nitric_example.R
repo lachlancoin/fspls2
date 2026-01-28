@@ -66,31 +66,28 @@ transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=10)
 
 #SET UP FLAGS
 flags = list(pthresh = 0.05, max=10,nrep=10,batch=0,topn=10,beam=1,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
-             pheno_balance = T,
-             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T
+             pheno_balance = T,transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T
+             
 )
 
 
 datasets = list(NITRIC=nitric_data)
-datasH = lapply(datasets, function(d)dataH$new(d,nme=d$nme, hasNA=F, convertToBigMatrix=F, flags=flags))
+
+dh = dataH$new(nitric_data,nme="nitric", hasNA=F, convertToBigMatrix=F, flags=flags)
 #lapply(datasH, function(dh)dh$clear_db(T))
-nmesH = names(datasH); names(nmesH) = nmesH
+
 datasAll =analysisEnv$new(flags=flags) 
 
-phens=datasH[[1]]$pheno()$all
-flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
-lapply(datasH, function(dh) dh$update(phens, flags))
-dh = datasH[[1]] 
+phens=dh$pheno()$all
+flags[['data_types']] =toJSON(names(dh$data$data))
+ dh$update(phens, flags)
+
 vars_all=dh$select(datasAll, phens , flags, verbose=T)
 
-all_models = lapply(datasH, function(dh){
-  dh$makeAllModels(vars_all,useDB=F)
-})
-eval1= .merge1_new(lapply(nmesH, function(nmeh){
-  all_modelsh = all_models[[nmeh]]
-  dh = datasH[[nmeh]]
-  dh$evaluateAllModels(all_modelsh, useDB=F)
-}), addName="data")
+all_models = dh$makeAllModels(vars_all,useDB=F)
+
+ eval1 =  dh$evaluateAllModels(all_models, useDB=F)%>% tibble::add_column(data='nitric')
+
 
 ggps1=.plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0="measure",linetype="beam", ##"full_model"
                  shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
