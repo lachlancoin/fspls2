@@ -160,7 +160,7 @@ sigEnv<-R6Class("sigEnv", public = list(
       }
     }
   },
- updateTransforms(transform_y){
+ updateTransforms1=function(transform_y){
    stop(" this not implemented until we split out the transform_y")
  },
   updateData=function(  user=self$user,data_flags = list(), data_names = list(), data_types = list(),phenos = list(), dims=list()){

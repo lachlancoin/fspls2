@@ -8,6 +8,21 @@ lapply(fromJSON(transform_y), function(t_y){
 })
 }
 
+##note: duplicates do not have same
+.inv_quantile<-function(y1_){
+  y4 = rep(NA, length(y1_))
+  NA_ind = is.na(y1_)
+  y1 = y1_[!NA_ind]
+  v = 1:length(y1)
+  ym = cbind(y1,v)
+  y2 = ym[order(y1),,drop=F]
+  # dupl = duplicated(y2[,1])
+  y3 =  cbind(y2,v/length(v)) #   qnorm((v+0.5)/(1+length(v))))
+  y4[!NA_ind] = y3[order(y3[,2]),3]
+  y4
+}
+
+
 ## assumes Wall1 is upper diagonal
 ## uses data with mean subtracted
 ## does not add any constant term
@@ -615,6 +630,25 @@ convert=function(b_i1){
   pow_ind = match(b_i1[[4]], names(self$transforms[[trans_ind]]$params))
   c(data_ind, var_ind, trans_ind, pow_ind)
 },
+quantileMatch=function(d){
+  for(nme in names(self$data)){
+    mat = self$data[[nme]]
+    mat_target = d$data[[nme]]
+    mi1 = match(colnames(mat), colnames(mat_target))
+    subinds = !is.na(mi1)
+    head(colnames(mat)[subinds]); head(colnames(mat_target)[mi1[subinds]])
+    
+    mat = mat[,subinds,drop=F]
+    self$vars[[nme]] = self$vars[[nme]][subinds]
+    self$norm[[nme]] = self$norm[[nme]][subinds]
+    self$dataNA[[nme]] = self$dataNA[[nme]][,subinds,drop=F]
+    
+    qq1=.inv_quantile(unlist(as.matrix(mat)))
+    qq2=quantile(mat_target, qq1)
+    self$data[[nme]] = Matrix(qq2, nrow = nrow(mat), ncol = ncol(mat), dimnames = list(rownames(mat), colnames(mat)))
+  }
+},
+
 cats = function(maxpheno = 1e9){
   fam=self$family
   phens =  lapply(1:length(fam), function(i){
@@ -1696,10 +1730,13 @@ extractPredictions=function(all_models_,phens1, flags, CV = FALSE,liab=T,
         ypred$updateYP(d,prev_i1, nonNA, inv_transform_y=inv_transform_y, flip=FALSE, liab=liab )
 
         return(lapply(nmesp, function(nmesp1){
-          phens1[[nmesp1]]
+          #phens1[[nmesp1]]
           yy2 = d$y[[nmesp1]]
+          if(is.null(yy2)){
+            return(list(ypred=ypred$ypreds[[nmesp1]]))
+          }
           mi  = match(phens1[[nmesp1]],dimnames(yy2)[[2]])
-          list(y=d$y[[nmesp1]][,mi,drop=F], ypred= ypred$ypreds[[nmesp1]])
+          list(y=yy2[,mi,drop=F], ypred= ypred$ypreds[[nmesp1]])
         } )    )   
 #        d$updateYpredsInds(phens,full_model[[nmes1]], d$nreps(), ypred )
       }
@@ -1734,8 +1771,8 @@ evals
 },
 ypred=function(phens1){
   family = unlist(lapply(names(phens1), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1])))
-  ypr = ypredObj$new(self,self$phensi(phens1),family=family)
-  ypr
+  ypred = ypredObj$new(self,phens1)
+  ypred
 },# inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
 #all_models_y = all_models$y; inverse_func_str = fromJSON(flags1$transform_y_inverse)[[1]]; self = datasAll$datas[[1]]
 evaluateAllModels=function(all_models_y,phens,flags,
@@ -2185,7 +2222,7 @@ getAngleInner=function(phensi,ik,k,var){
 },
 phensi=function(subphens){
   phensi=lapply(names(subphens), function(nme){
-    if(is.null(self$y[[nme]])) stop("subphens is wrong")
+    if(is.null(self$y[[nme]])) return(NULL)
     mi2=match(subphens[[nme]], colnames(self$y[[nme]]))
     names(mi2) = subphens[[nme]]
     na_ind= which(is.na(mi2))
@@ -2243,18 +2280,7 @@ getAngles1=function(subphens,varnames,incl=names(self$data), k=1,type="slow1"){
     
   },
 
-storeWeights = function(flags, remote=""){
-  weights = self$getWeights()
-  jsonw = lapply(weights, function(w) lapply(w,toJSONM))
-  df1=.merge1(lapply(jsonw, function(json){
-      data.frame(types = toJSON(self$types), pheno = toJSON(dimnames(self$y)[[2]]), 
-                 family = toJSON(self$family),
-                 offset= json$offset, weights = json$weights, date = date(), flags = toJSON(flags), ip=remote)
-  }), addName="name")
-  df1 = df1 %>% tibble::add_column(size= unlist(lapply(df1$name, function(x) length(strsplit(as.character(x),",")[[1]]))))
-  try(dbWriteTable(dist$mydb, "weights", df1,overwrite=F,append=T)
-)
-},
+
 
 
 
@@ -2421,7 +2447,7 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL,qq=1, exc
         var_res = var_res & (names(norm1) %in% g_incl)
       }
       excl1 = excl[unlist(lapply(excl, function(e1)e1[[1]]==norm_nme))]
-      var_res = var_res[!(names(var_res) %in% unlist( lapply(excl1, function(e1) e1[[2]])))]
+     var_res[(names(var_res) %in% unlist( lapply(excl1, function(e1) e1[[2]])))]=F
       var_res
   })
 },
@@ -2573,6 +2599,7 @@ updateTransforms=function(transform_y){
                        transform_y=toJSON(list(x=list(invfunc="function(y) y",func="function(y) y",1), params=1)),
                       incl_full=T,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores
     self$transforms = .convertToTransform(transform_y)
+    self$y = NULL
     self$default_transform = eval(str2lang("function(x,pow) x"))
     if(!is.null(memDir)){
       mem_dirp = memDir

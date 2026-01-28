@@ -50,6 +50,7 @@ getFullModels<-function(all_models){
   }))
 }
 .getFamily<-function(y_mat, family1=NULL, max_ordinal=20){
+  if(is.null(y_mat)) return(NULL)
   types = attr(y_mat, "types")
   
   if(!is.null(types)){
@@ -277,20 +278,23 @@ datasEnv<-R6Class("datasEnv", public = list(
     pheno_balance=.readFlag(flags,"pheno_balance",NULL)
   #  invisible(lapply(datas, function(data) data$init1(pheno_balance = pheno_balance, nrep=nrep,  batch = batch)))
     varn = getOption("varn",c())
-   
-    invisible(lapply(1:length(datas), function(ik) {
+   if(length(ys)>0){
+    invisible(lapply(1:length(ys), function(ik) {
+      
       y1 = ys[[ik]] #dists[[ik]]$updateYdb(cats[['cats']])
+      if(!is.null(y1)){
       family = families[[ik]]
      
       ##need to work on all_v_all
       datas[[ik]]$updateY(y1, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
   #    datas[[ik]]$updateYdb(dists[[ik]]$mydb, cats[['cats']])
   #    missing_vals = self$updateY(y1, family=family, CHECK=T)
-      
+      }
   #    datas[[ik]]$initTrain(varn=varn)
     #data[[ik]]$initY()
      return(NULL)
     }))
+   }
     self$datas = datas
   },
  plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x = NULL, violin=F, assoc=F){
@@ -345,7 +349,7 @@ datasEnv<-R6Class("datasEnv", public = list(
      self$datas[[k]]$updateWeights(subphens)
    } 
   },
-   getSigDB=function(nme1="",reload= F, clear=F, user=""){
+   getSigDB=function(nme1,reload= F, clear=F, user=""){
      if(is.null(nme1)) return(NULL)
      curr_sigs = self$sigs[[nme1]]
      if(!is.null(curr_sigs)){
@@ -451,7 +455,7 @@ datasEnv<-R6Class("datasEnv", public = list(
       ord = order(unlist(lapply(variables, length)),decreasing=T)
       variables = variables[ord]
       var_inds = var_inds[ord]
-    # v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
+     #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
       
      for(v_nme in names(variables)){
       # print(v_nme)
@@ -482,7 +486,7 @@ datasEnv<-R6Class("datasEnv", public = list(
                      all_models[[names(models1)[[k]]]][[r_nme]]= models1[[k]][[r_nme]] #[[p_nme]][[r_nme]] #[[p_nme]][[r_nme]] 
                                 
                    }else{
-                     print("already calculated!")
+                     #print("already calculated!")
                    }
                 }
               }
@@ -881,9 +885,6 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     vars_all
   },
   extractPredictions=function(all_models,phens=all_models$phens, flags=all_models$flags, CV = FALSE, liab=T, data_nme  = names(self$datas)){
-    #datas = self$datas
-  #  inverse_func_str =lapply(transform_y, function(t_y)  t_y[[2]])
-    
     self$updateLOOC(phens, flags)
     names(data_nme) = data_nme
     #nmes_p = names(phens); names(nmes_p) = nmes_p
@@ -891,6 +892,7 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
     #all_models_ = all_models_y[[1]];d_nme = data_nme[[1]];# nme_p = nmes_p[[1]]; phens1 = phens[[nme_p]];
     
     res3 = lapply(all_models_y, function(all_models_){
+      print(all_models_[[1]][[1]]$var_names)
       #res2 = lapply(nmes_p, function(nme_p){
        # phens1 = phens[[nme_p]]
         res2=lapply(data_nme, function(d_nme){
@@ -911,8 +913,10 @@ updateLOOC=function( phens, flags,varn=c(),force=F, verbose=F){
 updateTransforms = function(transform_y){
   
   self$flags[['transform_y']] = transform_y
+  if(length(self$sigs)>0){
   for(k in 1:length(self$sigs)){
     self$sigs[[k]]$updateTransforms(transform_y)
+  }
   }
   for(k in 1:length(self$datas)){
     self$datas[[k]]$updateTransforms(transform_y)

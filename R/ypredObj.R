@@ -529,19 +529,23 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
   }
   rms
 }
-.initYpred1<-function(y, phensi, family){
-  #inds1 = 1:maxn
-  #names(inds1)=inds1
-  nmey =names(phensi)
+.initYpred1<-function(y,
+                      rown=rownames(y), 
+                      phens1,
+                      family){
+  nmey =names(phens1)
+  phensi=phens1
   names(nmey) = nmey
+  nrow = length(rown)
   indsy = 1:length(nmey); names(indsy)=nmey
   #family = unlist(lapply(nmey, function(x) strsplit(x,"\\.")[[1]][1]))
   
   #lapply(inds1, function(x)  {
     res = lapply(indsy, function(i){
       i1 = nmey[[i]]
-      yi = y[[i1]]
+      #
       if(family[[i]]=="multinomial"){
+        yi = y[[i1]]
         yi = attr(yi,"factor")
          levs1 = levels(yi)
          names(levs1) = levs1
@@ -550,9 +554,10 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
            mean(vv,na.rm=T)
 #           rep(mean(vv, na.rm=T), length(vv))
          }))
-         rr = do.call(rbind, replicate(length(yi),rr1, simplify=FALSE))
-         dimnames(rr) = list(dimnames(y)[[1]],levs1)
+         rr = do.call(rbind, replicate(nrow,rr1, simplify=FALSE))
+         dimnames(rr) = list(rown,levs1)
        }else if(family[[i]]=="ordinal"){
+         yi = y[[i1]]
            levs1 = min(yi,na.rm=T):max(yi,na.rm=T)
            names(levs1) = levs1
           rr0= unlist(lapply(levs1[-length(levs1)], function(l1){
@@ -562,10 +567,10 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
            }))
           rr1 = cumsum(rr0)
           rr = do.call(rbind, replicate(length(yi),rr1, simplify=FALSE))
-          dimnames(rr) = list(dimnames(y)[[1]],levs1[-length(levs1)])
+          dimnames(rr) = list(rown,levs1[-length(levs1)])
     }else{
       subinds = phensi[[i]]
-      dimn = list(rownames(y[[i]]), colnames(y[[i]])[subinds])
+      dimn = list(rown, subinds)
       rr = Matrix(0,nrow = length(dimn[[1]]), ncol = length(dimn[[2]]),dimnames = dimn ,sparse=T)
         #as.matrix(data.frame(rep(mean(yi,na.rm=T),length(yi))))
     }
@@ -587,18 +592,19 @@ ypredObj<-R6Class("ypredObj", public = list(
   phensi="numeric",
   nrow="numeric",
   
-  initialize=function(data, phensi,  
-                      family = unlist(lapply(names(phensi), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1]))),
-                     
+  initialize=function(data, phens1,  
+                     rown = rownames(data$data[[1]]),
                       types_=getOption("fspls.types", 
                                      default_types)){
    # rms_prev = 99999
+    #phensi = phens1
+    family = unlist(lapply(names(phens1), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1])))
   wname=NULL
   rmsv=NULL
-  self$phensi = phensi
+  self$phensi = phens1
   self$family=family
   self$types_ = types_
-    ypreds=.initYpred1(data$y, phensi, family)
+    ypreds=.initYpred1(data$y, rown, phens1, family)
  # self$params=params
   self$wname=wname
   self$ypreds=ypreds

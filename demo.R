@@ -45,7 +45,7 @@ example_files= grep("_data.rds",dir("data", full=T),v=T)
 names(example_files) = lapply(example_files, function(x)strsplit(x,"/")[[1]][2])
 examples = lapply(example_files, readRDS)
 }
-datasets =examples[4]; pthresh = 0.05 ; randomise=F; duplicate=F
+datasets =examples[2]; pthresh = 0.05 ; randomise=F; duplicate=F
 options("fspls.types"=
           fromJSON('{"gaussian": ["correlation","rms"],"binomial":"AUC","multinomial":"AUC","ordinal" : "AUC_all"}'))
 pows = c(0.5,1,1.5)

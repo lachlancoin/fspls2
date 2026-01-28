@@ -81,7 +81,7 @@ transform_y=getYTransform(pow = c(1), offset=0.1, norm=1000, n_random=10)
 
 flags = list(pthresh = 1.0, nrep=0,batch=1,
 #             incl = "input_D_neg_1_pbmc_fspls2",
-             topn=30,beam=1,all_v_all=T,x_transform=T, transform_y = toJSON(transform_y))
+             topn=30,beam=1,all_v_all=F,x_transform=T, transform_y = toJSON(transform_y))
 ## MAKE THE FSPLS DATA OBJECT
 datasAll =datasEnv$new(datasets,flags=flags)
 phens=datasAll$pheno()
