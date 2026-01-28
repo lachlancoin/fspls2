@@ -49,7 +49,7 @@ getFullModels<-function(all_models){
     }))
   }))
 }
-.getFamily<-function(y_mat, family1=NULL, max_ordinal=20){
+.getFamily<-function(y_mat, family1=NULL, max_ordinal=getOption("max_ordinal",20)){
   if(is.null(y_mat)) return(NULL)
   types = attr(y_mat, "types")
   

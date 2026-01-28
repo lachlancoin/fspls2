@@ -761,7 +761,7 @@ calcRMSV=function(y, nonNA,      flip=F){
 
     y2 = if(is.null(ind_1)) y[[nme_p1]] else  y[[nme_p1]][ind_1,,drop=F]
     yp2 = if(is.null(ind_1))ypreds1 else  ypreds1[ind_1,,drop=F] 
-    names(ycol_inds) = dimnames(y2)[[2]][ycols]
+    names(ycol_inds) = dimnames(y2)[[2]][ycol_inds]
     rms_1=lapply(ycol_inds, function(ycol_ind){
       ycol = ycols[ycol_ind]
       y1 =  y2[,ycol]
