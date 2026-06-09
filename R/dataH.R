@@ -57,13 +57,14 @@
   newNA = length(which(is.na(mi0))>0)
   
   if(!hasNA& !newNA){
-    if(convertToBigMatrx){
+    if(convertToBigMatrix){
       m2=matrix(0, nrow = nrow(mat), ncol = ncol(mat))
       res1 = list(matrix = as.big.matrix(mat),
                   matrixNA = as.big.matrix(m2)
       )
     }else{
-      res1 = list(matrix = mat,
+      mat1 = if(typeof(mat)=="S4") mat1 else Matrix(mat);
+      res1 = list(matrix = mat1,
                   matrixNA = Matrix(0,nrow(mat) , ncol(mat), sparse = T)
       )
     }
@@ -115,7 +116,7 @@ getFullModels<-function(all_models){
 }
 
 
-.getFamily<-function(y_mat, family1=NULL, max_ordinal=20){
+.getFamily<-function(y_mat, family1=NULL, max_ordinal=getOption("max_ordinal",20)){
   types = attr(y_mat, "types")
   
   if(!is.null(types)){
@@ -334,11 +335,13 @@ dataH<-R6Class("dataH", public = list(
    beam= log(.readFlag(flags,"beam",1))
   saveAngles=F
   # vars_l = datasAll$nextVars(expt_id, flags)
-   while(length(vars_l_todo$todo1)>0){
+   while(length(vars_l_todo$todo1)>0 ){
      comb2 = self$multiAnglesAndPv(phens, k1,flags,expt_id, vars_l_todo, saveAngles=saveAngles, verbose=verbose)
      data_nme=self$nme
      vars_l_todo=datasAll$savePvalsAndNextVars(flags,phens,vars_l_todo,comb2,data_nme,  k1,logpvthresh,beam)
      if(verbose) print(vars_l_todo$vars_l)
+     if(length(vars_l_todo$vars_l[[1]]$var_names)>=flags$max) break;
+     
      #datasAll$savePvals(expt_id,k1, self$nme, vars_l_todo$vars_l,comb_)
      #vars_l_todo = datasAll$nextVars(vars_l_todo, expt_id, k1,logpvthresh,beam)
    }

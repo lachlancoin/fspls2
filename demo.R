@@ -50,12 +50,14 @@ options("fspls.types"= fromJSON('{"gaussian": ["correlation","rms"],"binomial":[
 
 #SET UP TRANSFORMATIONS
 pows = c(0.5,1,1.5)
-transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=10)
+pows = 1
+transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=5)
 
 #SET UP FLAGS
-flags = list(pthresh = 0.001, max=3,nrep=1,batch=0,topn=10,beam=2,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
+flags = list(pthresh = 0.05, max=10,nrep=1,batch=0,topn=10,beam=1,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
              transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T
 )
+options("x_transform"="NA")
 
 datasets =examples[2];
 #runAll<-function(datasets){
@@ -63,13 +65,15 @@ datasets =examples[2];
 datasH = lapply(datasets, function(d)dataH$new(d,nme=d$nme, flags=flags))
 #lapply(datasH, function(dh)dh$clear_db(T))
   nmesH = names(datasH); names(nmesH) = nmesH
-  datasAll =analysisEnv$new(flags=flags) 
- #datasAll$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
+  datasAll =analysisEnv$new(flags=flags) ;
+ # datasAll$clear_db(drop=T)
+ datasAll$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
   phens=datasH[[1]]$pheno()$all
   flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
   lapply(datasH, function(dh) dh$update(phens, flags))
    dh = datasH[[1]] 
-  vars_all=dh$select(datasAll, phens , flags, verbose=T)
+   
+  vars_all=dh$select(datasAll, phens , flags, verbose=T, useDB=F)
  
   #vars_all = datasAll$select(datasH,phens, flags, verbose=T,useDB=T)
   ##extract the variables for the full model only

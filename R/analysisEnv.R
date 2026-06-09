@@ -221,6 +221,8 @@ analysisEnv<-R6Class("analysisEnv", public = list(
         #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
         stop_random= min(gp1)<=min(gp)
         #print(head(sort(ord[stop_ind])))
+        print("COMPARING TO RANDOM!!!!!")
+        print(logpvs[c(gp1[1], gp[1])])
       }
       logpv =min(logpvs)
       
@@ -243,7 +245,7 @@ analysisEnv<-R6Class("analysisEnv", public = list(
       if(length(todo1)==1){
         print("could consider saving the vars at this point to the DB.  Maybe also need to record dataset included")
       }
-
+  print("shortening _todo")
             vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
       return(vars_l_todo)
 },
