@@ -55,8 +55,10 @@ toJSON1<-function(flags, keys = c()){
                      Wall = toJSONM(all_models5$Wall),
                      nvar = length(all_models5$var_names), 
                      mean_x = toJSON(all_models5$mean_x),
-                     pvs = toJSON(all_models5$pvs),
-                     pvs_all = toJSON(all_models5$pvs_all),
+                     pvs = toJSON(unlist(all_models5$pvs)),
+                     pvs_all = toJSON(unlist(all_models5$pvs_all)),
+                     angle = toJSON(all_models5$angle),
+                     angles = toJSON(all_models5$angles),
                      # transf= toJSON(all_models5$transf),
                      betas_proj = toJSONM(all_models5$betas_proj)
   ))
@@ -64,8 +66,12 @@ toJSON1<-function(flags, keys = c()){
 }
 .modelFromRow<-function(vn5){
  if(nrow(vn5)>1) {
-   print(vn5);
+   lens = apply(vn5,2, function(x) length(unique(x)))
+  lens1 = which(lens>1)
+  if(length(lens1)>0){
+    print(vn5[,lens1])
    warning("only expecting one row")
+  }
  }
   res=list(
     betas_proj = fromJSONM(vn5$betas_proj[[1]]),
@@ -75,6 +81,8 @@ toJSON1<-function(flags, keys = c()){
     mean_x = fromJSON(vn5$mean_x[[1]]),
     pvs = fromJSON(vn5$pvs[[1]]),
     pvs_all = fromJSON(vn5$pvs_all[[1]]),
+    angle = fromJSON(vn5$angle[[1]]),
+    angles = fromJSON(vn5$angles[[1]]),
     #transf = fromJSON(vn5$transf[[1]]),
     constants_proj=fromJSONM(vn5$constants_proj[[1]])
   )
@@ -117,7 +125,12 @@ setAttr<-function(mat1, attr1){
   }else{
     nme = attr1$names
     dimn = attr1$dimnames
-    if(!is.null(dimn) && !is.list(dimn)){
+        test=!is.null(dimn) && !is.list(dimn) && ncol(mat1)==nrow(mat1) && ncol(dimn)==ncol(mat1);
+   # print(test)
+    if(test){
+      attr1$dimnames=list(dimn[1,], dimn[2,])
+    
+    }else if(!is.null(dimn) && !is.list(dimn)){
       attr1$dimnames=as.list(dimn)
     }
     if(!is.null(nme)  && length(nme)==length(mat1)){
@@ -300,16 +313,16 @@ pvals=function(expt_id){
   combined =  dbGetQuery(self$mydb, 'SELECT * from pvals where experiment_id=:experiment_id ',list(experiment_id=expt_id))
   combined
 },
-loadPrev=function(expt_id, prev_i, k, data_nme = self$subnme){
+loadPrev=function(expt_id, prev_i3, k, data_nme = self$subnme){
   tbls = dbListTables(self$mydb)
   #combined1 = combined[names(combined) %in% c("experiment_id","data","varnames")]
   hasModel = "pvals" %in% tbls
-  if(!hasModel) return(prev_i)
-  r1= list(experiment_id=expt_id,  varnames = toJSON(prev_i$var_names),k=k, data = data_nme)
+  if(!hasModel) return(prev_i3)
+  r1= list(experiment_id=expt_id,  varnames = toJSON(prev_i3$var_names),k=k, data = data_nme)
   combined =  dbGetQuery(self$mydb, 'SELECT * from pvals where experiment_id=:experiment_id and prev_var=:varnames and k=:k and data =:data',r1)
   if(nrow(combined)==0) {
-    warning("could not find prev_i")
-    return(prev_i)
+    warning("could not find previous")
+    return(prev_i3)
   }
   prev_i2=.modelFromRow(combined[1,])
   prev_i2

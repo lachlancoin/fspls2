@@ -67,8 +67,9 @@ post_process<-function(variables, flags, phens){
 }
 .mergeResInner<-function(res_inner1){
   nme_comb = names(res_inner1[[1]]);names(nme_comb) = nme_comb
+  #nme_c1 = nme_comb[[1]]; nme_p1 = names(res_inner1[[1]][[nme_c1]])[1]
+  
   res_inner=lapply(nme_comb, function(nme_c1){
-    #nme_c1 = nme_comb[[1]]; nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
     nmesp1 = names(res_inner1[[1]][[nme_c1]]);names(nmesp1) = nmesp1
     lapply(nmesp1, function(nme_p1){
     #  comb = comb_[[nme_c1]][[nme_p1]]
@@ -84,6 +85,8 @@ post_process<-function(variables, flags, phens){
           ri[[nme_c1]][[nme_p1]][[vn]]
         })
         nv1 = list(var_names =nv[[1]]$var_names,
+                 angle = sum(unlist(lapply(nv, function(nv1) unlist(nv1$angle)))),
+              cum_angle =sum(unlist(lapply(nv, function(nv1) unlist(nv1$angles)))),
             cum_pv= .sumChisq(unlist(lapply(nv, function(nv1){
       unlist(nv1$pvs)
     }))),
@@ -151,7 +154,7 @@ analysisEnv<-R6Class("analysisEnv", public = list(
     self$sigsdir=paste(dbDir,"fspls_signatures",sep="/")
     #self$datasH = datasH 
     #self$sigs=   sigEnv$new(self$sigsdir,nme1)
-    self$sigs=   sigEnv$new(self$sigsdir,nme1,flags, NULL, clear=F)
+    self$sigs=    sigEnv$new(self$sigsdir,nme1,flags, NULL, clear=F)
     
   },
   updateData=function(datasH, data_names =names(datasH), 
@@ -167,7 +170,7 @@ analysisEnv<-R6Class("analysisEnv", public = list(
  
   clear_db=function(drop=F,exclude="vars", datasH = NULL){
     if(drop){
-      self$sigs$drop_all(exclude=exclude)
+      if(!is.null(self$sigs))self$sigs$drop_all(exclude=exclude)
       if(!is.null(datasH)){
         lapply(datasH, function(dh) dh$clear_db(drop=drop, exclude=exclude))
       }
@@ -178,21 +181,22 @@ analysisEnv<-R6Class("analysisEnv", public = list(
   },  
   
  
- 
+
  savePvalsAndNextVars=function(flags,phens, vars_l_todo,comb2,data_nme, k1,logpvthresh,beam,stop_y="rand", verbose=F){
-   #savePvals=function(flags,phens,k1, data_nme, vars_l, comb_){
-     
-    self$savePvals(flags,phens,k1, data_nme, vars_l_todo$vars_l,comb2)
+   
+   if(!is.null(flags$angles_only) && flags$angles_only) logpvthresh =0;
+      self$savePvals(flags,phens,k1, data_nme, vars_l_todo$vars_l,comb2)
     self$nextVars(flags,phens, vars_l_todo,  k1,logpvthresh,beam, stop_y = stop_y, verbose=verbose)
  },
  nextVars=function(flags, phens, vars_l_todo,  k1,logpvthresh,beam,stop_y="rand", verbose=F){
    vars_l = vars_l_todo$vars_l
    todo1 = vars_l_todo$todo1
    expt_id=self$sigs$getExpt(flags, phens, add_new=T)
+   useAngles = !is.null(flags$angles_only) && flags$angles_only
    angles_all = lapply(vars_l, function(vars_l1){
      varnames = vars_l1$var_names; 
-     res_inner2 = self$sigs$loadPvals(expt_id, varnames,k1) ## reconstruct ri
-     nxt_vars1=.mergeResInner(res_inner2)
+     res_inner1 = self$sigs$loadPvals(expt_id, varnames,k1) ## reconstruct ri
+     nxt_vars1=.mergeResInner(res_inner1)
      nxt_vars1 =nxt_vars1[unlist(lapply(nxt_vars1, length))>0]
      if(length(nxt_vars1)==0) return(NULL)
      nxt_vars1
@@ -200,38 +204,56 @@ analysisEnv<-R6Class("analysisEnv", public = list(
    
    angles_all = angles_all[unlist(lapply(angles_all, length))>0]
    if(length(angles_all)==0){
-  
-     vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1[-1])
+       vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1[-1])
      return(vars_l_todo)
    }
       ang1 = unlist(unlist(unlist(angles_all, rec=F),rec=F),rec=F)
-      logpvs = unlist(lapply(ang1, function(a1)a1[["cum_pv"]]))
-      logpvs_all = unlist(lapply(ang1, function(a1)a1[["cumpv_all"]]))
+      angles_ = unlist(lapply(ang1, function(a1)a1[["angle"]]))
+      
+      vn = unlist(lapply(ang1, function(a1)paste(names(a1[["var_names"]]), collapse=";")), rec=F)
+      names(ang1) = vn 
+      
+      logpvs =if(useAngles) angles_ else   unlist(lapply(ang1, function(a1)a1[["cum_pv"]]))
+      logpvs_all = if(useAngles) unlist(lapply(ang1, function(a1)a1[["cum_angle"]])) else  unlist(lapply(ang1, function(a1)a1[["cumpv_all"]]))
+      
+      
       ord = order(logpvs)
       names(ord) = names(logpvs)
       ord_all = order(logpvs_all)
       ang1 = ang1[ord_all]
       logpvs = logpvs[ord_all]
       logpvs_all = logpvs_all[ord_all]
+      angles_ = angles_[ord_all]
       if(!is.null(stop_y)){
         gp1=grep(stop_y, names(logpvs))
         gp=grep(stop_y, names(logpvs), inv=T)
         
         # print("HERE")
+        stop_random =  min(logpvs[gp1]) < min(logpvs[gp]) 
+        stop_random1= min(angles_[gp1]) < min(angles_[gp])
         #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
-        stop_random= min(gp1)<=min(gp)
+      # stop_random= min(gp1)<=min(gp)
         #print(head(sort(ord[stop_ind])))
-        print("COMPARING TO RANDOM!!!!!")
-        print(logpvs[c(gp1[1], gp[1])])
+        print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles))
+        print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
+        print("cumulative ")
+        print(unlist(list(rand=min(logpvs_all[gp1]),nonrand= min(logpvs_all[gp]))))
+        
+        if(!useAngles) print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
+        
       }
       logpv =min(logpvs)
+      
       
   if(stop_random){
     if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
   }
+      if(stop_random1){
+        if(verbose) print(paste("stopping due to random1"))
+      }
   ##ADD MORE RESTRICTIONS .. eg maxsize
       #     while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! vars_l_todo$stop_random){
-  if((!stop_random && logpv<=logpvthresh  ) ){
+  if((!stop_random &&  ! stop_random1 && logpv<=logpvthresh  ) ){
     if(verbose){
       print(head(sort(logpvs_all[gp])))
       print(names(vars_l))
@@ -249,9 +271,9 @@ analysisEnv<-R6Class("analysisEnv", public = list(
             vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
       return(vars_l_todo)
 },
-savePvals=function(flags,phens,k1, data_nme, vars_l, comb_){
+savePvals=function(flags,phens,k1, data_nme, vars_l, comb2){
   for(varn1 in names(vars_l)){ 
-    ri=comb_[[varn1]]
+    ri=comb2[[varn1]]
     varnames=vars_l[[varn1]]$var_names
     self$sigs$savePvals(flags, phens, data_nme, ri, varnames,k1, useCurrVarnames = F)
   }

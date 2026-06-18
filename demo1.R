@@ -8,17 +8,19 @@
 ##SET APPROPRIATE LIB PATHS 
 
 ##SHOULD BE RUN FROM WHERE GIT CLONED TO
-.libPaths("~/R/x86_64-pc-linux-gnu-library/4.1/")
+
+.libPaths("~/R/x86_64-pc-linux-gnu-library/4.6/")
+
 if(rev(strsplit(getwd(),"/")[[1]])[1]!="fspls2")stop("not in right directory")
  options(bigmemory.allow.dimnames=TRUE)
-
+{
 library(jsonlite)
 library(R6)
 library(Matrix)
 library(glmnet)
 library(tidyr)
 library(pROC); 
-library(wCorr)
+#library(wCorr)
 library(MASS);
 library(ggplot2)
 library(nnet)  ## for multinomial
@@ -27,8 +29,11 @@ library("binom") ## for plotting
 
 library(SeuratObject)
 
-library(writexl)  ## to save weights
-library(readxl)
+#library(writexl)  ## to save weights
+#library(readxl)
+ library(DBI); 
+ library(RSQLite);
+ library(cowplot)
 #optional packages
 #library(bigmemory)
 #library(bigalgebra)
@@ -43,7 +48,7 @@ library(readxl)
 #library(data.table)
 #library(R.utils)
 #library(httr);
-
+}
 ##LOAD CODE
 src1=grep(".R$",dir("./R",rec=T),v=T)
 invisible(try(lapply(paste("./R",src1,sep="/"), function(x) {print(x);source(x)})))
@@ -61,31 +66,67 @@ variance = sparse_variance(counts1)
 
 meta=pbmc@meta.data[,match(c( "predicted_labels_broad", "predicted_labels_fine"),names(pbmc@meta.data))]
 for(k in 1:ncol(meta))meta[[k]] = factor(meta[[k]])
+y = meta
 
-ys=list(pbmc=meta)
+#weights_old=read_xlsx("weights42.xlsx")
+#if(!is.null(weights_old)){
+#  counts1 = counts1[,dimnames(counts1)[[2]] %in% weights_old$var]
+#}
+dataset = list(counts=counts1)
+mat =lapply(dataset, function(d1).getSparseMatrices(d1, hasNA=F))
 
-weights_old=read_xlsx("weights42.xlsx")
 
-if(!is.null(weights_old)){
-  counts1 = counts1[,dimnames(counts1)[[2]] %in% weights_old$var]
-}
-datasets = list(pbmc=list(counts=counts1))
-mats = lapply(datasets, function(d) lapply(d, function(d1).getSparseMatrices(d1, hasNA=F)))
-flags = list(pthresh = 1e-2, max=100, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T,all_v_all=T)
+transform_y=getYTransform(pow = 1,  n_random=1, perm=F)
+flags = list(pthresh = 0.05, max=100,nrep=5,batch=0,topn=50,beam=10,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
+             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T, angles_only=T
+)
+options("x_transform"="NA")
 
-ys$pbmc =ys$pbmc[,2,drop=F]
 
-datasAll =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
+#flags = list(pthresh = 1e-2, max=100, nrep=1,batch=0, train=names(datasets)[1],topn=20,beam=1,verbose=T,all_v_all=T)
+options("fspls.types"= fromJSON('{"gaussian": ["correlation","rms"],"binomial":["AUC","area","max_diff","max_diff_x"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
+
+
+
+
+dbDir="./dbDir"  ## this is where fspls_signatures will be created
+dbDir1="./dbDir1"  ## this is where fspls_signatures will be created
+dh = dataH$new(NULL,nme="pbmc", y=meta[1], mat = mat,       dbDir = dbDir1, flags=flags, useDB=T)
+datasH = list(pbmc = dh)
+analysis =analysisEnv$new(dbDir=dbDir, flags=flags) ;
+# analysis$clear_db(drop=T)
+analysis$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
+phens=datasH[[1]]$pheno()$all
+flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
+dh = datasH[[1]] 
+dh$update(phens, flags, force=T);
+vars_all=dh$select(analysis, phens , flags, verbose=F, useDB=F)
+vars_all1=.extractFullVars(vars_all)
+ all_modelsh= dh$makeAllModels(vars_all,useDB=F, verbose=T)
+
+eval1=  dh$evaluateAllModels(all_modelsh, useDB=F, verbose=T)
+#}), addName="data")
+
+ggps1=.plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0="measure",linetype="beam", ##"full_model"
+                 shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
+                 scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
+
+
+
+
+ggps1[[1]]
+
+analysis =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
 
 transform_y=getYTransform(n_random=1)
 
-phens=datasAll$pheno()
+phens=analysis$pheno()
 phens$all = phens$all[1]
 if(!is.null(weights_old)){
   #quicker to use existing variables if provided
-  vars_all = datasAll$convert(weights_old$var,phens, transform_y)
+  vars_all = analysis$convert(weights_old$var,phens, transform_y)
 }else{
-  vars_all = datasAll$select(phens$all, flags,transform_y = transform_y, verbose=T)
+  vars_all = analysis$select(phens$all, flags,transform_y = transform_y, verbose=T)
 }
 
 ## FIT MODELS
@@ -93,7 +134,7 @@ options("fspls.verbose1"=F); options("fspls.check"=F)
 phens_ = phens
 #phens_[[1]][[1]] = phens[[1]][[1]][10]
 #all_models_ = datas$makeAllModels(vars_all, phens_, flags)
-all_models = datasAll$makeAllModels(vars_all, verbose=T)
+all_models = analysis$makeAllModels(vars_all, verbose=T)
 
 #betas_save = all_models_[[1]]$`counts.CD74;counts.FTH1;counts.CCL5;counts.HLA-DRB1;counts.RPS12;counts.LYZ;counts.GNLY;counts.NIBAN1;counts.IGHM;counts.BANK1`$all$full$pbmc$betas$binomial
 #print(betas_save)
@@ -110,7 +151,7 @@ all_models = datasAll$makeAllModels(vars_all, verbose=T)
 
 options("diff_thresh"=0.1)
 
-eval1 = datasAll$evaluateAllModels(all_models)
+eval1 = analysis$evaluateAllModels(all_models)
 
 ## GET WEIGHTS FROM FULL MODEL
 final_models = .getFinalModel(all_models$y, target_size = "max")
@@ -134,7 +175,7 @@ dev.off()
 
 
 ##VISUALISE PREDICTIONS
-predictions =datasAll$extractPredictions(all_models,phens, flags,liab=F,CV = F);
+predictions =analysis$extractPredictions(all_models,phens, flags,liab=F,CV = F);
 len = length(predictions[[1]][[1]]$pbmc)
 
 ggps2 = .plotArea1(predictions, rename=F,subset = len,
@@ -144,7 +185,7 @@ ggps2 = .plotArea1(predictions, rename=F,subset = len,
 ### get projection
 variables = vars_all$y$variables
 varnames = variables[[length(variables)]]
-projOut=datasAll$getProjectedData(varnames)
+projOut=analysis$getProjectedData(varnames)
 
 
 

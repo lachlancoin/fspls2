@@ -1,5 +1,9 @@
 
-
+is.big.matrix<-function(mat){
+  if(typeof(mat)=="S4") return(FALSE);
+  print(typeof(mat))
+  return (bigmemory::is.big.matrix(mat));
+}
 
 ## this from sce single cell format
 .convertSCEToSparse<-function(sce){
@@ -184,19 +188,44 @@ length(unique(eval1$`data:family`))
   })
   ggps
 }
-randomize<-function(y,seed){
-  set.seed(seed)
-  inds=sample.int(length(y))
- # print(inds)
-  y1 = y[inds]
-  y1
+
+rotate <- function(x, n) {
+  n <- n %% length(x)          # handle n > length or negative n
+  x[c((n + 1):length(x), seq_len(n))]
 }
-invrandomize<-function(y1,seed){  ## inverse randomises for the same seed
-  set.seed(seed)
-  inds = sample.int(length(y1))
-  #print(inds)
-  y1[ match(1:length(y1),inds)]
+
+permute<-function(x, seed, norm = 1, offset = 0){
+  x1=(x+offset)/norm; 
+  rotate(x1, seed)
 }
+
+invpermute = function(y1, seed, norm=1,offset=0){
+ rotate(y1,-seed)*norm-offset 
+}
+
+randomize <- function(y, seed, norm = 1, offset=0) {
+  y1=(y+offset)/norm; 
+  set.seed(seed)
+  inds <- sample.int(length(y1))
+  y1[inds]
+}
+
+invrandomize <- function(y1, seed, norm=1, offset=0) {
+  set.seed(seed)
+  inds <- sample.int(length(y1))
+  y1[order(inds)]*norm-offset   # clean and idiomatic
+  # equivalently: y1[match(1:length(y1), inds)]  -- your version, also correct
+  # or:           { r <- y1; r[inds] <- y1; r }  -- most explicit
+}
+
+# Test
+#y <- 1:10
+#y_rand <- randomize(y, seed = 42)
+#y_back <- invrandomize(y_rand, seed = 42)
+#identical(y, y_back)  # TRUE
+
+
+
 .calcAverageAccuracy<-function(comb){
   comb1=unite(comb,comb,experiment_id, cv_full, measure,sep="__");
   comb1_lev = unique(comb1$comb); names(comb1_lev) = comb1_lev
@@ -210,12 +239,25 @@ invrandomize<-function(y1,seed){  ## inverse randomises for the same seed
   subset(medians, cv_full=="CV=avg")
 }
 
-.getRandomFuncs<-function(n,CHECK=F){ ## although these are same, every invocation will give different results
+.getPermFuncs<-function(n,norm=1, offset=0, CHECK=F){ ## although these are same, every invocation will give different results
   if(n==0) return(list())
+  inds = sample.int(4*n,2*n, replace=F)
+ # inds = inds[which(inds %%size !=0)][1:n]
+  names(inds) = inds
+  transf=list(invfunc=paste0("function(y,seed) invpermute(y,seed, ",norm,", ",offset,")"),
+              func=paste0("function(x,seed) permute(x,seed, ",norm,", ",offset,")"),params=as.list(inds))
+  transf
+}
+
+
+.getRandomFuncs<-function(n,norm=1, offset=0, CHECK=F){ ## although these are same, every invocation will give different results
+  if(n==0) return(list())
+  n1 = max(n, 1000)
  inds = sample.int(2*n,n, replace=F)
  names(inds) = inds
  which(duplicated(inds))
- transf=list(invfunc="function(y,seed) randomize(y,seed)",func="function(x,seed) invrandomize(x,seed)",params=as.list(inds))
+ transf=list(invfunc=paste0("function(y,seed) invrandomize(y,seed, ",norm,", ",offset,")"),
+             func=paste0("function(x,seed) randomize(x,seed, ",norm,", ",offset,")"),params=as.list(inds))
  if(CHECK){
    ggp= .checkInverse1(transf)
    ggp
@@ -253,10 +295,19 @@ invrandomize<-function(y1,seed){  ## inverse randomises for the same seed
   invisible(llm)
  # print("ok")
 }
-getYTransform<-function(pows = c(1),offset=1, n_random=0,norm=1000, exp_x = c(), exp_y = c(), CHECK=F){
+getYTransform<-function(pows = c(1),offset=1e-3, size = 1e6, n_random=0,perm=F, norm=1, exp_x = c(), exp_y = c(), CHECK=F){
+ # offset= 1e-3; norm=1;
   funcs = list()
   if(length(pows)>0) funcs = c(funcs,list(pow=.getTransformFuncs(pows,  norm = norm, offset=offset, CHECK=CHECK) ))
-  if(n_random>0)funcs = c(funcs,list( rand=.getRandomFuncs(n_random)))
+  if(n_random>0){
+    if(perm) {
+      funcs = c(funcs,list( rand=.getPermFuncs(n_random,  norm = norm, offset=offset)))
+      
+    }else{
+      funcs = c(funcs,list( rand=.getRandomFuncs(n_random, norm = norm, offset = offset)))
+      
+    }
+  }
   if(length(exp_x)>0) funcs = c(funcs, list(log=getExpFunc(exp_x, rev=F, offset=offset, CHECK=CHECK)))
   if(length(exp_y)>0) funcs = c(funcs, list(exp=getExpFunc(exp_y, rev=T, offset=offset, CHECK=CHECK)))
   funcs
@@ -307,23 +358,26 @@ logfunc<-function(x,pow, norm=1,offset=0.1){
   log(x1)/log(pow)
 }
 
-powfunc<-function(x,pow, norm=1, offset=0.1){
+powfunc<-function(x,pow, norm=1, offset=0.0001){
  # pow=v[1]; norm=v[2]; offset=v[3]
   x1=(x+offset)/norm; 
   sign(x1) * abs(x1)^pow
 }
-invpowfunc<-function(y,pow, norm=1, offset=0.1){
+invpowfunc<-function(y,pow, norm=1, offset=0.0001){
   #pow=v[1]; norm=v[2]; offset=v[3];
   y1 = sign(y) * abs(y)^(1/pow); 
   y1*norm-offset
 }
 
 ##this gets transformations for x variable
+##invfunc applied to y; func applied to x
 .getTransformFuncs<-function(pows,
                              offset=0.1, norm=1,CHECK=F){
   names(pows)=pows
-   transf=list(invfunc =  paste0("function(y,pow,norm=",norm,",offset=",offset,") powfunc(y,pow,norm,offset)"),
-         func=paste0("function(x,pow,norm=",norm,",offset=",offset,") invpowfunc(x,pow,norm,offset)"), params = as.list(pows))
+  transf=list(invfunc=paste0("function(y,seed) invpowfunc(y,seed, ",norm,", ",offset,")"),
+              func=paste0("function(x,seed) powfunc(x,seed, ",norm,", ",offset,")"),params=as.list(pows))
+  
+   
     if(CHECK){
     ggp= .checkInverse1(transf)
     ggp

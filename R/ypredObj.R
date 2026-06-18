@@ -666,6 +666,8 @@ updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, li
                      family = self$family[[kk]],liab=T,x_transform = F){  ## kk1 in model space 
     transforms = d$getTransforms(prev_kj$var,inv_transform = x_transform )
     x_ = d$extractData(prev_kj$var, adjust=F)
+  #  print(paste("WALL", kk1))
+  #  print( prev_kj$Wall)
     ab=.eval1_(x_[ind_1,,drop=F], prev_kj$betas_proj[[kk1]], prev_kj$Wall[[kk1]], transforms, family, mean_x = prev_kj$mean_x)
     ab = as.matrix(ab)
     constants = prev_kj$constants_proj[[kk1]]

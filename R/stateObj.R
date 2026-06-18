@@ -40,6 +40,9 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                     var="list", var_names="list",
                     varnames="list",
                     name="character",
+                    angle="double",
+                    angles="list",
+                    sumAngle="numeric",
                     name_prev="character",
                     betas_proj="vector", #list of vector
                     Wall="matrix",  ##list of matrix,
@@ -52,6 +55,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                    pvs="list",
                    pvs_all ="list",
                    sumPv="numeric",
+                  
                     initialize = function(phensi,data,
                                           betas_proj, 
                                           constants_proj,
@@ -62,8 +66,12 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                                           var = list(), varnames = list(),
                                           Wall = matrix(nrow=0, ncol=0),
                                          mean_x = NULL, pvs = c(),
+                                      
                                          useoffset=T
                                          ){
+                      self$angle=NULL;
+                      self$sumAngle=NULL;
+                      self$angles = c();
                       self$pvs = pvs
                       self$pvs_all = unlist(pvs)
                       if(!is.null(prev_i)) self$pvs_all = c(self$pvs_all, prev_i$pvs_all)

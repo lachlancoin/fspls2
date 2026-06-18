@@ -1,6 +1,6 @@
 
 ##SET APPROPRIATE LIB PATHS 
-.libPaths("~/R/x86_64-pc-linux-gnu-library/4.1/")
+.libPaths("~/R/x86_64-pc-linux-gnu-library/4.6/")
 
 options(bigmemory.allow.dimnames=TRUE)
 {
@@ -19,7 +19,7 @@ library(confintr)
 library(DBI); 
 library(RSQLite);
 library(cowplot)
-library(bigmemory)
+#library(bigmemory)
 }
 
 ##SHOULD RUN FROM FSPLS2 directory
@@ -51,45 +51,32 @@ options("fspls.types"= fromJSON('{"gaussian": ["correlation","rms"],"binomial":[
 #SET UP TRANSFORMATIONS
 pows = c(0.5,1,1.5)
 pows = 1
-transform_y=getYTransform(pow = pows, offset=0.1, norm=1000, n_random=5)
 
-#SET UP FLAGS
-flags = list(pthresh = 0.05, max=10,nrep=1,batch=0,topn=10,beam=1,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
-             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T
+dbDir="./dbDir"  ## this is where fspls_signatures will be created
+dbDir1="./dbDir1"  ## this is where fspls_signatures will be created
+
+
+transform_y=getYTransform(pow = pows,  n_random=1, perm=F)
+flags = list(pthresh = 0.05, max=20,nrep=1,batch=0,topn=50,beam=1,all_v_all=F,  project=T,  stop_y="rand",x_transform=T,
+             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T, angles_only=T
 )
 options("x_transform"="NA")
 
-datasets =examples[2];
-#runAll<-function(datasets){
-  
-datasH = lapply(datasets, function(d)dataH$new(d,nme=d$nme, flags=flags))
-#lapply(datasH, function(dh)dh$clear_db(T))
-  nmesH = names(datasH); names(nmesH) = nmesH
-  datasAll =analysisEnv$new(flags=flags) ;
- # datasAll$clear_db(drop=T)
- datasAll$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
-  phens=datasH[[1]]$pheno()$all
-  flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
-  lapply(datasH, function(dh) dh$update(phens, flags))
-   dh = datasH[[1]] 
-   
-  vars_all=dh$select(datasAll, phens , flags, verbose=T, useDB=F)
- 
-  #vars_all = datasAll$select(datasH,phens, flags, verbose=T,useDB=T)
-  ##extract the variables for the full model only
-  vars_all1=.extractFullVars(vars_all)
-  all_models = lapply(datasH, function(dh){
-    dh$makeAllModels(vars_all,useDB=F)
-  })
-  eval1= .merge1_new(lapply(nmesH, function(nmeh){
-    all_modelsh = all_models[[nmeh]]
-    dh = datasH[[nmeh]]
-    dh$evaluateAllModels(all_modelsh, useDB=F)
-  }), addName="data")
-  
+nme = names(examples)[2]
+dataset =examples[[nme]]
+dh = dataH$new(dataset,dbDir = dbDir1, nme=nme, flags=flags, useDB=T)
+analysis =analysisEnv$new(dbDir=dbDir, flags=flags) ;
+analysis$clear_db(drop=T, exclude=c(), datasH=list(dh))# this clears the attached dbs
+  phens=dh$pheno()$all
+  flags[['data_types']] =toJSON(names(dh$data$data))
+dh$update(phens, flags, force=T);
+  vars_all=dh$select(analysis, phens , flags, verbose=F, useDB=F)
+  all_models =dh$makeAllModels(vars_all,useDB=F)
+  eval1= dh$evaluateAllModels(all_models, useDB=F)
   ggps1=.plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0="measure",linetype="beam", ##"full_model"
                    shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
+  ggps1
   pdf("output.pdf")
   lapply(ggps1, print)
   dev.off()
