@@ -1,3 +1,17 @@
+
+.better1<-function(rmsv, rmsv2){
+  measure = rmsv$measure[[1]]
+  subpheno = rmsv$subpheno[[1]]
+  cv = rmsv$cv[[1]]
+  rmsv_ = subset(rmsv, submeasure=="mid"& cv==cv & measure==measure & subpheno == subpheno) %>% pivot_wider(names_from="pheno", values_from="value")
+  rmsv2_ = subset(rmsv2, submeasure=="mid"& cv==cv & measure==measure & subpheno == subpheno) %>% pivot_wider(names_from="pheno", values_from="value")
+a1 = rbind(rmsv_[1,-(1:6)], rmsv2_[1,-(1:6)])
+
+a2 = cbind(c("bef","aft"),a1)
+names(a2)[1] = "nme"
+a2
+}
+
 default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC"}')
 .convertToTransform<-function(transform_y){
 lapply(fromJSON(transform_y), function(t_y){
@@ -110,7 +124,7 @@ lapply(fromJSON(transform_y), function(t_y){
   yn[y>thresh]=1
   yn
 }
-.calcPvalue<-function(x_,y, beta_new2, yp1,w, family, Wall2, transf){   ## this seems to not work anymore for multinomial
+.calcPvalue<-function(x_,y, beta_new2, yp1k,w, family, Wall2, transf){   ## this seems to not work anymore for multinomial
   if(length(which(!is.na(y)))==0) return (0)
   if(family=="multinomial"){
     yp_new = .eval1_noBETA(x_, Wall2, transf, family)
@@ -145,11 +159,13 @@ lapply(fromJSON(transform_y), function(t_y){
       .lrt(ll2,ll1,2,1, log.p=T)
     })
   }else{
-    if(ncol(yp_new)>1) stop("not expecting")
-    m1=glm(y~yp1[,1],weights=w,family=family)
-    m2=glm(y~yp_new[,1], weights = w, family=family)
+    if(ncol(yp_new)>1 || ncol(yp1k)>1) stop("not expecting")
+   
+    m1=glm(y~yp1k[,1],family=family)# weights=w[nonNAy], weights should be integer
+    m2=glm(y~yp_new[,1], family=family)#weights = w[nonNAy], 
     ll2 = logLik(m2)
     ll1 =  logLik(m1)
+    if(ll1==0)warning("problem, zero likelihood")
     pv1 = .lrt(ll2,ll1,2,1, log.p=T)
   }
   as.vector(pv1)
@@ -1129,6 +1145,13 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
   #if(!inv_transform){
   #    transform_func_y =self$transforms[[b_i[[3]]]][[1]]
   #}
+  if(family=="multinomial"){
+    yp1 =  .eval1_noBETA(x_[nonNA,-ncol(x_),drop=F ],  Wall1, transf[-ncol(x_)], family)
+    
+  }else{
+    yp1 =  .eval1_(x_[nonNA,-ncol(x_),drop=F ],  betas1,Wall1, transf[-ncol(x_)], family)
+  }
+  
   for(kk in 1:ncoly){
     nonNAk = nonNA & non_na_x
     nonNAk1 = non_na_x[nonNA]; ## second subset
@@ -1139,22 +1162,17 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
     beta_new1=0;
     const_term=0
    # Wall1 = NULL
-    if(family=="multinomial"){
-      yp1 =  .eval1_noBETA(x_[nonNA,-ncol(x_),drop=F ],  Wall1, transf[-ncol(x_)], family)
-      
-    }else{
-    yp1 =  .eval1_(x_[nonNA,-ncol(x_),drop=F ],  betas1,Wall1, transf[-ncol(x_)], family)
-    }
+   
     #  if(family=="multinomial")  (x_1 %*%  Wall1) %*% betas1  else (x_[,-ncol(x_),drop=F ] %*%  Wall1) %*% betas1 [,kk,drop=F]
     
    # if(useoffset){
-      x = cbind(yp1, transf1$func(x1_[nonNA,1,drop=F], transf1$param))
+      x = cbind(yp1[,kk], transf1$func(x1_[nonNA,1,drop=F], transf1$param))
       dimnames(x)[[2]] = c(paste0("A",1:(ncol(x)-1)),"x")
     #}else{
      # stop("no transformation here without offset!")
     #  x = x_[nonNAk,,drop=F]
     #}
-    yp1 = yp1[nonNAk1,,drop=F]  
+   # yp1 = yp1[nonNAk1,kk,drop=F]  
     if(family=="multinomial"){
        ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
@@ -1318,7 +1336,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
       }else{
         betas[[kk]] = beta_new1
       }
-       pv1 = .calcPvalue(x_[nonNA ,,drop=F] ,y, betas[[kk]], yp1,w, family,Wall2, transf)
+       pv1 = .calcPvalue(x_[nonNA ,,drop=F] ,y, betas[[kk]], yp1[,k,drop=F],w, family,Wall2, transf)
     pvs[[kk]] = pv1
       constants[[kk]] = const_term  #-mean_adj*beta_new1
   }
@@ -1435,15 +1453,18 @@ makeModels=function(phens1, vars2,k,
     models[[jk+1]] =prev_i1$simplify()
     if(checkRMSV){
       rmsv2=self$checkRMSV(subphens,prev_i1, ypred, nonNA, inv_transform_y=!inv_transform,verbose=verbose)
+     # print(subset(rmsv2, submeasure=="mid"))
       if(!is.null(rmsv)){
-      better = .better(rmsv2, rmsv)
-    #print(better)
-    if(!better[1]){
-    #    print(subset(rmsv, submeasure=="mid")%>% tibble::add_column(numvars=jk-1))
-    #    print(subset(rmsv2, submeasure=="mid")%>% tibble::add_column(numvars=jk))
-        warning(paste("not better, stopping",jk))
-        break;
-      }
+      better = .better1(rmsv, rmsv2)
+       improvement = apply(better[,-1,drop=F],2, function(x)x[2]-x[1])
+       #print(better)
+       
+       if(min(improvement)<(-1e-3)){
+         warning(paste("not improving!", paste0(improvement)))
+       }
+       
+       
+   
       }
       rmsv = rmsv2
     }
@@ -1550,7 +1571,7 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=!getOption("x
       means_x = apply(extractd0,2,mean)
       extractd = self$extractData(c(prev_i$var, list(b_i)), adjust=T)
       subnme = names(subphens)[[1]]
-      family = strsplit(subnme,"\\.")[[1]]
+      family = strsplit(subnme,"\\.")[[1]][1]
       df2 = data.frame(lapply(subphens[[1]], function(colind){
         if(family=="multinomial"){
           y_m = attr(self$y[[1]],"factor")
@@ -1767,8 +1788,8 @@ evaluateAllModels=function(all_models_y,phens,flags,
   #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
   if(length(all_models_y)==0) return(NULL)
   #
-  #names(nmes_models) = nmes_models
-  #nmes_models = names(all_models_y[[1]]);  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+  #
+  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
@@ -2109,12 +2130,9 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
         to_rem = which(norm>-var_thresh)
         P = self$UDVP$P
         angles1 = lapply(names(phensi), function(ii){
-       
-          nme_i = ii
+                 nme_i = ii
           phensi1 = phensi[[ii]]
-       #  lapply(phi, function(ii){
-          
-          products =self$train[[k]]$product(ik,ii,phensi1);
+                 products =self$train[[k]]$product(ik,ii,phensi1);
           nmes_products = names(products); names(nmes_products) = nmes_products
           #nmes_prod = "rand"; nmes_prod1 = names(products[[nmes_prod]])[1]
           angle=lapply(nmes_products, function(nmes_prod){
@@ -2142,28 +2160,6 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
             angle_1
           })
           })
-        #if(FALSE){
-          ##JUST TO SHOW THAT SUBTRACTING MEAN DOESNT MAKE DIFF BECAUSE yTR has mean zero
-         # x1 = t(t(x[]) - self$mean_x[[ik]])
-        #  product1 = abs(yTr1%*%x1[,self$cols_incl[[ik]]])
-        #  product2 = abs(yTr1%*%x1[,self$cols_incl[[ik]]])
-        #}
-        #the product should not include information from the NA see comment above
-        
-        ##note yTr has zeros where nonNA is false
-        #print(table(yTr[1,!nonNA]))
-        ##NOW CALCULATE NORM,WHICH WE NOT ADJUSTING FOR NA
-      #  print(dim(product))
-      #  print(length(self$cols_incl[[ik]]))
-        
-        # angle = matrix(999,nrow=nrow(yTr1),ncol = ncol(W))  ## we could try not to calculate this each time
-       #   if(length(which(!self$cols_incl))>0){
-      #      angle[,!self$cols_incl[[ik]]] = 999 #product2#  [self$cols_incl[[ik]]]
-        #  }
-       
-         ##because norm is actually negative number
-        
-
          angle
         })
      }

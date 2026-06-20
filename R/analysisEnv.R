@@ -1,51 +1,4 @@
-post_process<-function(variables, flags, phens){
-  full_index = length(variables)
-  beams = 1:length(variables[[full_index]])
-  names(beams)=beams
-  vars_combined=lapply(beams, function(beam){
-    vars_all = list()
-    vars_all1 = list()
-    vars_all2 = list()
-    #vars_all3 = list() #funcstr
-    names(variables) = 1:length(variables)
-    # func_inds = lapply(variables, function(vv) attr(vv,"func_ind"))
-    
-    for(repn in names(variables)){
-      full = repn==full_index
-      
-      var1 = variables[[repn]][[beam]]   ### only taking the top1
-      var2 = var1$var_names
-      if(length(var2)>0){
-        names(var2) = names(var1$var_names)
-        cumpv = var1$cum_pv#lapply(var1, function(vv) attr(vv,"cumpv"))
-        varn = paste(names(var2),collapse=";") #paste(names(var2), collapse=";")
-        if(is.null(vars_all[[varn]])){
-          vars_all[[varn]] = list()
-          vars_all1[[varn]] = var2
-          vars_all2[[varn]] = list()
-          # vars_all3[[varn]] =list(repn) 
-          # names(vars_all3[[varn]]) = func_str1
-        }else{
-          #vars_all3[[varn]]=c( vars_all3[[varn]],repn)
-        }
-        repn1 = as.list(as.numeric(repn))
-        repn2 = as.list(cumpv)
-        names(repn1) = if(full) "full" else repn
-        names(repn2) = if(full) "full" else repn
-        if(is.null(vars_all[[varn]])){
-          vars_all[[varn]] =repn1
-          vars_all2[[varn]] =repn2
-          # vars_all3[[varn]]
-        }else{
-          vars_all[[varn]] = c(vars_all[[varn]] , repn1)
-          vars_all2[[varn]] = c(vars_all2[[varn]] , repn2)
-        }
-      }
-    }
-    list(variables = vars_all1, inds = vars_all,cumpv=vars_all2, beam=beam,flags = flags,phens = phens )# ,transf= vars_all3) 
-  })
-  vars_combined
-}
+
 
 .extractFullVars<-function(vars_all0){
   lapply(vars_all0, function(vars_all){
@@ -231,6 +184,8 @@ analysisEnv<-R6Class("analysisEnv", public = list(
         # print("HERE")
         stop_random =  min(logpvs[gp1]) < min(logpvs[gp]) 
         stop_random1= min(angles_[gp1]) < min(angles_[gp])
+        stop_random2= min(logpvs_all[gp1]) < min(logpvs_all[gp])
+        
         #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
       # stop_random= min(gp1)<=min(gp)
         #print(head(sort(ord[stop_ind])))
@@ -245,23 +200,24 @@ analysisEnv<-R6Class("analysisEnv", public = list(
       logpv =min(logpvs)
       
       
-  if(stop_random){
+  if(stop_random || stop_random1 || stop_random2){
     if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
   }
-      if(stop_random1){
-        if(verbose) print(paste("stopping due to random1"))
-      }
+    
   ##ADD MORE RESTRICTIONS .. eg maxsize
       #     while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! vars_l_todo$stop_random){
-  if((!stop_random &&  ! stop_random1 && logpv<=logpvthresh  ) ){
+  if((!stop_random &&  ! stop_random1 && !stop_random2 && logpv<=logpvthresh  ) ){
     if(verbose){
       print(head(sort(logpvs_all[gp])))
       print(names(vars_l))
     }
     dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
     ang1 = ang1[!duplicated(dupls)]
+    ang1 = ang1[grep("rand", names(ang1), inv=T)]
     ang1 = ang1[1:min(length(ang1),beam)]
     vars_l_todo = list(stop=F, vars_l = ang1, todo1 = vars_l_todo$todo1)
+    if(length(grep("rand", names(vars_l_todo$vars_l)))>0) stop("!!");
+    
     return(vars_l_todo)
   }
       if(length(todo1)==1){

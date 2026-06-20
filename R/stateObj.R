@@ -70,7 +70,7 @@ stateObj<-R6Class("stateObj",##represents a state of the model
                                          useoffset=T
                                          ){
                       self$angle=NULL;
-                      self$sumAngle=NULL;
+                      self$sumAngle=0;
                       self$angles = c();
                       self$pvs = pvs
                       self$pvs_all = unlist(pvs)

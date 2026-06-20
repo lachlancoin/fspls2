@@ -66,7 +66,7 @@ trainObj<-R6Class("trainObj",
                       looc_incl_k_ij = self$looc_incl[,k]
                       means_y = lapply(y1, function(y1_) lapply(funcst, function(fst) lapply(fst$params,function(f3) rep(0, ncol(y1_)))))
                       inds_to_do = which(names(self$y1) %in% names(phens1))
-                      #colk1=1; f_k = 1; g_k = 1;j= which(dimnames(y1[[colk]])[[2]] %in% phens1[[colk1]])[1]
+                      #colk1=1; f_k = 1; g_k = 1; colk = inds_to_do[colk1]; j= which(dimnames(y1[[colk]])[[2]] %in% phens1[[colk1]])[1]
                       
                       for(colk1 in 1:length(inds_to_do)){
                        colk = inds_to_do[colk1]
@@ -92,10 +92,11 @@ trainObj<-R6Class("trainObj",
                                  self$yTr[[colk]][[f_k]][[g_k]][j,nonNA1] = weights[nonNA1]*(v  - meansy[j]) #y[,j]  - mean_y[j]
                                     if(length(which(!nonNA1))>0){
                                       self$yTr[[colk]][[f_k]][[g_k]][j,!nonNA1] =0   ## will not contribute to dot product
-                                      if(length(which(!nonNA2))>0){
-                                        self$yTr[[colk]][[f_k]][[g_k]][j,which(nonNA1)[!nonNA2]] =0
-                                      }
+                                   
                                     }
+                                 if(length(which(!nonNA2))>0){
+                                   self$yTr[[colk]][[f_k]][[g_k]][j,which(nonNA1)[!nonNA2]] =0
+                                 }
                                  vars1 = apply(self$yTr[[colk]][[f_k]][[g_k]][j,,drop=F],1,var, na.rm=T)
                                  if(min(vars1)==0) stop(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs)))
                                  }
