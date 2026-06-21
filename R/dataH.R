@@ -13,7 +13,7 @@ mergeAll = function(comb2_new, beam){
   
 }
 
-get_comb_plot<-function(plot_results){
+get_comb_plot<-function(plot_results, nvar){
   if(length(plot_results)==0) return(NULL)
   names(plot_results) = 1:length(plot_results)
   plot_results[[1]]$prev=""
@@ -463,7 +463,9 @@ dataH<-R6Class("dataH", public = list(
    self$data$cats(maxpheno)
  },
  update=function(phens, flags, verbose=F, force=F){
-   if(is.null(flags[['data_types']]))flags[['data_types']]=toJSON(names(self$data$data))
+#   flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
+
+   if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(names(self$data$data))
      self$updateLOOC(phens, flags, verbose=verbose,force=force)
      self$updateTrain(phens, flags,verbose=verbose, force=force)
    ##updated after updateLOOC
@@ -475,6 +477,8 @@ dataH<-R6Class("dataH", public = list(
  select=function(analysis, phens,flags,
                  ## expt_id specific to this database .. might be diff for global
                  verbose=F, useDB=!is.null(self$sigs), force=F){#c(y="function(y) y","function(y) y")
+   if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(names(self$data$data))
+   
    if(flags$topn<flags$beam) stop("beam should be less than topn")
    if(is.null(flags[['data_types']])) flags[['data_types']] = names(self$data$data)
    nreps = self$update(phens, flags, verbose=verbose,force=force);
@@ -542,7 +546,7 @@ dataH<-R6Class("dataH", public = list(
        plot_results[[nvar]] = mergeAll(comb2_new, flags$beam)
      }
    }
-   attr(vars_l_todo,"plots")=get_comb_plot(plot_results)
+   attr(vars_l_todo,"plots")=get_comb_plot(plot_results, nvar)
   
  vars_l_todo
  },
@@ -600,21 +604,25 @@ res_inner
  },
 post_process=function(variables, flags, phens, useDB=FALSE){
   useAngles = !is.null(flags$angles_only) && flags$angles_only
-  
-  full_index = length(variables) 
+    full_index = length(variables) 
   beams = 1:length(variables[[full_index]])
   names(beams)=beams
+  names(variables) = 1:length(variables)
+  
   vars_combined=lapply(beams, function(beam){
+    print(beam)
     vars_all = list()
     vars_all1 = list()
     vars_all2 = list()
     #vars_all3 = list() #funcstr
-    names(variables) = 1:length(variables)
     # func_inds = lapply(variables, function(vv) attr(vv,"func_ind"))
     
     for(repn in names(variables)){
       full = repn==full_index
-      
+      if(beam>length(variables[[repn]])) {
+        print("skipping")
+        next;
+      }
       var1 = variables[[repn]][[beam]]   ### only taking the top1
       var2 = var1$var_names
       if(length(var2)>0){

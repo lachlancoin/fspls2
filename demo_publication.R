@@ -48,31 +48,19 @@ print(dir(path,full=T,rec=T))
 transform_y=getYTransform(pow = 1,  n_random=1, perm=F)
 flags = list(pthresh = 0.05, max=600,nrep=10,batch=0,topn=50,beam=1,all_v_all=T,  project=T,  stop_y="rand",x_transform=T,
              checkRMSV=F,  ## for checking RMSV when building model to ensure its improving
-             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T, angles_only=F, get_plots=T)
+             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T, angles_only=F, get_plots=F)
 options("x_transform"="NA")
 
-#flags = list(pthresh = 0.2, nrep=10,batch=0, max=50,topn=100,beam=2,all_v_all=F, one_v_rest=F,x_transform=T)
-#flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)", "x3":"function(x) x^3","1x":"function(x) 1/x"}'
-#flags[['transform']] = '{"x" :"function(x) x","log" :"function(x) log1p(x)"}'
-#flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)"}'
-#flags$transform_y = toJSON(getYTransform(pows = seq(0.2,2.0,by=0.4) ,offset=0.1, n_random=10,norm=10))
-
-#flags[['transform']] = '{"x" :"function(x) x"}'
-
-#flags[['transform']] =toJSON(getXTransform(c(seq(-1,-0.2,by=0.2),seq(0.1,0.9,by=.1), seq(1,2,by=.5))))#  '{"x" :"function(x) x", "log":"function(x) log1p(x)"}'
-
-
-rawl = .readRawlinsonData(filenames=list(golub = 'coin_data/coin_multiclass_data.prepd.Rds'), path= path)
-rawl = .readRawlinsonData(filenames=list(golub = 'ng_data/ng_counts.prepd.Rds'), path= path)
-rawl = .readRawlinsonData(filenames=list(golub = 'golub_data/golub.prepd.Rds'), path= path)
-rawl = .readRawlinsonData(filenames=list(golub = 'alvez_data/alvez_data.prepd.Rds'), path= path)
+names = c('coin_data/coin_multiclass_data.prepd.Rds', 'ng_data/ng_counts.prepd.Rds','golub_data/golub.prepd.Rds', 'alvez_data/alvez_data.prepd.Rds')
+nme = names[1]
+rawl = .readRawlinsonData(filenames=list(golub =nme), path= path)
 dir("/home/unimelb.edu.au/lcoin/github/FSPLS-publication-repo/output/")
 #rds = readRDS("/home/unimelb.edu.au/lcoin/github/FSPLS-publication-repo/output/alvez_kfold_results_unweighted.Rds")
 
 
 ## MAKE THE FSPLS DATA OBJECT
-#vars = apply(rawl$golub$dataset$rna,2,var)
-#rawl$golub$dataset$rna = rawl$golub$dataset$rna[,vars>quantile(vars)[1]] ## remove low variance col
+vars = apply(rawl$golub$dataset$rna,2,var)
+rawl$golub$dataset$rna = rawl$golub$dataset$rna[,vars>quantile(vars)[1]] ## remove low variance col
 
 
 dbDir1="./"; dbDir="./"
@@ -92,7 +80,7 @@ dh = datasH[[1]]
 dh$update(phens, flags, force=T);
 vars_all=dh$select(analysis, phens , flags, verbose=F, useDB=F)
 comb_plot = attr(vars_all,"plots")
-if(!is.null(comb_plot))plot_traj(comb_plot, y="cumulative",keep_best = 5,txtsize=8,step=10)
+if(!is.null(comb_plot))traj_plots=plot_traj_all(comb_plot, y="cumulative",keep_best = 5,txtsize=8,step=10)
 vars_all1=.extractFullVars(vars_all)
 all_modelsh= dh$makeAllModels(vars_all,phens=phens,useDB=F, verbose=T)
 
