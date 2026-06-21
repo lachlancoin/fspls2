@@ -1,19 +1,24 @@
 ##SET APPROPRIATE LIB PATHS 
 
 ##SHOULD BE RUN FROM WHERE GIT CLONED TO
-.libPaths("~/R/x86_64-pc-linux-gnu-library/4.1/")
+.libPaths("~/R/x86_64-pc-linux-gnu-library/4.6/")
 options(bigmemory.allow.dimnames=TRUE)
 
-library(jsonlite)
+{
+  library(RColorBrewer)
+  library(jsonlite)
 library(R6)
 library(Matrix)
 library(glmnet)
 library(tidyr)
 library(pROC); 
-library(wCorr)
+#library(wCorr)
 library(MASS);
 library(ggplot2)
 library(nnet)  ## for multinomial
+  library(DBI); 
+  library(RSQLite);
+  library(cowplot)
 library("binom") ## for plotting
 #optional packages
 #library(bigmemory)
@@ -29,7 +34,7 @@ library("binom") ## for plotting
 #library(data.table)
 #library(R.utils)
 #library(httr);
-
+}
 ##LOAD CODE
 if(rev(strsplit(getwd(),"/")[[1]])[1]!="fspls2")stop("not in right directory")
 src1=grep(".R$",dir("./R",rec=T),v=T)
@@ -40,11 +45,17 @@ path="~/github/FSPLS-publication-repo/input"
 print(dir(path,full=T,rec=T))
 
 
-flags = list(pthresh = 0.2, nrep=10,batch=0, max=50,topn=100,beam=2,all_v_all=F, one_v_rest=F,x_transform=T)
+transform_y=getYTransform(pow = 1,  n_random=1, perm=F)
+flags = list(pthresh = 0.05, max=600,nrep=10,batch=0,topn=50,beam=1,all_v_all=T,  project=T,  stop_y="rand",x_transform=T,
+             checkRMSV=F,  ## for checking RMSV when building model to ensure its improving
+             transform_y = toJSON(transform_y), useoffset=T,useglmnet=T,loadPV=T, angles_only=F, get_plots=T)
+options("x_transform"="NA")
+
+#flags = list(pthresh = 0.2, nrep=10,batch=0, max=50,topn=100,beam=2,all_v_all=F, one_v_rest=F,x_transform=T)
 #flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)", "x3":"function(x) x^3","1x":"function(x) 1/x"}'
 #flags[['transform']] = '{"x" :"function(x) x","log" :"function(x) log1p(x)"}'
 #flags[['transform']] = '{"x" :"function(x) x","exp" :"function(x) exp(x)"}'
-flags$transform_y = toJSON(getYTransform(pows = seq(0.2,2.0,by=0.4) ,offset=0.1, n_random=10,norm=10))
+#flags$transform_y = toJSON(getYTransform(pows = seq(0.2,2.0,by=0.4) ,offset=0.1, n_random=10,norm=10))
 
 #flags[['transform']] = '{"x" :"function(x) x"}'
 
@@ -56,57 +67,46 @@ rawl = .readRawlinsonData(filenames=list(golub = 'ng_data/ng_counts.prepd.Rds'),
 rawl = .readRawlinsonData(filenames=list(golub = 'golub_data/golub.prepd.Rds'), path= path)
 rawl = .readRawlinsonData(filenames=list(golub = 'alvez_data/alvez_data.prepd.Rds'), path= path)
 dir("/home/unimelb.edu.au/lcoin/github/FSPLS-publication-repo/output/")
-rds = readRDS("/home/unimelb.edu.au/lcoin/github/FSPLS-publication-repo/output/alvez_kfold_results_unweighted.Rds")
+#rds = readRDS("/home/unimelb.edu.au/lcoin/github/FSPLS-publication-repo/output/alvez_kfold_results_unweighted.Rds")
 
 
 ## MAKE THE FSPLS DATA OBJECT
-vars = apply(rawl$golub$dataset$rna,2,var)
-rawl$golub$dataset$rna = rawl$golub$dataset$rna[,vars>quantile(vars)[1]] ## remove low variance cols
-datasAll =datasEnv$new(rawl,flags=flags) 
-datasAll$updateTransforms( toJSON(getYTransform(pows = seq(1) ,expX=T,n_random=10,norm=10)))
+#vars = apply(rawl$golub$dataset$rna,2,var)
+#rawl$golub$dataset$rna = rawl$golub$dataset$rna[,vars>quantile(vars)[1]] ## remove low variance col
 
-phens=datasAll$pheno(sep=F)
-#apply(datasAll$datas$golub$y$multinomial.y,2,sum)
-phens = phens[[1]]
-#phens$all$binomial.multiway = phens$all$binomial.multiway[2]
-## FIND VARIABLES
-#transform_y=getYTransform(n_random=10)
 
-vars_all = datasAll$select(phens, flags,verbose=T)
-vars_all1=.extractFullVars(vars_all)
-
-## FIT MODELS
-options("fspls.verbose1"=T); options("fspls.CHECK"=F)
-all_models = datasAll$makeAllModels(vars_all, phens, flags)
-eval = datasAll$evaluateAllModels(all_models, phens, flags)
-##PLOT
-ggps1=.plotEval2(eval,legend=T, grid1="subpheno", grid0="measure",
-                 shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
-                 scales="free",title =names(phens)[1], title1="pheno" ) 
-
-ggps1
-##VISUALISE PREDICTIONS
-predictions0 =datasAll$extractPredictions(all_models,phens, flags, CV = F, liab=F);
-
-predictions1 =datasAll$extractPredictions(all_models,phens, flags, CV = T, liab=F);
-
-#aa=roc(predictions[[2]]$y, predictions[[2]]$X0)
-ggps = .plotArea1(predictions1, rename=F, max=10)
-ggps
-
-### get projection
-varnames = variables[[length(variables)]]$var
-projOut=datas$getProjectedData(varnames)
-
-indices = match(lapply(varnames, function(v)v[2]), dimnames(datas$datas$golub$data$rna)[[2]])
-variance_before = datas$getVariance()
-variance_after =   lapply(projOut, function(p1){
-  lapply(p1, function(p2){
-    apply(p2,2,var,na.rm=T)
+dbDir1="./"; dbDir="./"
+datasH = lapply(names(rawl), function(n){
+  dataH$new(rawl[[n]],     dbDir = dbDir1, flags=flags, useDB=T)
   })
-})
-head(sort(unlist(variance_before),decr=T))
-head(sort(unlist(variance_after),decr=T))
+names(datasH) = names(rawl)
 
+analysis =analysisEnv$new(dbDir=dbDir, flags=flags) ;
+
+analysis$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
+phens=datasH[[1]]$pheno()$all
+#phens[[1]] = phens[[1]][3]
+#phens2 = list(phens[[1]][3]); names(phens2) = names(phens)
+flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
+dh = datasH[[1]] 
+dh$update(phens, flags, force=T);
+vars_all=dh$select(analysis, phens , flags, verbose=F, useDB=F)
+comb_plot = attr(vars_all,"plots")
+if(!is.null(comb_plot))plot_traj(comb_plot, y="cumulative",keep_best = 5,txtsize=8,step=10)
+vars_all1=.extractFullVars(vars_all)
+all_modelsh= dh$makeAllModels(vars_all,phens=phens,useDB=F, verbose=T)
+
+eval1=  dh$evaluateAllModels(all_modelsh,phens = phens, useDB=F, verbose=T)
+#}), addName="data")
+#eval1w=eval1 %>% pivot_wider(names_from = pheno, values_from=mid)
+
+ggps2=.plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0=c("measure","beam"),linetype="beam", ##"full_model"
+                 shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
+                 scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
+
+
+
+
+ggps2[[1]]
 
 

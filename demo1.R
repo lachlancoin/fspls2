@@ -103,7 +103,7 @@ analysis =analysisEnv$new(dbDir=dbDir, flags=flags) ;
 # analysis$clear_db(drop=T)
 analysis$clear_db(drop=T, exclude=c(), datasH=datasH)# this clears the attached dbs
 phens=datasH[[1]]$pheno()$all
-phens[[1]] = phens[[1]][3]
+#phens[[1]] = phens[[1]][3]
 #phens2 = list(phens[[1]][3]); names(phens2) = names(phens)
 flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
 dh = datasH[[1]] 
@@ -118,14 +118,14 @@ eval1=  dh$evaluateAllModels(all_modelsh,phens = phens, useDB=F, verbose=T)
 #}), addName="data")
 #eval1w=eval1 %>% pivot_wider(names_from = pheno, values_from=mid)
 
-ggps1=.plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0=c("measure","beam"),linetype="beam", ##"full_model"
+ggps2=.plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0=c("measure","beam"),linetype="beam", ##"full_model"
                  shape_color=c("data","transf"),sep_by=c("cv_full"), showranges=T,
                  scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
 
 
 
 
-ggps1[[1]]
+ggps2[[1]]
 
 analysis =datasEnv$new(NULL, ys,mats=mats,flags=flags) 
 

@@ -132,7 +132,7 @@ lapply(fromJSON(transform_y), function(t_y){
     yp_new = .eval1_(x_, beta_new2, Wall2, transf, family)
   }
   if(family=="multinomial"){
-    m1 = multinom_ridge(yp1,y,w)
+    m1 = multinom_ridge(yp1k,y,w)
     m2 = multinom_ridge(yp_new,y,w)
     ll2 = -0.5 * m2$dev  
     ll1 = -0.5 *m1$dev       
@@ -142,7 +142,7 @@ lapply(fromJSON(transform_y), function(t_y){
     pv1 = .lrt(ll2,ll1,df2, df1, log.p=T)
   }else if(family=="ordinal"){
     pv1 =tryCatch({
-      df1 = data.frame(cbind(y,as.matrix(yp1 )));
+      df1 = data.frame(cbind(y,as.matrix(yp1k )));
       df1$y=factor(df1$y, levels = sort(unique(df1$y)))  
       func = paste0("y~",paste(colnames(df1)[-1], collapse="+"))
       m1=polr(func,  data=df1,weights=w,Hess=T, method="logistic")
@@ -152,7 +152,7 @@ lapply(fromJSON(transform_y), function(t_y){
       ll2 =  logLik(m2)
       .lrt(ll2,ll1,2,1,log.p=T)  
     },error=function(ew){
-      m1=glm(y~yp1[,1],weights=w,family="gaussian")
+      m1=glm(y~yp1k[,1],weights=w,family="gaussian")
       m2=glm(y~yp_new[,1], weights=w,family="gaussian")
       ll2 = logLik(m2)
       ll1 =  logLik(m1)
@@ -1336,7 +1336,12 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
       }else{
         betas[[kk]] = beta_new1
       }
-       pv1 = .calcPvalue(x_[nonNA ,,drop=F] ,y, betas[[kk]], yp1[,k,drop=F],w, family,Wall2, transf)
+     # print("H")
+    #  print(dim(x_));
+    #  print(nonNA);
+    #  print(dim(y))
+    #  print(dim(yp1));
+       pv1 = .calcPvalue(x_[nonNA ,,drop=F] ,y, betas[[kk]], yp1[,kk,drop=F],w, family,Wall2, transf)
     pvs[[kk]] = pv1
       constants[[kk]] = const_term  #-mean_adj*beta_new1
   }

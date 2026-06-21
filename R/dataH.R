@@ -1,4 +1,5 @@
 
+
 mergeAll = function(comb2_new, beam){
   comb1 = .merge1_new(lapply(comb2_new, function(c){
     .merge1_new(lapply(c$angles, function(c1){
@@ -10,6 +11,26 @@ mergeAll = function(comb2_new, beam){
    o =  order(comb1$value)
    comb1[o[1:beam],]
   
+}
+
+get_comb_plot<-function(plot_results){
+  if(length(plot_results)==0) return(NULL)
+  names(plot_results) = 1:length(plot_results)
+  plot_results[[1]]$prev=""
+  comb_plot = .merge1_new(plot_results, addName="nvar");
+  comb_plot = comb_plot[comb_plot$func!="rand",,drop=F]
+  cumulative=comb_plot$value + comb_plot$sumAngle
+  
+  sigs = comb_plot$signature; 
+  maxsig=as.factor(unlist(lapply(sigs, function(sig1){
+    inds1=grep(paste0("^",sig1), comb_plot$signature)
+    #    inds1 = inds1[]
+    inds1 = inds1[which.min(cumulative[inds1])]
+    comb_plot$sig[inds1]
+  })))
+  comb_plot = comb_plot%>%tibble::add_column(cumulative, totalvar = nvar, maxsig)
+  comb_plot$nvar = as.numeric(comb_plot$nvar)
+  comb_plot
 }
 plot_traj_all<-function(comb_plot, y="value", facet="maxsig~.", keep_best=10, txtsize=5, step=2){
   nreps = unique(comb_plot$nrep); names(nreps)=nreps;
@@ -106,9 +127,10 @@ df33 = cbind(df3[,1:3],apply(df3[,-(1:3)],1,sum))
 names(df33)[4] = "angle"
 df4 = cbind(df33, df22[,4])
 names(df4)[5] = "pval"
+my_colors <- colorRampPalette(brewer.pal(12, "Paired"))(100)
+ggp1=ggplot(df1, aes(angle,pval, color=Column, shape=Row))+geom_point(alpha = alpha,size=2)+facet_grid("typ1 ~ni1")+ scale_shape_manual(values = rep(0:25, length.out = 100))+scale_color_manual(values = my_colors)
+ggp2=ggplot(df1, aes(angle,pval, color=Row, shape=Column))+geom_point(alpha = alpha,size=2)+facet_grid("typ1 ~ni1")+ scale_shape_manual(values = rep(0:25, length.out = 100))+ scale_color_manual(values = my_colors)
 
-ggp1=ggplot(df1, aes(angle,pval, color=Column, shape=Row))+geom_point(alpha = alpha,size=2)+facet_grid("typ1 ~ni1")+ scale_shape_manual(values = letters[1:26])
-ggp2=ggplot(df1, aes(angle,pval, color=Row, shape=Column))+geom_point(alpha = alpha,size=2)+facet_grid("typ1 ~ni1")+ scale_shape_manual(values = letters[1:26])
 
 
 ggp3 = ggplot(df4, aes(angle,pval, color=typ1, shape=ni1))+geom_point(alpha = alpha)
@@ -510,7 +532,7 @@ dataH<-R6Class("dataH", public = list(
            data_nme=self$nme
       comb2 = lapply(comb2_new, function(x) x$pvs)
      vars_l_todo_new=analysis$savePvalsAndNextVars(flags,phens,vars_l_todo,comb2,data_nme,  k1,logpvthresh,beam)
-   #  comb2 = comb2_new1;#lapply(comb2_new, function(x) x$angles)
+   
      vars_l_todo = vars_l_todo_new
      nvar = length(vars_l_todo$vars_l[[1]]$var)
     if(verbose) print(names(vars_l_todo$vars_l))
@@ -520,26 +542,8 @@ dataH<-R6Class("dataH", public = list(
        plot_results[[nvar]] = mergeAll(comb2_new, flags$beam)
      }
    }
-  if(get_plots){
-    names(plot_results) = 1:length(plot_results)
-    plot_results[[1]]$prev=""
-   comb_plot = .merge1_new(plot_results, addName="nvar");
-   comb_plot = comb_plot[comb_plot$func!="rand",,drop=F]
-   cumulative=comb_plot$value + comb_plot$sumAngle
-   
-   sigs = comb_plot$signature; 
-   maxsig=as.factor(unlist(lapply(sigs, function(sig1){
-     inds1=grep(paste0("^",sig1), comb_plot$signature)
-     #    inds1 = inds1[]
-     inds1 = inds1[which.min(cumulative[inds1])]
-     comb_plot$sig[inds1]
-   })))
+   attr(vars_l_todo,"plots")=get_comb_plot(plot_results)
   
-   
-   comb_plot = comb_plot%>%tibble::add_column(cumulative, totalvar = nvar, maxsig)
-   comb_plot$nvar = as.numeric(comb_plot$nvar)
-   attr(vars_l_todo,"plots")=comb_plot
-  }
  vars_l_todo
  },
 findPrev=function(comb2, expt_id, prev_i3, k){
