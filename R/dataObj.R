@@ -601,7 +601,7 @@ fitModel<-function(yTr,x1,offset=NULL, family=getOption("family","binomial"),
 dataObj<-R6Class("dataObj", public = list(
   dist="environment",
   data="list",
-  
+  db_name="character",
   dataNA="list",
   types="vector",
   nrow="integer",
@@ -826,6 +826,10 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
   }else{
     non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(T,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
   }
+  if(length(which(non_na_x))==0){
+    print(vars1);
+    stop("no non_zero");
+  }
   if(length(vars1[[j]])==0){
     x_=rep(1, self$nrow)
     }else{
@@ -854,7 +858,9 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
   }
   # x = x[non_na_x]
   varx = var(x_[non_na_x],na.rm=T)
-  if(is.na(varx) )stop("variance  NA")
+  if(is.na(varx) ){
+    stop("variance  NA")
+  }
   #if(varx<1e-10)stop("variance  too small")
   #k =NULL ##delete this later
  # transform_func_y = self$default_transform
@@ -1165,13 +1171,16 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
    
     #  if(family=="multinomial")  (x_1 %*%  Wall1) %*% betas1  else (x_[,-ncol(x_),drop=F ] %*%  Wall1) %*% betas1 [,kk,drop=F]
     
-   # if(useoffset){
+   if(useoffset){
       x = cbind(yp1[,kk], transf1$func(x1_[nonNA,1,drop=F], transf1$param))
       dimnames(x)[[2]] = c(paste0("A",1:(ncol(x)-1)),"x")
-    #}else{
-     # stop("no transformation here without offset!")
-    #  x = x_[nonNAk,,drop=F]
-    #}
+    }else{
+     # warning("no transformation here without offset!")
+      x = x_[nonNAk,,drop=F];
+     # for(kk3 in 1:ncol(x)){
+    #    transf1$func(x[,], transf1$param)
+    #  }
+    }
    # yp1 = yp1[nonNAk1,kk,drop=F]  
     if(family=="multinomial"){
        ty=as.list(table(y))
@@ -2586,6 +2595,35 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
 updateTransforms=function(transform_y){
   self$transforms =.convertToTransform(transform_y)
 },
+split=function(proportions){
+ 
+  db_name = self$db_name
+  #    p = proportions[[1]]
+  prop1 = cumsum(proportions)
+  nrow = self$nrow
+  prop2 = c(0,round(prop1*nrow))
+  inds_new = lapply(1:(length(prop2)-1), function(i){
+    start = prop2[i]+1
+    end = prop2[i+1]
+    inds = prop2[i]:prop2[i+1]
+  }); 
+  names(inds_new) =  paste(db_name,prop2[-1],sep=".")
+  mats = lapply(inds_new, function(inds){
+    nme_d = names(self$data); names(nme_d) = nme_d
+      lapply(nme_d, function(nme){
+          list(
+          matrix = self$data[[nme]][inds,,drop=F],
+          matrixNA =  self$dataNA[[nme]][inds,,drop=F]
+          )
+        })
+  })
+    ys =  lapply(inds_new, function(inds){
+      lapply(self$y, function(y1){
+      y1[inds,,drop=F]
+    })
+    })
+  list(mats = mats, ys = ys);  
+},
   initialize=function( cohort,  db_name,dbDir,flags,
                       incl_full=T,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores
    #print("H")
@@ -2597,7 +2635,7 @@ updateTransforms=function(transform_y){
      #                            data_types = names(self$datas[[1]]$data),
       #                           dims = self$dims(),
        #                          phenos =self$datas[[1]]$pheno())
-    
+    self$db_name=db_name;
     if(!is.null(memDir)){
       mem_dirp = memDir
       mem_dirp = paste(memDir,nrow(cohort$rna$matrix),sep="/")  #getOption("fspls.mem_dir", NULL)

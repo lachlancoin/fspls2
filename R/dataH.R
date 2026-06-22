@@ -363,10 +363,13 @@ dataH<-R6Class("dataH", public = list(
  #transform_y="character",
  #var_t = "list",
  nme="character",
+ dbDir="character",
   initialize=function(
     d,
     nme = "none",
     y = d$y,
+    y1=NULL, 
+    
     flags = list(),
     convertToBigMatrix=F,
     hasNA=T,
@@ -374,6 +377,7 @@ dataH<-R6Class("dataH", public = list(
     family= .getFamily(y),
     dbDir="./",
     memDir=NULL, useDB=F){
+    self$dbDir = dbDir
     nme=sub("/",".",nme)
     self$flags = flags
    # transform_y =.readFlag(flags, "transform_y",toJSON(list(x=list(unvfunc="function(y,param) y",func="function(y,param) y", param=1))))
@@ -382,6 +386,7 @@ dataH<-R6Class("dataH", public = list(
     self$sigsdir=paste(dbDir,paste0("fspls_signatures__",nme,sep="/"))
     self$sigs = list()
     #####
+    if(is.null(nme)) stop("nme should not be null")
     self$data = 
       dataObj$new(mat, nme,dbDir,flags,  
                   incl_full=T,seed = getOption("seed",42), memDir=if(is.null(memDir)) NULL else paste(memDir, nme,sep="/"))
@@ -399,6 +404,11 @@ dataH<-R6Class("dataH", public = list(
       if(!is.null(y)){  ## could be null in an evaluation only mode
       ##need to work on all_v_all
           self$data$updateY(y, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
+      }else if(!is.null(y1)){
+        ## set y directly , used in split
+        self$data$y = y1;
+        self$data$family = family;
+        self$data$weights = rep(1, nrow(y1[[1]]))
       }
       self$sigsdir=paste(dbDir,"fspls_signatures1",sep="/")
       dir.create(self$sigsdir, recursive=F, showWarnings=F)
@@ -407,6 +417,22 @@ dataH<-R6Class("dataH", public = list(
       
     
   },
+ split=function(proportions = c(0.5,0.5)){
+   datas = self$data$split(proportions);
+   mats = datas$mats;
+   ys = datas$ys;
+   nme_d = names(mats); names(nme_d) = nme_d
+   all_v_all = .readFlag(self$flags,"all_v_all",F)
+   one_v_rest = .readFlag(self$flags,"one_v_rest",F)
+   dbDir =self$dbDir;
+   #nme = nme_d[[1]]
+   lapply(nme_d, function(nme){
+     mat = mats[[nme]]
+     dh1 = dataH$new(NULL,nme=nme, y=NULL, y1=ys[[nme]], family = self$data$family, mat = mat,       dbDir = dbDir, flags=flags, useDB=!is.null(self$sigs))
+         dh1
+     
+   })
+ },
  updateTransform=function(transform_y){
    ##probably no longer relevant
    stop("no longer relevant")
@@ -474,6 +500,20 @@ dataH<-R6Class("dataH", public = list(
    names(nreps) = nreps
    nreps
  },
+ select_parallel==function(analysis, k, phens,flags,
+                           ## expt_id specific to this database .. might be diff for global
+                           verbose=F, useDB=!is.null(self$sigs), force=F){
+   if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(names(self$data$data))
+   
+   if(flags$topn<flags$beam) stop("beam should be less than topn")
+   if(is.null(flags[['data_types']])) flags[['data_types']] = names(self$data$data)
+   nreps = self$update(phens, flags, verbose=verbose,force=force);
+   vars_l_todo = analysis$getTodo(flags, phens)
+   expt_id=if(is.null(self$sigs)) 0 else self$sigs$getExpt(flags, phens, add_new=T)
+   variables = self$select_k(analysis, phens,flags, k1, expt_id, vars_l_todo,verbose=verbose)
+   variables1 =variables$vars_l;
+   variables1
+ },
  select=function(analysis, phens,flags,
                  ## expt_id specific to this database .. might be diff for global
                  verbose=F, useDB=!is.null(self$sigs), force=F){#c(y="function(y) y","function(y) y")
@@ -533,7 +573,7 @@ dataH<-R6Class("dataH", public = list(
         plot_grid(ggps[[1]], ggps[[2]], ggps[[3]])
       }
     
-           data_nme=self$nme
+           data_nme=self$nme;
       comb2 = lapply(comb2_new, function(x) x$pvs)
      vars_l_todo_new=analysis$savePvalsAndNextVars(flags,phens,vars_l_todo,comb2,data_nme,  k1,logpvthresh,beam)
    
@@ -895,11 +935,8 @@ makeAllModels=function(vars_all0,
   #v_nme = names(vars_all$variables)[1]; max=10; verbose=T; k=1;variables =vars_all$variables; 
   
   for(v_nme in names(variables)){
-
     if(verbose)print(v_nme)
     vars2 = variables[[v_nme]]
-    #     var_transf=strsplit(names(transf[[v_nme]])[[1]],"_")[[1]]
-    #    if(verbose)print(var_transf)
     vars2 = vars2[1:min(length(vars2), max)]
     inds =var_inds[[v_nme]]
     nme_ = paste(names(vars2),collapse=";")
