@@ -500,7 +500,7 @@ dataH<-R6Class("dataH", public = list(
    names(nreps) = nreps
    nreps
  },
- select_parallel==function(analysis, k, phens,flags,
+ select_parallel=function(analysis, k, phens,flags,
                            ## expt_id specific to this database .. might be diff for global
                            verbose=F, useDB=!is.null(self$sigs), force=F){
    if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(names(self$data$data))
@@ -518,8 +518,7 @@ dataH<-R6Class("dataH", public = list(
                  ## expt_id specific to this database .. might be diff for global
                  verbose=F, useDB=!is.null(self$sigs), force=F){#c(y="function(y) y","function(y) y")
    if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(names(self$data$data))
-   
-   if(flags$topn<flags$beam) stop("beam should be less than topn")
+      if(flags$topn<flags$beam) stop("beam should be less than topn")
    if(is.null(flags[['data_types']])) flags[['data_types']] = names(self$data$data)
    nreps = self$update(phens, flags, verbose=verbose,force=force);
    if( useDB && !is.null(self$sigs)){
@@ -714,6 +713,7 @@ multiAnglesAndPv=function(comb2, phens,  k1,flags, expt_id, vars_l_todo,
     varnames = prev_i2$var_names; 
        sumAngle =sum(prev_i2$angles)
       comb_=self$combinedAngles(phens, varnames, incl, k1,  g_incl, qq_t, flags, sumAngle) ;
+      if(length(comb_)==0) stop("length zero")
        # return(list(comb_angle1, all_angles));
 
       if(saveAngles) return(comb_)
@@ -744,10 +744,13 @@ simplify = function(ri){
   type=self$type
   prev_signature =paste(unlist(lapply(varnames, function(vn)vn[2])),collapse=";")
     var_t = self$var_thresh(qq_t)
-   angleH=list(angles=
-                 self$data$getAngles1(phens,varnames,incl=incl,k=k, type=type),
+    
+    angles=  self$data$getAngles1(phens,varnames,incl=incl,k=k, type=type)
+    angles =angles[ unlist(lapply(angles, length))>0]
+   angleH=list(angles=angles,
                cols_incl = self$data$cols_incl(var_t,incl, g_incl,excl=varnames)) ### fix 
   comb_angle1 =  .combineAngles1(angleH, incl, flags, sumAngle, prev_signature, excl=varnames)
+  
   all_angles = .extrAngles(angleH,comb_angle1, incl)
   attr(comb_angle1,"all")=all_angles;
   comb_angle1
