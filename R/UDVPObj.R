@@ -6,7 +6,7 @@
   U1
 }
 
-UDVPObj<-R6Class("UVDPObj", public = list(
+UDVPObj<-R6::R6Class("UVDPObj", public = list(
   P="matrix",
   inds = "vector",
   centralise="logical",

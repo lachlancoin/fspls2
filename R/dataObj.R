@@ -3,8 +3,8 @@
   measure = rmsv$measure[[1]]
   subpheno = rmsv$subpheno[[1]]
   cv = rmsv$cv[[1]]
-  rmsv_ = subset(rmsv, submeasure=="mid"& cv==cv & measure==measure & subpheno == subpheno) %>% pivot_wider(names_from="pheno", values_from="value")
-  rmsv2_ = subset(rmsv2, submeasure=="mid"& cv==cv & measure==measure & subpheno == subpheno) %>% pivot_wider(names_from="pheno", values_from="value")
+  rmsv_ = subset(rmsv, submeasure=="mid"& cv==cv & measure==measure & subpheno == subpheno) |> pivot_wider(names_from="pheno", values_from="value")
+  rmsv2_ = subset(rmsv2, submeasure=="mid"& cv==cv & measure==measure & subpheno == subpheno) |> pivot_wider(names_from="pheno", values_from="value")
 a1 = rbind(rmsv_[1,-(1:6)], rmsv2_[1,-(1:6)])
 
 a2 = cbind(c("bef","aft"),a1)
@@ -12,9 +12,9 @@ names(a2)[1] = "nme"
 a2
 }
 
-default_types=fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC"}')
+default_types=jsonlite::fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC"}')
 .convertToTransform<-function(transform_y){
-lapply(fromJSON(transform_y), function(t_y){
+lapply(jsonlite::fromJSON(transform_y), function(t_y){
   t_y1 =  lapply(t_y[1:2], function(t_y1) eval(str2lang(t_y1)))
   t_y1$params = t_y[[3]]
   .checkInverse(t_y1)
@@ -226,7 +226,7 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
         y1[y==levs[[ind2]]]=1
         y1
       })
-    }),rec=F)
+    }),recursive=FALSE)
   }))
   rownames(res) = rownames(y)
   m1 = Matrix(as.matrix(res),sparse=T)
@@ -345,46 +345,6 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
   return(T)
 }
 
-fitModel<-function(yTr,x1,offset=NULL, family=getOption("family","binomial"),
-                   weights = rep(1, length(yTr)),
-                   useBF = getOption("useBF",FALSE)){ #
-  ll=0
-  #n = dim(x)[2]
-  
-  if(is.null(offset)){
-    if(family!="multinomial"){
-      if(is.null(x1)) lm<-glm(yTr~1,family=family, weights=weights)
-      else lm<-glm(yTr~x1,family=family, weights=weights)
-    }else{
-      #offset = cbind(rep(0,dim(offset)[1]),offset)  not sure about cbind  here
-      if(is.null(x1)) invisible(capture.output({lm<-multinom(yTr~1)}))
-      else invisible(capture.output({lm<-multinom(yTr~x1)}))
-    }
-    if(useBF){
-      coe = summary(lm)$coeff
-      ll =ll+abf(coe[2,])
-    }else{
-      ll=ll+logLik(lm)
-    }
-  }else{
-  
-      if(family!="multinomial"){
-        if(is.null(x1)) lm<-glm(yTr~offset(offset),family=family, weights=weights)
-        else lm<-glm(yTr~x1+offset(offset),family=family, weights=weights)
-      }else{
-        #offset = cbind(rep(0,dim(offset)[1]),offset)  not sure about cbind  here
-        if(is.null(x1)) invisible(capture.output({lm<-multinom(yTr~offset(offset))}))
-        else invisible(capture.output({lm<-multinom(yTr~x1+offset(offset))}))
-      }
-      if(useBF){
-        coe = summary(lm)$coeff
-        ll =ll+abf(coe[2,])
-      }else{
-        ll=ll+logLik(lm)
-      }
-  }
-  ll
-}
 
 .convertOrdinalRanges<-function(f2){
   v2=unlist(lapply(names(f2), function(f3) {
@@ -434,7 +394,7 @@ fitModel<-function(yTr,x1,offset=NULL, family=getOption("family","binomial"),
           
         })
       
-      nconst=unlist(lapply(const_proj1, length),rec=T)
+      nconst=unlist(lapply(const_proj1, length),recursive=TRUE)
       dimn =  list(subpheno=phen_nmes , variables = 1:max(nconst))
       dims = c(length(phen_nmes), max(nconst))
       names(dims) = names(dimn)
@@ -483,122 +443,11 @@ fitModel<-function(yTr,x1,offset=NULL, family=getOption("family","binomial"),
 
 
 
-.convertToTrainingData1<-function(depmapData,  drug,
-                                  nme="all",
-                                  small_class_thresh = 5,
-                                   incl_data=NULL
-                                        , phenotypes = NULL){
-  .conv1=function(x) strsplit(x,"::")[[1]][1]
-  
-  if(is.null(depmapData$nme2Treatment) || !is.null(phenotypes)){
-    drug_code = drug
-    names(drug_code) = drug
-  }else{
-    drug = drug[which(drug %in% names(depmapData$nme2Treatment))]
-    mi1 = match(drug,names(depmapData$nme2Treatment))
-    drug_code =depmapData$nme2Treatment[mi1[!is.na(mi1)]]
-  }
-  
-  dat = lapply(depmapData$input_files, function(inp){
-    zd = inp$zdesc[[nme]]
-      lapply(zd,function(zd1){
-        m1 = attach.big.matrix(zd1[['vals']])
-        attr(m1,"norm")=attr(zd1,"norm")
-        attr(m1,"mean_x")=attr(zd1,"mean_x")
-        isna = attach.big.matrix(zd1[['isNA']])
-        list(vals=m1, isNA=isna)
-      })
-  })
-  pheno=NULL
-  if(is.null(phenotypes)){
-    zd = depmapData$pheno_files$pheno$zdesc[[nme]]
-   pheno = 
-     lapply(zd, function(zd1)attach.big.matrix(zd1[['vals']]))
-    pheno = lapply(pheno, function(p) {
-      p1=p$x; 
-      dimnames(p1)[[2]] =unlist(lapply(dimnames(p1)[[2]], .conv1));
-      p1
-      })
-  }
-  beam=getOption("fspls.bean",c(1,1))
-  #maxn= beam[1] *beam[2]
-  
-  trans_names = names(depmapData$transformations)
-  names(subset_nmes) = subset_nmes
-  if(!is.null(incl_data)) subset_nmes = subset_nmes[incl_data]
-  types1 = names(dat)[names(dat)!="pheno"]
-  names(types1) =types1
-  names(trans_names) = trans_names
-    data2 = lapply(types1, function(t1){
-      lapply(trans_names, function(nme_t){
-          d1 = dat[[t1]][[nme_t]][['vals']]
-          if(is.null(d1)) {
-            d1 = dat[[t1]][[nme_t]][['vals']]
-          }
-      d1
-    })
-    })
-    data2Na = lapply(types1, function(t1){
-      lapply(trans_names, function(nme_t){
-        d1 = dat[[t1]][[nme_t]][['isNA']]
-        if(is.null(d1)) {
-          d1 = dat[[t1]][[nme_t]][['isNA']]
-        }
-        d1
-      })
-    })
-    
-    data = unlist(data2, recursive=F)
-    dataNA = unlist(data2Na, recursive=F)
-    names(data) = gsub("\\.",":", names(data))
-    names(dataNA) = gsub("\\.",":", names(dataNA))
-    y_matr = if(is.null(phenotypes)) pheno[[nme]] else phenotypes
-    if(is.null(rownames(y_matr)[[1]]))stop(" row names cannot be null ")
-    mi2 =match(rownames(data[[1]]), rownames(y_matr))
-    
-#    y = as.matrix(y_matr[,grep(drug_code, dimnames(y_matr)[[2]]),drop=F])
-    mi=match(drug_code, dimnames(y_matr)[[2]])
-    if(length(which(is.na(mi)))>0){
-    #  stop(paste("did not find phenotype", paste(drug_code, collapse=",")))
-      y = data.frame(array(0,dimnames =list(rownames(data[[1]]), drug_code) , dim = c(nrow(data[[1]]),length(drug_code))))
-    
-    } else{   
-    #print(mi2)
-      y = y_matr[mi2,mi,drop=F]
-      dimnames(y)[[2]] = names(drug_code)
-    }
-    fam = getOption("family",NULL)
-    for(k in 1:ncol(y)){
-       if(!is.null(fam) && fam[k]=="multinomial"){
-          y [,k] = factor(y[,k])
-        }
-      if(is.factor(y[,k])){
-        if(length(levels(y[,k]))>2){
-        ##levels from most to least abundant
-        y[y[,k] %in% names(which(table(y[,k])<small_class_thresh)),]=NA
-        
-        y[,k] = factor(y[,k], levels = names(sort(table(as.character(y[!is.na(y[,k]),k])),decr=T)))
-        }else{
-        #  y[,k] = as.numeric(y[,k])-1
-        }
-      }
-    }
-    #print(head(y))
-    if(length(drug)==1 && drug_code!=drug) dimnames(y)[[2]]=names(drug_code)
-    weights = apply(y, c(1,2), function(c) 1)
-    ones = weights
-    y = data.frame(y)
-    family=if(!is.null(getOption("family",NULL))) getOption("family") else .inferFamily(y)
-    #print(paste("family",family))
-    res=dataObj$new(data,dataNA,y,family, weights)
-  res
-}
 
 
 
 
-
-dataObj<-R6Class("dataObj", public = list(
+dataObj<-R6::R6Class("dataObj", public = list(
   dist="environment",
   data="list",
   db_name="character",
@@ -606,6 +455,7 @@ dataObj<-R6Class("dataObj", public = list(
   types="vector",
   nrow="integer",
   vars="list",
+  direction="character",
 #  var_thresh="double",
 transforms = "list",  ## this is the functions
 #transform_y="list", ## this is the string
@@ -722,7 +572,7 @@ mult = grep("multinomial",names(phens))
        names(l3) = nme
        l3
    })
-   return( c(l12,(unlist(l1,rec=F))))
+   return( c(l12,(unlist(l1,recursive=FALSE))))
   }else{
     return(list(all=phens))
   }
@@ -931,29 +781,10 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
         const_term = sm$coefficients[1,1]
       }
     }else{
-      spike_slab_iter = getOption("spike_slab_iter",0)
+     # spike_slab_iter = getOption("spike_slab_iter",0)
       nonNAy = !is.na(y)
       if(length(which(nonNAy))==0){
         const_term =0; beta_new1 = 0
-      }else if(spike_slab_iter>1){
-        # print("using spike slab")
-        #ab2 = lm.spike(x~y, niter=spike_slab_iter, ping -1)
-        ab2=lm.spike(x~y, niter= spike_slab_iter, ping =-1)#,weights=w)
-        sm = summary(ab2)
-        pv1=max(1e-20,1-sm$coefficients[1,5])
-        if(family=="binomial"){
-          ab=logit.spike(y~x, niter= spike_slab_iter, ping =-1)
-        }else{
-          #if(getOption("logprint",F)) print("gaussian spike slab")
-          ab=lm.spike(y~x, niter= spike_slab_iter, ping =-1)#,weights=w)
-          
-        }
-        sm = summary(ab)
-        x_ind = match(c("x","(Intercept)"),dimnames(sm$coefficients)[[1]])
-        coeff = sm$coefficients[x_ind[1],c(1,2,3,5)]
-        const_term = sm$coefficients[x_ind[2],1]
-        beta_new1=coeff[1]
-        pv1 = 1-coeff[4]
       }else{
         if(useglm){
           sm2<- tryCatch({
@@ -1223,28 +1054,10 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
       }
     }else{
       nonNAy = !is.na(y)
-      spike_slab_iter = getOption("spike_slab_iter",0)
+      #spike_slab_iter = getOption("spike_slab_iter",0)
       if(length(which(nonNAy))==0){
         const_term=0; beta_new1 = rep(0,ncol(x))
-      }else if(spike_slab_iter>1){
-        # print("using spike slab")
-        #ab2 = lm.spike(x~y, niter=spike_slab_iter, ping -1)
-        ab2=lm.spike(as.matrix(x)~y, niter= spike_slab_iter, ping =-1)#,weights=w)
-        sm = summary(ab2)
-        if(family=="binomial"){
-          ab=logit.spike(y~as.matrix(x), niter= spike_slab_iter, ping =-1)
-        }else{
-          #if(getOption("logprint",F)) print("gaussian spike slab")
-          ab=lm.spike(y~x, niter= spike_slab_iter, ping =-1)#,weights=w)
-          
-        }
-        stop("redo")
-        sm = summary(ab)
-        x_ind = match(c("x","(Intercept)"),dimnames(sm$coefficients)[[1]])
-        coeff = sm$coefficients[x_ind[1],c(1,2,3,5)]
-        const_term = sm$coefficients[x_ind[2],1]
-        beta_new1=coeff[1]
-      }else{
+      }else {
        
         if(useglm){
           if(CHECK && FALSE){
@@ -1658,13 +1471,13 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x 
        c(incl,g)
       })
     })
-    vars = unlist(vars1,rec=F)
+    vars = unlist(vars1,recursive=FALSE)
   }
   into=c("data","gene")
   
   if(!is.null(transform_x) && all_types){
     nmev = names(vars)
-    transform_x1 = fromJSON(transform_x)
+    transform_x1 = jsonlite::fromJSON(transform_x)
     nme_t = names(transform_x1)
     to_repl=paste0("_",names(transform_x1))
     for(kk in nme_t){
@@ -1708,7 +1521,7 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x 
   nme_df = names(df); names(nme_df) = nme_df
   df4 = .merge1_new(lapply(nme_df, function(nmedf1){
     df_k = df[[nmedf1]]
-    df3=df2 %>% tibble::add_column(y=df_k) %>% pivot_longer(names(df2)) %>% separate("name",sep="__", into=into)
+    df3=df2 |> tibble::add_column(y=df_k) |> pivot_longer(names(df2)) |> separate("name",sep="__", into=into)
   }),addName="pheno")
   df4$y = factor(df4$y)
   df4 = subset(df4, !is.na(y))
@@ -1784,8 +1597,8 @@ ypred=function(phens1){
   family = unlist(lapply(names(phens1), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1])))
   ypr = ypredObj$new(self,self$phensi(phens1),family=family)
   ypr
-},# inverse_func_strs = fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
-#all_models_y = all_models$y; inverse_func_str = fromJSON(flags1$transform_y_inverse)[[1]]; self = datasAll$datas[[1]]
+},# inverse_func_strs = jsonlite::fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
+#all_models_y = all_models$y; inverse_func_str = jsonlite::fromJSON(flags1$transform_y_inverse)[[1]]; self = datasAll$datas[[1]]
 evaluateAllModels=function(all_models_y,phens,flags,
                            ypred = self$ypred(phens), #lapply(phens, function(phens1) self$ypred(phens1)),
                            verbose=F
@@ -1821,12 +1634,12 @@ evaluateAllModels=function(all_models_y,phens,flags,
               }
               names(all_models2) = NULL
               names(all_models2_full) = NULL
-              all_models3 = unlist(all_models2,rec=F)
-              all_models3_full = unlist(all_models2_full,rec=F)
+              all_models3 = unlist(all_models2,recursive=FALSE)
+              all_models3_full = unlist(all_models2_full,recursive=FALSE)
               full_model = all_models3[["full"]]
                full_model_nme=paste(names(full_model$var_names), collapse=";")
-              nmesm = grep("full",names(all_models3),inv=T,v=T);
-              nmesm_full = grep("full",names(all_models3_full),inv=T,v=T);
+              nmesm = grep("full",names(all_models3),inv=T,value=TRUE);
+              nmesm_full = grep("full",names(all_models3_full),inv=T,value=TRUE);
               inds=as.numeric(nmesm); 
               inds_full = as.numeric(nmesm_full)
               res1 = NULL; res2 = NULL; res3 = NULL
@@ -1836,7 +1649,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
                 ypred$updateYP(d, full_model, nonNA, inv_transform_y = inv_transform_y, flip=FALSE, liab=liab)
                 res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)
                # print(res1);
-                res1 = res1 %>% tibble::add_column(isfull=T, model=full_model_nme)
+                res1 = res1 |> tibble::add_column(isfull=T, model=full_model_nme)
                 #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
               }
               if(length(nmesm)>0){
@@ -1849,7 +1662,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
                 nonNA=self$getNonNAInds(inds)
-                res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)%>% tibble::add_column(isfull=F,model="cv")
+                res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=F,model="cv")
               }
               if(length(nmesm_full)>0){
                 #transf=c()
@@ -1861,7 +1674,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
                 nonNA=self$getNonNAInds(inds_full)
-                res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)%>% tibble::add_column(isfull=T,model=full_model_nme)
+                res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=T,model=full_model_nme)
               }
               rbind(res1,res2,res3)
 #        }),addName="model")
@@ -1896,7 +1709,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
       nxt_v
     })
     self$train[[k]]$prev_old = self$train[[k]]$prev
-    self$train[[k]]$prev=unlist(best_all, rec=F)
+    self$train[[k]]$prev=unlist(best_all, recursive=FALSE)
   },
   getMaxBetaProj=function(){
     #     lapply(self$prevs, function(prevk){
@@ -1978,7 +1791,9 @@ getVariance=function(){
     if(typeof(self$data[[ik]])=="S4"){
     return(sparse_variance(self$data[[ik]]))
     }else{
-      return(biganalytics::apply(self$data[[ik]], 2,var, na.rm=T))
+      return(apply(self$data[[ik]], 2,var, na.rm=T))
+      
+      #return(biganalytics::apply(self$data[[ik]], 2,var, na.rm=T))
     }
   })
 },
@@ -2017,7 +1832,7 @@ saveParquet=function(){
     print(nme1)
     xx = mem_dirs[[nme1]]
     if(length(self$norms_list[[nme1]])>0){
-      files = grep(".pq",dir(xx, full=T),v=T)
+      files = grep(".pq",dir(xx, full=T),value=TRUE)
       out_F= paste(xx, paste0(length(files)+1,".gz.pq"),sep="/")
       dat2=as_tibble(self$norms_list[[nme1]])
    # print(names(dat2))
@@ -2097,7 +1912,9 @@ getNorm=function(W,var,ik,type){
   #    print("done calc")
   }else{  ## not currently used
     x3 =  self$data[[ik]]-  self$UDVP$P %*%W
-      norm = -1*biganalytics::apply(x3,2,function(g) sqrt(sum((g-mean(g))^2)))
+    norm = -1*apply(x3,2,function(g) sqrt(sum((g-mean(g))^2)))
+    
+#      norm = -1*biganalytics::apply(x3,2,function(g) sqrt(sum((g-mean(g))^2)))
   }
  # print(paste("updating", length(self$norms_list[[ik]])))
   if(getOption("store.norm",TRUE)){
@@ -2119,24 +1936,8 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
  # nonNA = lapply(d$nonNA,t)
 #  yTr[,!nonNA]=0
      if(assoc){
-       stop("rethink this")
-       if(!is.null(self$dataNA)) stop(" should have NA in matrix for this")
-       #const_term = 0 ##NEED TO THINK ABOUT THIS
-       offset = NULL #rep(const_term,nrow(y))
-       angle = matrix(1e9, nrow=nrow(yTr),ncol=ncol(x))
-       #x1
-       #ll0 = fitModel(y[,1],NULL,offset)#,indices)
-       for(kk in 1:ncol(y)){
-         ##this assumes NAs are NAs not in diff matrix
-         lls = apply(x[nonNA,self$cols_incl[[ik]]],2,function(v){
-           nonNAv = !is.na(v)
-           fitModel(y[nonNA,kk][nonNAv],v[nonNAv],offset)#,indices)
-         })
-         
-         lls = -1*lls
-        
-         angle[kk,self$cols_incl[[ik]]] = lls
-       }
+      stop("not supported")
+      
      }else{
         norm = self$getNorm(W,var, ik, type)
         norm_sel = abs(norm[unlist(lapply(var, function(v) if(v[1]==ik) v[2] else NULL))])
@@ -2166,8 +1967,20 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
               product=product-  PY %*% W  #[,self$cols_incl[[ik]],drop=F]
              # dimnames(product) = dimnames(self$train$products[[ik]][[ii]])
             }
-            angle_1= t(abs(product[]))/(norm)
-            if(nrow(angle_1) !=nrow(yTr1)) angle_1 = t(angle_1)
+            direction=self$direction
+           # print(paste("dir",direction));
+            if(direction=="+"){
+              angle_1= t((product[]))/(norm)
+              angle_1[angle_1>0]=999
+            }else if(direction=="-"){
+              angle_1= -1* (t((product[]))/(norm))
+              angle_1[angle_1>0]=999
+              
+            }else{
+              angle_1= t(abs(product[]))/(norm)
+            }
+            if(ncol(angle_1) != length(norm) || colnames(angle_1)[1]!=names(norm)[1]) angle_1 = t(angle_1)
+            #if(nrow(angle_1) !=nrow(yTr1)) angle_1 = t(angle_1)
             if(length(to_rem)>0){
                 angle_1[,to_rem]=999  #after we project out the projected out columns have zero norm
             }
@@ -2276,7 +2089,7 @@ storeWeights = function(flags, remote=""){
                  family = toJSON(self$family),
                  offset= json$offset, weights = json$weights, date = date(), flags = toJSON(flags), ip=remote)
   }), addName="name")
-  df1 = df1 %>% tibble::add_column(size= unlist(lapply(df1$name, function(x) length(strsplit(as.character(x),",")[[1]]))))
+  df1 = df1 |> tibble::add_column(size= unlist(lapply(df1$name, function(x) length(strsplit(as.character(x),",")[[1]]))))
   try(dbWriteTable(dist$mydb, "weights", df1,overwrite=F,append=T)
 )
 },
@@ -2361,7 +2174,7 @@ updateTrain=function(phens,flags, transform_y= flags$transform_y, verbose=F, for
     self$transforms = transforms
   nrep = ncol(self$looc$incl)
   if(verbose) print("update train")
-  incls = fromJSON(.readFlag(flags,'data_types',"{}")) 
+  incls = jsonlite::fromJSON(.readFlag(flags,'data_types',"{}")) 
   if(length(incls) == 0 )incls = list("all"=names(self$data))
   incls_all = unique(unlist(incls))
   if(length(self$train)!=nrep  ||  is.null(self$train[[1]]) || self$train[[1]]$diffTransforms(transforms)){ # || toJSON(self$train[[1]]$func_str)!=toJSON(transform_y)){
@@ -2405,7 +2218,8 @@ updateLOOC=function(phens,flags,varn=c(), force=F, verbose=F){
   self$prev = list()
   nrep = ncol(self$looc$incl)
   var = self$extractVar(varn)
-  Wall = if(length(var)==0) matrix(nrow=0, ncol=0) else  .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
+  if(length(var)>0) stop("need to reimplement calcWall_2 for this")# .calcWall_2(self, var)# lapply(datas, function(x) return(matrix(nrow=0, ncol=0)))
+  Wall =  matrix(nrow=0, ncol=0) 
   for(k in 1:nrep){
     #  print(k)
     #    phensi,data, betas_new, constants_proj,  k, #mean_y,
@@ -2451,7 +2265,12 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
       var_res
   })
 },
-  updateY=function(y1,    family=NULL,CHECK=T, all_v_all=F, one_v_rest=F){ ## updates y
+  updateY=function(y1,preprocessed=F,family=NULL,CHECK=T, all_v_all=F, one_v_rest=F){ ## updates y
+    if(preprocessed){
+      self$y = y1;
+      self$family = family;
+      self$weights = rep(1, nrow(y1[[1]]))
+    }
     if(is.null(rownames(y1))){
       if(nrow(y1)==nrow(self$data[[1]])){
         rownames(y1) = rownames(self$data[[1]])
@@ -2513,8 +2332,8 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
     if(all_v_all) names(y) = gsub("multinomial","binomial.multiway",names(y))
     if(one_v_rest) names(y) = gsub("multinomial","binomial",names(y))
    self$family = unlist(lapply(names(y), function(nme) rep(gsub(".multiway","",nme),
-                                                           if(is.list(y[[nme]])) length(y[[nme]]) else ncol(y[[nme]]))),rec=F)
-   self$y = unlist(y, rec=F)
+                                                           if(is.list(y[[nme]])) length(y[[nme]]) else ncol(y[[nme]]))),recursive=FALSE)
+   self$y = unlist(y, recursive=FALSE)
    self$weights = rep(1, length(mi1))
     return(NULL)
    # list(missing=missing_vals, matching=matching_vals)
@@ -2528,11 +2347,11 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
       names(nme_data) = nme_data
       mem_dirs = lapply(nme_data,function(xx){
         d1 = paste(mem_dirp,nme,xx,sep="/") 
-        dir.create(d1, rec=T)
+        dir.create(d1, recursive=TRUE)
         d1
       })
       self$norm_done = lapply(mem_dirs,function(xx){
-        open_dataset(xx)%>% collect()
+        open_dataset(xx)|> collect()
       })
       self$mem_dirs = mem_dirs
     }else{
@@ -2545,7 +2364,7 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
     types_m = subset(dist$types, type %in%types)
     matrices_all = lapply(types_m$rds, function(rds){
       fi = paste0("^",rev(strsplit(rds,"./")[[1]])[1],".")
-      fi1= grep(fi,dir(dist$dir),v=T)
+      fi1= grep(fi,dir(dist$dir),value=TRUE)
       names(fi1) = unlist(lapply(fi1, function(fi2){
         rev(strsplit(fi2,"\\.")[[1]])[1]
       }))
@@ -2582,7 +2401,8 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
     self$norm = lapply(self$data, function(d1) {
       normm = attr(d1,"norm")
       if(is.null(normm)){
-        normm=   -1 *biganalytics::apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
+        #normm=   -1 *biganalytics::apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
+        normm=   -1 *apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
         
       }
       #      print(normm)
@@ -2635,6 +2455,7 @@ split=function(proportions){
      #                            data_types = names(self$datas[[1]]$data),
       #                           dims = self$dims(),
        #                          phenos =self$datas[[1]]$pheno())
+    self$direction = .readFlag(flags,'direction','none');
     self$db_name=db_name;
     if(!is.null(memDir)){
       mem_dirp = memDir
@@ -2644,12 +2465,12 @@ split=function(proportions){
      names(nme_data) = nme_data
      mem_dirs = lapply(nme_data,function(xx){
        d1 = paste(mem_dirp,xx,sep="/") 
-       dir.create(d1, rec=T)
+       dir.create(d1, recursive=TRUE)
        d1
      })
      
      self$norm_done = lapply(mem_dirs,function(xx){
-       open_dataset(xx)%>% collect()
+       open_dataset(xx)|> collect()
      })
      self$mem_dirs = mem_dirs
     }else{
@@ -2715,7 +2536,9 @@ split=function(proportions){
          # normm=   -1 *apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
           normm = -1*sparse_norm(d1)
         }else{
-        normm=   -1 *biganalytics::apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
+          #normm=   -1 *biganalytics::apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
+          
+        normm=   -1 *apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
         }
       }
 #      print(normm)

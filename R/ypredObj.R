@@ -247,49 +247,7 @@ liability<-function(xM){ ## use with glmnet output
   }
   d2
 }
-.calcYpred_1<-function(prev_i1, data1, ind_1,
-                       kk=1,kk1="",
-                       betas1 = prev_kj$betas[[kk1]],
-                       transforms = NULL,
-                       constants= prev_i1$constants_proj[[kk]]
-                       #constants= unlist(prev_kj$constants_proj)
-){
- 
- 
-  #betas =  prev_i1$betas[[kk1]]
-  vars1 = prev_i1$var
-  yp = .rep(constants, length(which(ind_1)))
-  
-  if(length(vars1)==0) return(yp)
-  #betas1 = prev_i1$betas[[kk]]
-#  mean_x = prev_i1$mean_x
-  
-#  y1_off = mean_x %*% betas1
-  
- #print(y1_off)
- 
-#  yp = .rep(constants+y1_off[1,1], length(which(ind_1)))
-  
-  incl1 = unlist(lapply(vars1, length))>1
-  df1 = as.matrix(data.frame(vars1[incl1]))
-  betas1 = betas1[incl1,,drop=F]
 
-    if(nrow(df1)>0){
-    for(kj in 1:length(data1)){
-      inds_11 = which(df1[1,]==kj)
-      meanx = prev_i1$mean_x[inds_11]
-    #  yp =  betas1[inds_11,,drop=F]*meanx%*%
-      #print(meanx)
-      if(length(inds_11)>0){
-        d2 = .extract1(data1[[kj]],ind_1, df1, inds_11 ,transforms)
-        
-        prod=d2%*% betas1[inds_11,,drop=F]
-        yp = yp + prod
-      }
-    }
-  }
-  as.matrix(yp) 
-}
 
 
 rmse_interval <- function(rmse, deg_free, p_lower = 0.025, p_upper = 0.975){
@@ -367,35 +325,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
   m1 = cbind(v[-length(v)], v[-1], ty3)
   sum(apply(m1,1,function(v2) (v2[1] - v2[2])*v2[3]))
 }
-.calcAUCW<-function(ypred,y, w,
-                    conf.level=getOption("conf.level",0.95)
-                    ){
-  if(TRUE){
-    if(length(which(y==1))==0 || length(which(y==0))==0 ) return(c(0,0.5,1))
-    ##NOTE THE WEIGHTED VERSION SEEMS NOT TO WORK WELL
-  #  print(y)
-  #  print(ypred)
-    roc1=try(roc(y,ypred, quiet=T))
-    if(inherits(roc1,"try-error")){
-      return(rep(NA,3))
-    }
-    #print(ci(roc1)[1:3])
-   cir = ci(roc1, conf.level=conf.level)[1:3]
-   if(is.na(cir[2])) cir[2] = roc1$auc
-   if(is.na(cir[1])) cir[1] = 0
-   if(is.na(cir[3])) cir[3] = 1
-   return(cir)
-  }
-  
-  tw = table(w)
-  nw = as.numeric(names(tw))
-  tw = tw * nw
-  tw = tw/sum(tw)
-  #   print("H")
-  #  print(w)
-  aucs=data.frame(lapply(nw, function(w1) .calcAUCW1(y,ypred, w==w1,q=q)))
-  apply(aucs,1,function(auc) sum(auc*tw))
-}
+
 .logistic<-function(y ) 1.0 / ( 1.0 + exp(-y))
 .slug<-function(x){
  gsub("/",".", gsub(" ",".",gsub("^X","",x)))
@@ -583,7 +513,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
   #})
 }
 
-ypredObj<-R6Class("ypredObj", public = list(
+ypredObj<-R6::R6Class("ypredObj", public = list(
   wname="char",
   ypreds="list",
   weights="list",
@@ -789,12 +719,12 @@ calcRMSV=function(y, nonNA,      flip=F){
             df12[,2]=as.numeric(df12[,2])
           }
           df12
-        }), num_cols="value", addName="measure")%>% tibble::add_column(nsamps = nsamps, cv=flip)
+        }), num_cols="value", addName="measure")|> tibble::add_column(nsamps = nsamps, cv=flip)
     })
     rms_2 = .fixBeforeMerge(rms_1)
     df3=.merge1_new(rms_2,num_cols="value", addName="pheno")
     if(!("subpheno" %in% names(df3))){
-      df3 = df3 %>% tibble::add_column(subpheno="")
+      df3 = df3 |> tibble::add_column(subpheno="")
     }
     df3    
   })
@@ -850,7 +780,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
 .calcMissing<-function(yp, lower, upper){
   M = length(which(yp>=lower & yp<=upper))
   T = length(yp)
-  a=binom.confint(M,T, method="probit",conf.level=getOption("conf.level",0.95))
+  a=binom.confint(M,T, methods="probit",conf.level=getOption("conf.level",0.95))
   res = c(a$lower, a$mean, a$upper) 
   names(res)=c("low","mid","high")
   res
@@ -870,7 +800,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   #  TP=length(which(y1[o][(pos+1):length(y1)]==1))
   
   if(P==0) return (c(NA,NA,NA))
-  a=binom.confint(TP,P, method="prop.test",conf.level=getOption("conf.level",0.95))
+  a=binom.confint(TP,P, methods="prop.test",conf.level=getOption("conf.level",0.95))
   res=c(a$lower, a$mean, a$upper)
   names(res)=c("low","mid","high")
   res
@@ -879,7 +809,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   P =length( which( y1==1))
   N =length( which( y1==0))
   if(P+N==0) return (c(NA,NA,NA))
-  a=binom.confint(P,P+N, method="prop.test", conf.level=getOption("conf.level",0.95))
+  a=binom.confint(P,P+N, methods="prop.test", conf.level=getOption("conf.level",0.95))
   
   res=c(a$lower, a$mean, a$upper)
   names(res)=c("low","mid","high")
@@ -906,7 +836,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   FN = length(which(y1[yp<thresh]==1))
   TN = length(which(y1[yp<thresh]==0))
   if(2*TP+FP+FN==0) return(rep(NA,3))
-  a=binom.confint(2*TP,2*TP+FP+FN, method="probit",conf.level=getOption("conf.level",0.95))
+  a=binom.confint(2*TP,2*TP+FP+FN, methods="probit",conf.level=getOption("conf.level",0.95))
   res=c(a$lower, a$mean, a$upper)
   names(res)=c("low","mid","high")
   res
@@ -918,7 +848,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   TN = length(which(y1[yp<thresh]==0))
   if(TN+FN==0) return(c(NA,NA,NA))
   #print(paste(TN, FN))
-  a=binom.confint(TN,TN+FN, method="probit",conf.level=getOption("conf.level",0.95))
+  a=binom.confint(TN,TN+FN, methods="probit",conf.level=getOption("conf.level",0.95))
   res=c(a$lower, a$mean, a$upper)
   names(res)=c("low","mid","high")
   res
@@ -928,7 +858,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   TP = length(which(y1[yp>=thresh]==1))
   FP = length(which(y1[yp>=thresh]==0))
   if(TP+FP==0) return(c(NA,NA,NA))
-  a=binom.confint(TP,TP+FP, method="probit",conf.level=getOption("conf.level",0.95))
+  a=binom.confint(TP,TP+FP, methods="probit",conf.level=getOption("conf.level",0.95))
   res=c(a$lower, a$mean, a$upper)
   names(res)=c("low","mid","high")
   res
@@ -946,7 +876,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   #TN = length(which(y1[o][(pos+1):length(y1)]==0))
   #TP1 = length(which(y1[o][1:pos]==1))
   if(N==0) return (c(NA,NA,NA))
-  a=binom.confint(TN,N, method="prop.test",conf.level=getOption("conf.level",0.95))
+  a=binom.confint(TN,N, methods="prop.test",conf.level=getOption("conf.level",0.95))
   
   res=c(a$lower, a$mean, a$upper)
   names(res)=c("low","mid","high")
@@ -958,7 +888,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   TP = length(which(y1[yp>=thresh]==1))
   FP = length(which(y1[yp>=thresh]==0))
   if(TP+FP==0) return( rep(NA,3))
-  a=binom.confint(TP,TP+FP, method="prop.test",conf.level=getOption("conf.level",0.95))
+  a=binom.confint(TP,TP+FP, methods="prop.test",conf.level=getOption("conf.level",0.95))
   res=c(a$lower, a$mean, a$upper)
   names(res)=c("low","mid","high")
   res
@@ -968,7 +898,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   TN = length(which(y1[yp<thresh]==0))
   FN = length(which(y1[yp<thresh]==1))
   if(TN+FN==0) return (rep(NA,3))
-  a=binom.confint(TN,TN+FN, method="prop.test",conf.level=getOption("conf.level",0.95))
+  a=binom.confint(TN,TN+FN, methods="prop.test",conf.level=getOption("conf.level",0.95))
  res= c(a$lower, a$mean, a$upper)
  names(res)=c("low","mid","high")
  res

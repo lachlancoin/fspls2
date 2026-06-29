@@ -7,7 +7,7 @@
 
 
 
-trainObj<-R6Class("trainObj",
+trainObj<-R6::R6Class("trainObj",
                   public = list(
                     yTr="list",
                     k="numeric",

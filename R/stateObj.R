@@ -1,18 +1,18 @@
 
 
 
-.calcWall_2<-function(data,  var){
-  prev_i = list(Wall =matrix(nrow=0, ncol=0) , var = c() )
-  for(k in 1:length(var)){
-    Wall2 = .calcWall_1(data, var[[k]], prev_i)
-    prev_i = list(Wall = Wall2, var = var[1:k])
-  }
-  prev_i$Wall
-}
+#.calcWall_2<-function(data,  var){
+#  prev_i = list(Wall =matrix(nrow=0, ncol=0) , var = c() )
+#  for(k in 1:length(var)){
+#    Wall2 = .calcWall_1(data, var[[k]], prev_i)
+#    prev_i = list(Wall = Wall2, var = var[1:k])
+#  }
+#  prev_i$Wall
+#}
 #colk is family col
 
 
-mStateObj<-R6Class("mStateObj",
+mStateObj<-R6::R6Class("mStateObj",
                    public = list(
                      var="list",
                      logpvs="vector",
@@ -35,7 +35,7 @@ mStateObj<-R6Class("mStateObj",
                    )
 )
 
-stateObj<-R6Class("stateObj",##represents a state of the model
+stateObj<-R6::R6Class("stateObj",##represents a state of the model
                   public = list(
                     var="list", var_names="list",
                     varnames="list",

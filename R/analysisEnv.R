@@ -87,83 +87,50 @@
 #    }
 
 
-analysisEnv<-R6Class("analysisEnv", public = list(
-  #datasH = "list",
-  type="character",
-  sigsdir="character",
-  sigs="environment",
-  flags ="list",
-  #transform_y="character",
-  initialize=function(
-   #           datasH,
-              flags = list(),
-              dbDir="./"
-                    ){
-    nme1="combined"
-    self$flags = flags
-    #self$datasH = datasH
-   # self$transform_y =.readFlag(flags, "transform_y",toJSON(list(x=list(unvfunc="function(y,param) y",func="function(y,param) y", param=1))))
-    ### MAKE SIGNATURE DIRECTORY
-    self$sigsdir=paste(dbDir,"fspls_signatures",sep="/")
-    #self$datasH = datasH 
-    #self$sigs=   sigEnv$new(self$sigsdir,nme1)
-    self$sigs=    sigEnv$new(self$sigsdir,nme1,flags, NULL, clear=F)
-    
-  },
-  updateData=function(datasH, data_names =names(datasH), 
-                      data_types = names(datasH[[1]]$data$data),
-                      dims   = lapply(datasH, function(data) data$dims())
-                   ){
-    self$transform_y= self$sigs$updateData(data_flags = self$flags, 
-                                           data_names =data_names, 
-                                           data_types = data_types,
-                                           dims = dims,
-                                           transform_y = self$transform_y)
-  },
- 
-  clear_db=function(drop=F,exclude="vars", datasH = NULL){
-    if(drop){
-      if(!is.null(self$sigs))self$sigs$drop_all(exclude=exclude)
-      if(!is.null(datasH)){
-        lapply(datasH, function(dh) dh$clear_db(drop=drop, exclude=exclude))
+#' analysisEnv
+#'
+#' @description A class that encapsulates a FSPLS analysis of multiple datasets
+#'
+#' @export
+analysisEnv<-R6::R6Class("analysisEnv", 
+  private = list(
+    type="character",
+    sigsdir="character",
+    sigs="environment",
+    flags ="list",
+    updateData=function(datasH, data_names =names(datasH), 
+                        data_types = names(datasH[[1]]$data$data),
+                        dims   = lapply(datasH, function(data) data$dims())
+    ){
+      private$transform_y= private$sigs$updateData(data_flags = private$flags, 
+                                                   data_names =data_names, 
+                                                   data_types = data_types,
+                                                   dims = dims,
+                                                   transform_y = private$transform_y)
+    },
+    nextVars=function(flags, phens, vars_l_todo,  k1,logpvthresh,beam,stop_y="rand", verbose=F){
+      vars_l = vars_l_todo$vars_l
+      todo1 = vars_l_todo$todo1
+      expt_id=private$sigs$getExpt(flags, phens, add_new=T)
+      useAngles = !is.null(flags$angles_only) && flags$angles_only
+      angles_all = lapply(vars_l, function(vars_l1){
+        varnames = vars_l1$var_names; 
+        res_inner1 = private$sigs$loadPvals(expt_id, varnames,k1) ## reconstruct ri
+        nxt_vars1=.mergeResInner(res_inner1)
+        nxt_vars1 =nxt_vars1[unlist(lapply(nxt_vars1, length))>0]
+        if(length(nxt_vars1)==0) return(NULL)
+        nxt_vars1
+      })
+      
+      angles_all = angles_all[unlist(lapply(angles_all, length))>0]
+      if(length(angles_all)==0){
+        vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1[-1])
+        return(vars_l_todo)
       }
-    }else{
-      warning("need to set drop=T if you are sure, this will delete all saved signatures")
-    }
-    
-  },  
-  
- 
-
- savePvalsAndNextVars=function(flags,phens, vars_l_todo,comb2,data_nme, k1,logpvthresh,beam,stop_y="rand", verbose=F){
-   
-   if(!is.null(flags$angles_only) && flags$angles_only) logpvthresh =0;
-      self$savePvals(flags,phens,k1, data_nme, vars_l_todo$vars_l,comb2)
-    self$nextVars(flags,phens, vars_l_todo,  k1,logpvthresh,beam, stop_y = stop_y, verbose=verbose)
- },
- nextVars=function(flags, phens, vars_l_todo,  k1,logpvthresh,beam,stop_y="rand", verbose=F){
-   vars_l = vars_l_todo$vars_l
-   todo1 = vars_l_todo$todo1
-   expt_id=self$sigs$getExpt(flags, phens, add_new=T)
-   useAngles = !is.null(flags$angles_only) && flags$angles_only
-   angles_all = lapply(vars_l, function(vars_l1){
-     varnames = vars_l1$var_names; 
-     res_inner1 = self$sigs$loadPvals(expt_id, varnames,k1) ## reconstruct ri
-     nxt_vars1=.mergeResInner(res_inner1)
-     nxt_vars1 =nxt_vars1[unlist(lapply(nxt_vars1, length))>0]
-     if(length(nxt_vars1)==0) return(NULL)
-     nxt_vars1
-   })
-   
-   angles_all = angles_all[unlist(lapply(angles_all, length))>0]
-   if(length(angles_all)==0){
-       vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1[-1])
-     return(vars_l_todo)
-   }
-      ang1 = unlist(unlist(unlist(angles_all, rec=F),rec=F),rec=F)
+      ang1 = unlist(unlist(unlist(angles_all, recursive=FALSE),recursive=FALSE),recursive=FALSE)
       angles_ = unlist(lapply(ang1, function(a1)a1[["angle"]]))
       
-      vn = unlist(lapply(ang1, function(a1)paste(names(a1[["var_names"]]), collapse=";")), rec=F)
+      vn = unlist(lapply(ang1, function(a1)paste(names(a1[["var_names"]]), collapse=";")), recursive=FALSE)
       names(ang1) = vn 
       
       logpvs =if(useAngles) angles_ else   unlist(lapply(ang1, function(a1)a1[["cum_pv"]]))
@@ -187,7 +154,7 @@ analysisEnv<-R6Class("analysisEnv", public = list(
         stop_random2= min(logpvs_all[gp1]) < min(logpvs_all[gp])
         
         #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
-      # stop_random= min(gp1)<=min(gp)
+        # stop_random= min(gp1)<=min(gp)
         #print(head(sort(ord[stop_ind])))
         print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles))
         print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
@@ -200,72 +167,139 @@ analysisEnv<-R6Class("analysisEnv", public = list(
       logpv =min(logpvs)
       
       
-  if(stop_random || stop_random1 || stop_random2){
-    if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
-  }
-    
-  ##ADD MORE RESTRICTIONS .. eg maxsize
+      if(stop_random || stop_random1 || stop_random2){
+        if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
+      }
+      
+      ##ADD MORE RESTRICTIONS .. eg maxsize
       #     while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! vars_l_todo$stop_random){
-  if((!stop_random &&  ! stop_random1 && !stop_random2 && logpv<=logpvthresh  ) ){
-    if(verbose){
-      print(head(sort(logpvs_all[gp])))
-      print(names(vars_l))
-    }
-    dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
-    ang1 = ang1[!duplicated(dupls)]
-    ang1 = ang1[grep("rand", names(ang1), inv=T)]
-    ang1 = ang1[1:min(length(ang1),beam)]
-    vars_l_todo = list(stop=F, vars_l = ang1, todo1 = vars_l_todo$todo1)
-    if(length(grep("rand", names(vars_l_todo$vars_l)))>0) stop("!!");
-    
-    return(vars_l_todo)
-  }
+      if((!stop_random &&  ! stop_random1 && !stop_random2 && logpv<=logpvthresh  ) ){
+        if(verbose){
+          print(head(sort(logpvs_all[gp])))
+          print(names(vars_l))
+        }
+        dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
+        ang1 = ang1[!duplicated(dupls)]
+        ang1 = ang1[grep("rand", names(ang1), inv=T)]
+        ang1 = ang1[1:min(length(ang1),beam)]
+        vars_l_todo = list(stop=F, vars_l = ang1, todo1 = vars_l_todo$todo1)
+        if(length(grep("rand", names(vars_l_todo$vars_l)))>0) stop("!!");
+        
+        return(vars_l_todo)
+      }
       if(length(todo1)==1){
         print("could consider saving the vars at this point to the DB.  Maybe also need to record dataset included")
       }
-  print("shortening _todo")
-            vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
+      print("shortening _todo")
+      vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
       return(vars_l_todo)
-},
-savePvals=function(flags,phens,k1, data_nme, vars_l, comb2){
-  for(varn1 in names(vars_l)){ 
-    ri=comb2[[varn1]]
-    varnames=vars_l[[varn1]]$var_names
-    self$sigs$savePvals(flags, phens, data_nme, ri, varnames,k1, useCurrVarnames = F)
-  }
-},
-saveAngles=function(flags,phens,k1, data_nme, vars_l, comb_){
-  for(varn1 in names(vars_l)){ 
-    self$saveAngles(flags,phens, data_nme, comb_[[varn1]], vars_l[[varn1]]$var_names,k1)
-  }
-},
-
-getTodo=function(flags, phens, logpv = -100){
-  incls = fromJSON(.readFlag(flags,'data_types','{}'))
-  genes_incls=fromJSON(.readFlag(flags,"genes_incls",'{"all":["all"]}')) #,getOption("genes_incls",NULL)
-  quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
- # names(incls) = incls;
-  todo1 = unlist(unlist(lapply(incls, function(incl){
-    lapply(genes_incls, function(g_incl){
-      lapply(quantiles, function(qq){
-        list(incl = incl, g_incl = g_incl, qq = qq)    
+    },
+    savePvals=function(flags,phens,k1, data_nme, vars_l, comb2){
+      for(varn1 in names(vars_l)){ 
+        ri=comb2[[varn1]]
+        varnames=vars_l[[varn1]]$var_names
+        private$sigs$savePvals(flags, phens, data_nme, ri, varnames,k1, useCurrVarnames = F)
+      }
+    },
+    saveAngles=function(flags,phens,k1, data_nme, vars_l, comb_){
+      for(varn1 in names(vars_l)){ 
+        private$saveAngles(flags,phens, data_nme, comb_[[varn1]], vars_l[[varn1]]$var_names,k1)
+      }
+    }
+    
+   
+    
+  ),                      
+  public = list(
+  #datasH = "list",
+ 
+  #transform_y="character",
+    #' @description Create a new instance
+    #' @param flags a list object specifying options
+    #' @param dbDir location for database to be written
+  initialize=function(
+              flags = list(),
+              dbDir="./"
+                    ){
+    nme1="combined"
+    private$flags = flags
+    private$sigsdir=paste(dbDir,"fspls_signatures",sep="/")
+    #private$datasH = datasH 
+    #private$sigs=   sigEnv$new(private$sigsdir,nme1)
+    private$sigs=    sigEnv$new(private$sigsdir,nme1,flags, NULL, clear=F)
+    
+  },
+  #' Get todo 
+  #'
+  #' @param flags list of options
+  #' @param phens phenotypes
+  #' @param logpv starting logpv
+  #' @return object outlining what is left to do
+  getTodo=function(flags, phens, logpv = -100){
+    incls = fromJSON(.readFlag(flags,'data_types','{}'))
+    genes_incls=fromJSON(.readFlag(flags,"genes_incls",'{"all":["all"]}')) #,getOption("genes_incls",NULL)
+    quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
+    # names(incls) = incls;
+    todo1 = unlist(unlist(lapply(incls, function(incl){
+      lapply(genes_incls, function(g_incl){
+        lapply(quantiles, function(qq){
+          list(incl = incl, g_incl = g_incl, qq = qq)    
+        })
       })
-    })
-  }), rec=F), rec=F)
-  Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0))
-  # var_thresh = var_thresh[match(names(var_thresh), train_nme)]
-  vars_l_todo =
-    list(
-      todo1 = todo1,
-      jj=0,
-      logpv=logpv,
-      vars_l = list(empty=stateObj$new(phens, NULL,NULL,NULL,NULL, var=c(), varnames=c(), Wall =Wall0)),
-      stop=F
-    )
+    }), recursive=FALSE), recursive=FALSE)
+    Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0))
+    # var_thresh = var_thresh[match(names(var_thresh), train_nme)]
+    vars_l_todo =
+      list(
+        todo1 = todo1,
+        jj=0,
+        logpv=logpv,
+        vars_l = list(empty=stateObj$new(phens, NULL,NULL,NULL,NULL, var=c(), varnames=c(), Wall =Wall0)),
+        stop=F
+      )
+    
+    vars_l_todo
+  },
   
-  vars_l_todo
-}
-# self$select_k(phens,flags, k1,   var_thresh, quantiles)
+  #' Get clear the databases
+  #'
+  #' @param drop completely drop tables and start from scratch
+  #' @param exclude tables to exclue from clearing
+  #' @param datasH  list of dataH objects to clear
+   clear_db=function(drop=F,exclude="vars", datasH = NULL){
+    if(drop){
+      if(!is.null(private$sigs))private$sigs$drop_all(exclude=exclude)
+      if(!is.null(datasH)){
+        lapply(datasH, function(dh) dh$clear_db(drop=drop, exclude=exclude))
+      }
+    }else{
+      warning("need to set drop=T if you are sure, this will delete all saved signatures")
+    }
+    
+  },  
+  
+ 
+  #' Get the next vars in iteration
+  #'
+  #' @param flags list of options
+  #' @param phens phenotypes
+  #' @param vars_l_todo vars_l_todo
+  #' @param comb2 results
+  #' @param data_nme name of dataset
+  #' @param k1 which repetition
+  #' @return object outlining what is left to do
+ savePvalsAndNextVars=function(flags,phens, vars_l_todo,comb2,data_nme, k1){
+   beam=.readFlag(flags,'beam',1);
+   stop_y=.readFlag(flags,"stop_y","rand")
+   verbose=.readFlag(flags,"verbose",F);
+   logpvthresh = log(.readFlag(flags,'pthresh',0.05));
+   angles_only = .readFlag(flags,'angles_only',FALSE);
+   if(angles_only) logpvthresh =0;
+      private$savePvals(flags,phens,k1, data_nme, vars_l_todo$vars_l,comb2)
+    private$nextVars(flags,phens, vars_l_todo,  k1,logpvthresh,beam, stop_y = stop_y, verbose=verbose)
+ }
+
+# private$select_k(phens,flags, k1,   var_thresh, quantiles)
 
 
   

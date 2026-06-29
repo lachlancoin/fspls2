@@ -1,6 +1,6 @@
 
 
-loocObj<-R6Class("loocObj", public = list(
+loocObj<-R6::R6Class("loocObj", public = list(
   useAll="vector",
   nrep="numeric",
   batch="numeric",

@@ -1,4 +1,4 @@
-modelsEnv<-R6Class("modelsEnv", public = list(
+modelsEnv<-R6::R6Class("modelsEnv", public = list(
   models = "list",
   type="character",
   initialize=function(str = NULL){

@@ -1,7 +1,7 @@
 ##used to filter 
-data_keys = fromJSON(getOption("data_keys",'["bigmatrix", "all_v_all","merge","duplicate_ordinal","genes_incls"]'))
+data_keys = jsonlite::fromJSON(getOption("data_keys",'["bigmatrix", "all_v_all","merge","duplicate_ordinal","genes_incls"]'))
 
-expt_keys = fromJSON(getOption("expt_keys",'["project", "useoffset","useglmnet","pthresh","genes_incls","transform_y","batch","beam","nrep","stop_y","max","min","topn"]'))
+expt_keys = jsonlite::fromJSON(getOption("expt_keys",'["project", "useoffset","useglmnet","pthresh","genes_incls","transform_y","batch","beam","nrep","stop_y","max","min","topn"]'))
 
 
 .orderFlags<-function(flags, keys =c()){
@@ -37,11 +37,11 @@ toJSON1<-function(flags, keys = c()){
   }))
 }
 
-.compareModels<-function(all_models, all_models2){
-  tbl = .convertModelsToTable(all_models$models, 0)
-  tbl2 = .convertModelsToTable(all_models2$models, 0)
-  match(tbl$var_names, tbl2$var_names)
-}
+#.compareModels<-function(all_models, all_models2){
+#  tbl = .convertModelsToTable(all_models$models, 0)
+#  tbl2 = .convertModelsToTable(all_models2$models, 0)
+#  match(tbl$var_names, tbl2$var_names)
+#}
 .modelToRow<-function(all_models5){
  # print(all_models5)
   varnames = lapply(all_models5$var_names,paste, collapse=".")
@@ -176,7 +176,7 @@ fromJSONM<-function(json){
 }
 
 
-sigEnv<-R6Class("sigEnv", public = list(
+sigEnv<-R6::R6Class("sigEnv", public = list(
   mydb="S4",
   dir="character",
   dbfile="character",
@@ -221,7 +221,7 @@ sigEnv<-R6Class("sigEnv", public = list(
      dbExecute(self$mydb, 'DELETE FROM eval where experiment_id =:expt_id',list(expt_id=expt_id))
    }
    eval3 = .calcEval1(eval2, rename=F)
-   eval31 = eval3 %>% tibble::add_column(experiment_id=expt_id)
+   eval31 = eval3 |> tibble::add_column(experiment_id=expt_id)
  
    try(dbWriteTable(self$mydb, "eval", eval31,overwrite=!hasEval,append=hasEval))
    return(list(msg="success"))
@@ -286,14 +286,14 @@ savePvals=function(flags,phens, data_nme, ri, varnames,k,useCurrVarnames=F){
   #print(paste("saving pv",expt_id, k, data_nme, toJSON(varnames), useCurrVarnames))
   varn1 = toJSON(varnames)
   tbls = self$tbls()
-  combined=.merge_all(ri,c("transf","param","var") , .modelToRow)%>% tibble::add_column(prev_var=varn1, data=data_nme, experiment_id = expt_id,k=k)
+  combined=.merge_all(ri,c("transf","param","var") , .modelToRow)|> tibble::add_column(prev_var=varn1, data=data_nme, experiment_id = expt_id,k=k)
   #if(getOption("verbose",F)) print(combined);
   if(useCurrVarnames) combined$prev_var= combined$var_names
   #apply(combined, 2, function(x) length(table(x))/length(x))
   ##follow to check
  # aa= .splitAll(combined, c("data","transf","param","var"),.modelFromRow)
   
-  #combined= .convertModelsToTable1(ri, expt_id=expt_id,debug=F) %>% tibble::add_column(prev_var=varn1, data=data_nme)
+  #combined= .convertModelsToTable1(ri, expt_id=expt_id,debug=F) |> tibble::add_column(prev_var=varn1, data=data_nme)
   hasModel = "pvals" %in% tbls
   if( hasModel && FALSE){
     print("deleting from pvals")
@@ -352,7 +352,7 @@ aa
    }
    #transform_y=""
      all_models1 = all_models_$models
-     combined=.merge_all(all_models1,c("beam","model_name","rep") , .modelToRow)%>% tibble::add_column(experiment_id = expt_id)
+     combined=.merge_all(all_models1,c("beam","model_name","rep") , .modelToRow)|> tibble::add_column(experiment_id = expt_id)
       try(dbWriteTable(self$mydb, "models", combined,overwrite=!hasModel,append=hasModel))
    return(list(msg="success"))
  },
