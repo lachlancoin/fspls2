@@ -9,7 +9,7 @@ Authors@R: c(person(given = "Lachlan",
                       role = c("aut", "cre"),
                       email = "l.coin@imb.uq.edu.au")
         )
-Imports: R6, jsonlite, Matrix, glmnet, tidyr, MASS, ggplot2, pROC, binom, confintr, DBI, RSQLite, methods,tibble, ggrepel, RColorBrewer
+Imports: R6, jsonlite, Matrix, glmnet, tidyr, MASS, ggplot2, pROC, binom, confintr, DBI, RSQLite, methods,tibble, ggrepel, RColorBrewer, parallel
 Maintainer: Lachlan Coin <l.coin@imb.uq.edu.au>
 Description: Identifies minimal gene signatures from multiomic data.
 License: GPL-2
@@ -20,3 +20,7 @@ Packaged: 2026-06-25 12:36:27 UTC; lcoin
 Date/Publication: 2026-06-25 13:50:02 UTC
 Config/roxygen2/version: 8.0.0
 Encoding: UTF-8
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr

@@ -28,6 +28,7 @@ trainObj<-R6::R6Class("trainObj",
                     initialize = function(y, looc, incl, transforms,family=names(y)
                                           ){  #y is a list of sparse matrices
                       if(length(names(transforms))==0) stop("no names on transform")
+                     # print(y)
                       
                     #  types_ =     getOption("fspls.types", fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC"}'))
                       self$family=family
@@ -40,7 +41,7 @@ trainObj<-R6::R6Class("trainObj",
                           lapply(transforms, function(f_k){
                             params = f_k$params;names(params)=params
                             lapply(params, function(p1){
-                               t(y11)
+                               Matrix::t(y11)
                             })
                           })
                           })

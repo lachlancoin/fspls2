@@ -1,10 +1,37 @@
 
+
+#' Fit a GLM, suppressing perfect separation warnings
+#'
+#' @param ... Arguments passed to glm
+#' @return A fitted glm object
+#' @export
+glm1 <- function(...) {
+  withCallingHandlers(
+    glm(...),
+    warning = function(w) {
+      if (grepl("fitted probabilities numerically 0 or 1 occurred", conditionMessage(w))) {
+        invokeRestart("muffleWarning")
+      }
+    }
+  )
+}
+
+
+
 ##BIG MATRIX NOT SUPPORTED IN THIS VERSION
 is.big.matrix<-function(mat){
   if(typeof(mat)=="S4") return(FALSE);
   #print(typeof(mat))
   return (FALSE)
  # return (bigmemory::is.big.matrix(mat));
+}
+
+###used strictly for debugging
+.self<-function(dh){
+  assign("self", dh, envir = .GlobalEnv) 
+  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) 
+  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
+  
 }
 
 ## this from sce single cell format
@@ -355,8 +382,10 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
 #' @param CHECK check whether inverse function works
 #' @return ggplot2 plot
 #' @export
-getYTransform<-function(pows = c(1),offset=1e-3,  n_random=0,perm=F, norm=1,CHECK=F){
+getYTransform<-function(pows = c(1),offset=0,  n_random=1,perm=F, norm=1,CHECK=F){
  # offset= 1e-3; norm=1;
+  if(n_random <1) warning(" recommended to have at least one random permutation");
+  if(!( 1 %in% pows)) warning("recommended to have a pow of 1, which is the untransformed y ")
   funcs = list()
   if(length(pows)>0) funcs = c(funcs,list(pow=.getTransformFuncs(pows,  norm = norm, offset=offset, CHECK=CHECK) ))
   if(n_random>0){

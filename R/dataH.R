@@ -1,4 +1,4 @@
-
+#private = self[[".__enclos_env__"]]$private
 
 mergeAll = function(comb2_new, beam){
   comb1 = .merge1_new(lapply(comb2_new, function(c){
@@ -180,10 +180,10 @@ return(list(ggp1, ggp2, ggp3))
         if(is.null(ang1)) return(NULL)
         col_incl = cols_incl1[[inc1]]
         ang2=ang1[[1]][[nme_t1]][[nme_p1]]
-        cs = colSums(ang2)
+        cs = Matrix::colSums(ang2)
         if(length(ang1)>1){
           for(jk in 1:length(ang1)){
-            cs = cs+colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
+            cs = cs+Matrix::colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
           }
         }
         excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1 && ex[4] ==nme_p1))]
@@ -362,16 +362,18 @@ getFullModels<-function(all_models){
 #'
 #' @export
 dataH<-R6::R6Class("dataH", 
+                   inherit = analysisBase,
  private = list(
    data ="environment",
-   sigsdir="character",
-   sigs="environment",
+  # sigsdir="character",
+  # sigs="environment",
+  #nme="character",
    type="character",  
    flags="list",
    data_id="character",
    #transform_y="character",
    #var_t = "list",
-   nme="character",
+   
    dbDir="character",
    makeModels=function(vars2, inds, phens,flags){
      checkRMSV = .readFlag(flags,"checkRMSV",FALSE)
@@ -421,19 +423,18 @@ dataH<-R6::R6Class("dataH",
      stop_y = .readFlag(flags, 'stop_y',"rand")
      logpvthresh = log(.readFlag(flags,"pthresh",0.1))
      beam= .readFlag(flags,"beam",1)
-     saveAngles=F
      comb2 = NULL;
      plot_results = list()
      # vars_l = analysis$nextVars(expt_id, flags)
      nvar=0;
      while(length(vars_l_todo$todo1)>0 ){
-       comb2_new = try(private$multiAnglesAndPv(comb2, phens, k1,flags,expt_id, vars_l_todo, saveAngles=saveAngles, verbose=verbose))
+       comb2_new = try(self$multiAnglesAndPv(comb2, phens, k1,flags,expt_id, vars_l_todo))
        if(inherits(comb2_new,"try-error")) break;
        if(F && flags$plot){
          ggps=plot_ri(comb2_new,1)
          plot_grid(ggps[[1]], ggps[[2]], ggps[[3]])
        }
-       data_nme=private$nme;
+       data_nme=self$name();
        comb2 = lapply(comb2_new, function(x) x$pvs)
        vars_l_todo_new=analysis$savePvalsAndNextVars(flags,phens,vars_l_todo,comb2,data_nme,  k1)
        vars_l_todo = vars_l_todo_new
@@ -453,27 +454,33 @@ dataH<-R6::R6Class("dataH",
      lapply(private$data$vars, function(v) quantile(v, qq_t))
    },
   
-   updateTrain=function( phens, flags,  verbose=FALSE, force=F){
-     private$data$updateTrain( phens,flags,verbose=verbose, force=force)
+   updateTrain=function( phens, flags, transform_y,  verbose=FALSE, force=F){
+     private$data$updateTrain( phens,flags,transform_y, verbose=verbose, force=force)
    },
    updateLOOC=function( phens, flags,varn=c(),verbose=FALSE, force=F){
      private$data$updateLOOC( phens,flags,varn=varn,force=force, verbose=verbose); ### update training object - updates all
    },
-   findPrev=function(comb2, expt_id, prev_i3, k){
+   findPrev=function(comb20, expt_id, prev_i, k){
      if(is.null(private$sigs)){
-       nmes= unlist(lapply(prev_i3$var_names, function(x) paste(x,collapse=".")))
+       nmes= unlist(lapply(prev_i$var_names, function(x) paste(x,collapse=".")))
        if(length(nmes)==0)nmes="empty"
        nme1 = strsplit(nmes[length(nmes)],"\\.")[[1]]
        str = paste(nmes[-length(nmes)], collapse=";")
-       prev_i2= comb2[[str]][[nme1[3]]][[nme1[4]]][[nme1[2]]]
+       if(str=="") str="empty"
+       prev_i2= comb20[[str]][[nme1[3]]][[nme1[4]]][[nme1[2]]]
      }else{
        
-       prev_i2 =   private$sigs$loadPrev(expt_id, prev_i3, k, data_nme = private$nme)
+       prev_i2 =   private$sigs$loadPrev(expt_id, prev_i, k, data_nme = private$nme)
      }
-     if(is.null(prev_i2)) prev_i2 = prev_i3
+     if(is.null(prev_i2)){ 
+     #  warning("could not find")
+      # print(prev_i)
+       
+       prev_i2 = prev_i
+     }
      return(prev_i2);
    },
-   res_inner=function(comb_,prev_i, flags,k, expt_id){
+   res_inner=function(comb_,prev_i, flags,k, expt_id, phens){
      
      nme_comb = names(comb_); names(nme_comb) = nme_comb
      #nme_c1 = nme_comb[[1]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
@@ -494,12 +501,14 @@ dataH<-R6::R6Class("dataH",
                        var_names = c(prev_i$var_names, list(b_i_name)),
                        varnames = c(prev_i$varnames, paste(b_i_name, collapse="."))
              )
+            
              #  print(nv)
              nv$sumAngle = sum(nv$angles);
              
            }else{
              nv= private$getPvsAll(phens,prev_i, b_i_name,k,  prev_i$Wall,flags, angle=angle)
            }
+           names(nv$var_names) = nv$varnames;
            if(inherits(nv,"try-error")) {
              print(paste(nme_c1, "error"))
              return(NULL)
@@ -511,7 +520,7 @@ dataH<-R6::R6Class("dataH",
      })
      res_inner   
    },
-   post_process=function(variables, flags, phens, useDB=FALSE){
+   post_process_to_go=function(variables, flags, phens, useDB=FALSE){
      useAngles = !is.null(flags$angles_only) && flags$angles_only
      full_index = length(variables) 
      beams = 1:length(variables[[full_index]])
@@ -570,32 +579,7 @@ dataH<-R6::R6Class("dataH",
      vars_combined
    },
    
-   multiAnglesAndPv=function(comb2, phens,  k1,flags, expt_id, vars_l_todo,
-                             saveAngles=FALSE, verbose=F){
-     if(is.null(expt_id)) stop("expt_id is NULL")
-     vars_l = vars_l_todo$vars_l
-     todo1=vars_l_todo$todo1[[1]]
-     incl=todo1$incl
-     g_incl = todo1$g_incl
-     qq_t = todo1$qq
-     comb2_new=invisible( lapply(vars_l, function(prev_i){
-       prev_i2 = private$findPrev(comb2, expt_id, prev_i, k1);
-       varnames = prev_i2$var_names; 
-       sumAngle =sum(prev_i2$angles)
-       comb_=private$combinedAngles(phens, varnames, incl, k1,  g_incl, qq_t, flags, sumAngle) ;
-       if(length(comb_)==0) stop("length zero")
-       # return(list(comb_angle1, all_angles));
-       
-       if(saveAngles) return(comb_)
-       #comb_ = private$anglesAndPv(phens, prev_i, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
-       ri = private$res_inner( comb_,prev_i2,flags,k1, expt_id)
-       if(!is.null(private$sigs)) private$sigs$savePvals(flags,phens, private$nme, ri, varnames,k1,useCurrVarnames=T)
-       
-       
-       list(angles = comb_, pvs = ri) ;#private$simplify(ri))
-     }))
-     comb2_new
-   },
+   
    simplify = function(ri){
      ri_out=lapply(ri, function(ri1){
        lapply(ri1, function(ri2){
@@ -611,7 +595,7 @@ dataH<-R6::R6Class("dataH",
    },
    
    combinedAngles=function(phens, varnames, incl, k, g_incl, qq_t, flags, sumAngle){ #phens, varnames, incl=incl, k=k, type=type
-     type=private$type
+      type=private$type
      prev_signature =paste(unlist(lapply(varnames, function(vn)vn[2])),collapse=";")
      var_t = private$var_thresh(qq_t)
      
@@ -654,55 +638,99 @@ dataH<-R6::R6Class("dataH",
    #' @param y phenotype matrix
    #' @param nme Name of data object
    #' @param flags list of options
+   #' @param transform_y a transformation object
    #' @param family the statistical family of phenotype y
+   
    #' @param dbDir dir for databases
      initialize=function(
     data,
     y,
     nme,
     flags ,
+    transform_y=getYTransform(pow = 1,  n_random=1, perm=F),
     family= .getFamily(y),
-    dbDir="./"
+      dbDir=tempdir()
    ){
+       
+    super$initialize(nme,dims =lapply(data, dim),  flags=flags, dbDir=dbDir);
+       
     memDir=NULL
     useDB=!is.null(dbDir);
-    convertToBigMatrix=.readFlag(flags,"covertToBigMatrix", F)
+    convertToBigMatrix=F #.readFlag(flags,"covertToBigMatrix", F)
     hasNA=.readFlag(flags,"hasNA", T)
     preprocessed=.readFlag(flags,"preprocessed", F)
     
     mat = .getAllSparseMatrices(data,hasNA=hasNA, convertToBigMatrix=convertToBigMatrix)
+    #print("HHHHH")
+    #print(mat)
     private$dbDir = dbDir
-    nme=sub("/",".",nme)
-    private$flags = flags
+    #nme=sub("/",".",nme)
+  #  private$flags = flags
    # transform_y =.readFlag(flags, "transform_y",toJSON(list(x=list(unvfunc="function(y,param) y",func="function(y,param) y", param=1))))
     ### MAKE SIGNATURE DIRECTORY
-    private$nme=nme
-    private$sigsdir=paste(dbDir,paste0("fspls_signatures__",nme,sep="/"))
-    private$sigs = list()
+   # private$nme=nme
+  #  private$sigsdir=paste(dbDir,paste0("fspls_signatures__",private$nme,sep="/"))
+    #private$sigs = list()
     #####
-    if(is.null(nme)) stop("nme should not be null")
     private$data = 
-      dataObj$new(mat, nme,dbDir,flags,  
-                  incl_full=T,seed = getOption("seed",42), memDir=if(is.null(memDir)) NULL else paste(memDir, nme,sep="/"))
+      dataObj$new(mat, private$nme,dbDir,flags, 
+                  incl_full=T,seed = getOption("seed",42), memDir=if(is.null(memDir)) NULL else paste(memDir, private$nme,sep="/"))
     private$type="slow1"
     types_all = getOption("types_all",names(private$data$data))
     names(types_all) = types_all
-    batch=.readFlag(flags, "batch",0)
+    batch=.readFlag(flags, "batchsize",0)
     all_v_all = .readFlag(flags,"all_v_all",F)
     one_v_rest = .readFlag(flags,"one_v_rest",F)
-    nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
+    nrep = .readFlag(flags,"nfold",if(batch>0) 0 else 1)
+    if(nrep>0 && batch>0)warning("only one of nfold or batchsize should be non zero")
     pheno_balance=.readFlag(flags,"pheno_balance",NULL)
     varn = getOption("varn",c())
     #invisible(lapply(1:length(datas), function(ik) {
      # family = families[[ik]]
         private$data$updateY(y,preprocessed=preprocessed, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
     
-      private$sigsdir=paste(dbDir,"fspls_signatures1",sep="/")
-      dir.create(private$sigsdir, recursive=FALSE, showWarnings=F)
-      dims1 = list(private$data$dims()); names(dims1) = private$nme
-      private$sigs=   if(exists("dbConnect") && useDB) sigEnv$new(private$sigsdir,nme,flags, dims1, clear=F) else NULL;
+    #  private$sigsdir=paste(dbDir,"fspls_signatures1",sep="/")
+      #dir.create(private$sigsdir, recursive=FALSE, showWarnings=F)
+     # dims1 = list(private$data$dims()); names(dims1) = private$nme
+      #private$sigs=   if(exists("dbConnect") && useDB) sigEnv$new(private$sigsdir,nme,flags, dims1, clear=F) else NULL;
       
     
+  },
+  #' multiAngles and pv
+  #'
+  #' @param comb20 drop the tables instead of clear
+  #' @param phens1 drop the tables instead of clear
+  #' @param k1 k1 the tables instead of clear
+  #' @param flags drop the tables instead of clear
+  #' @param expt_id drop the tables instead of clear
+  #' @param vars_l_todo  drop the tables instead of clear
+    multiAnglesAndPv=function(comb20, phens1,  k1,flags, expt_id, vars_l_todo){
+            
+    verbose=.readFlag(flags,'verbose',F)
+    saveAngles=FALSE
+    if(is.null(expt_id)) stop("expt_id is NULL")
+    vars_l = vars_l_todo$vars_l
+    todo1=vars_l_todo$todo1[[1]]
+    incl=todo1$incl
+    g_incl = todo1$g_incl
+    qq_t = todo1$qq
+    comb2_new=invisible( lapply(vars_l, function(prev_i){
+      prev_i2 = private$findPrev(comb20, expt_id, prev_i, k1);
+      varnames = prev_i2$var_names; 
+      sumAngle =sum(prev_i2$angles)
+      comb_=private$combinedAngles(phens1, varnames, incl, k1,  g_incl, qq_t, flags, sumAngle) ;
+      if(length(comb_)==0) stop("length zero")
+      # return(list(comb_angle1, all_angles));
+      
+      if(saveAngles) return(comb_)
+      #comb_ = private$anglesAndPv(phens, prev_i, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
+      ri = private$res_inner( comb_,prev_i2,flags,k1, expt_id, phens1)
+     super$savePvals(flags,phens1, ri, varnames,k1,useCurrVarnames=T)
+      
+      
+      list(angles = comb_, pvs = ri) ;#private$simplify(ri))
+    }))
+    comb2_new
   },
   #' clear database
   #'
@@ -768,15 +796,16 @@ dataH<-R6::R6Class("dataH",
  #' update the phenotypes without remaking the entire object
  #' @param phens phenotypes
  #' @param flags list of options
+ #' @param transform_y transformation object 
  
- update=function(phens, flags){
+ update=function(phens, flags, transform_y=fromJSON(flags$transform_y)){
     verbose=.readFlag(flags,'verbose',F)
     force=.readFlag(flags,'force',F);
 #   flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
 
    if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(names(private$data$data))
      private$updateLOOC(phens, flags, verbose=verbose,force=force)
-     private$updateTrain(phens, flags,verbose=verbose, force=force)
+     private$updateTrain(phens, flags,transform_y, verbose=verbose, force=force)
    ##updated after updateLOOC
    nreps1 =self$nreps()
    nreps = 1:nreps1
@@ -787,21 +816,23 @@ dataH<-R6::R6Class("dataH",
 #' @param analysis an analysisEnv object
 #' @param phens list of phenotyps
 #' @param flags list of options
+#' @param transform_y transformation object 
 #' @param useDB boolean to indicate if results should be saved to database
- select=function(analysis, phens,flags,useDB=F
+ select=function(analysis, phens,flags,transform_y, useDB=F
                  ## expt_id specific to this database .. might be diff for global
                ){#c(y="function(y) y","function(y) y")
    verbose=.readFlag(flags,'verbose',F);
-   if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(names(private$data$data))
+   flags$transform_y = toJSON(transform_y);
+   if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(self$data_types())
       if(flags$topn<flags$beam) stop("beam should be less than topn")
    if(is.null(flags[['data_types']])) flags[['data_types']] = names(private$data$data)
-   nreps = self$update(phens, flags);
+   nreps = self$update(phens, flags, transform_y);
    if( useDB && !is.null(private$sigs)){
      vars_all = private$sigs$loadVars(flags, phens)
      if(!is.null(vars_all)) return(vars_all)
    }
    vars_l_todo = analysis$getTodo(flags, phens)
-   expt_id=if(is.null(private$sigs)) 0 else private$sigs$getExpt(flags, phens, add_new=T)
+   expt_id=super$getExpt(flags, phens, add_new=T)
    variables=lapply(nreps, function(k1){
      if(verbose) print(paste("cv",k1,"of",length(nreps)))
     private$select_k(analysis, phens,flags, k1, expt_id, vars_l_todo,verbose=verbose)
@@ -938,11 +969,15 @@ getVariance=function(varnames){
 #' @param vars_all list of variables selected by select method
 #' @param phens list of phenotypes
 #' @param flags flags
+#' @param transform_y an object to determine the y transformaton
 #' @param useDB whether to use the DB to save the reuslt
 #' @returns fitted models
 makeAllModels=function(vars_all, 
                        phens=vars_all[[1]]$phens, flags=vars_all[[1]]$flags, 
+                       transform_y =  fromJSON(flags$transform_y),
                        useDB=F){
+  
+  self$update(phens, flags,transform_y);
   verbose=.readFlag(flags,'verbose',F); max = .readFlag(flags,'max',1e6)
   sigDB = if(useDB) private$sigs else NULL
   if(!is.null(sigDB) ){

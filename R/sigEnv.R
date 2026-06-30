@@ -1,7 +1,7 @@
 ##used to filter 
 data_keys = jsonlite::fromJSON(getOption("data_keys",'["bigmatrix", "all_v_all","merge","duplicate_ordinal","genes_incls"]'))
 
-expt_keys = jsonlite::fromJSON(getOption("expt_keys",'["project", "useoffset","useglmnet","pthresh","genes_incls","transform_y","batch","beam","nrep","stop_y","max","min","topn"]'))
+expt_keys = jsonlite::fromJSON(getOption("expt_keys",'["project", "useoffset","useglmnet","pthresh","genes_incls","transform_y","batchsize","beam","nfold","stop_y","max","min","topn"]'))
 
 
 .orderFlags<-function(flags, keys =c()){
@@ -188,11 +188,11 @@ sigEnv<-R6::R6Class("sigEnv", public = list(
  user="", ## default user
   initialize=function(dbDir,subnme,flags, dims, user="",
                       clear=FALSE){ #there is duplication in phenosdir and dbDir .. fix later
-    if(!file.exists(dbDir)) dir.create(dbDir,recursive=T)
+    if(!file.exists(dbDir)) dir.create(dbDir,recursive=T, showWarnings=FALSE)
     self$subnme = subnme
     self$user=user
     self$sigsdir=paste(dbDir,subnme, sep="/")
-    dir.create(self$sigsdir,recursive=T)
+    dir.create(self$sigsdir,recursive=T, showWarnings = FALSE)
     self$dbfile=paste(self$sigsdir,paste("signatures",subnme,"sqlite",sep="."),sep="/")
     self$mydb=  dbConnect(RSQLite::SQLite(),self$dbfile,flags=SQLITE_RWC )
     if(clear) self$drop_all();
@@ -321,7 +321,7 @@ loadPrev=function(expt_id, prev_i3, k, data_nme = self$subnme){
   r1= list(experiment_id=expt_id,  varnames = toJSON(prev_i3$var_names),k=k, data = data_nme)
   combined =  dbGetQuery(self$mydb, 'SELECT * from pvals where experiment_id=:experiment_id and prev_var=:varnames and k=:k and data =:data',r1)
   if(nrow(combined)==0) {
-    warning("could not find previous")
+  #  warning("could not find previous")
     return(prev_i3)
   }
   prev_i2=.modelFromRow(combined[1,])

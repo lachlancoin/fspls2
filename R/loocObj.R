@@ -13,8 +13,8 @@ loocObj<-R6::R6Class("loocObj", public = list(
                       incl_full = T,
                       nrows = nrow(data$data[[1]]),
                        ## randomisation
-                      nrep=getOption("fspls.nrep",1), 
-                      batch=getOption("fspls.batch",0),
+                      nrep=getOption("nfold",1), 
+                      batch=getOption("batchsize",0),
                       seed = 42,
                       pheno_balance=NULL
                       ){

@@ -13,8 +13,9 @@ a2
 }
 
 default_types=jsonlite::fromJSON('{"gaussian": "correlation","binomial" : "AUC","multinomial" : "AUC","ordinal" :"AUC"}')
-.convertToTransform<-function(transform_y){
-lapply(jsonlite::fromJSON(transform_y), function(t_y){
+.convertToTransform<-function(transform_y, fromJSON=F){
+  str1 = if(fromJSON) jsonlite::fromJSON(transform_y) else transform_y 
+lapply(str1, function(t_y){
   t_y1 =  lapply(t_y[1:2], function(t_y1) eval(str2lang(t_y1)))
   t_y1$params = t_y[[3]]
   .checkInverse(t_y1)
@@ -95,7 +96,7 @@ lapply(jsonlite::fromJSON(transform_y), function(t_y){
 .getZetaBinary<-function(x,y, w){
   levsy =sort(unique(y[!is.na(y)]))
   yn = .mkBinary(y)
-  m1=glm(yn~as.matrix(x),  family="binomial", weights=w)
+  m1=glm1(yn~as.matrix(x),  family="binomial", weights=w)
   ll1 = logLik(m1)
   ll2 =  logLik(update(m1, ~1))
   pv = pchisq((2*(ll1 - ll2)),attr(ll1,"df")[1]-attr(ll2,"df")[1],lower.tail=FALSE,log.p=F)
@@ -112,7 +113,7 @@ lapply(jsonlite::fromJSON(transform_y), function(t_y){
   const_term=unlist(lapply(levsy1, function(l1){
     y2 = .mkBinary(y, thresh = l1)
   
-    m1=glm(y2~1, offset=prod, family="binomial", weights=w)
+    m1=glm1(y2~1, offset=prod, family="binomial", weights=w)
     -m1$coefficients[[1]]
   }))
   list(beta_new1 = beta_new1, const_term = const_term, pv = pv)
@@ -161,8 +162,8 @@ lapply(jsonlite::fromJSON(transform_y), function(t_y){
   }else{
     if(ncol(yp_new)>1 || ncol(yp1k)>1) stop("not expecting")
    
-    m1=glm(y~yp1k[,1],family=family)# weights=w[nonNAy], weights should be integer
-    m2=glm(y~yp_new[,1], family=family)#weights = w[nonNAy], 
+    m1=glm1(y~yp1k[,1],family=family)# weights=w[nonNAy], weights should be integer
+    m2=glm1(y~yp_new[,1], family=family)#weights = w[nonNAy], 
     ll2 = logLik(m2)
     ll1 =  logLik(m1)
     if(ll1==0)warning("problem, zero likelihood")
@@ -307,10 +308,10 @@ multinom_ridge<-function(x,y,w,lambda=NULL){
           col_incl = cols_incl[[i]][[inc1]]
           #ang1=angle1[[inc1]]
           ang2=ang1[[1]][[nme_t1]][[nme_p1]]
-          cs = colSums(ang2)
+          cs = Matrix::colSums(ang2)
           if(length(ang1)>1){
             for(jk in 1:length(ang1)){
-              cs = cs+colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
+              cs = cs+Matrix::colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
             }
           }
           excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1 && ex[4] ==nme_p1))]
@@ -579,7 +580,7 @@ mult = grep("multinomial",names(phens))
 },
 ####does regression just on orthogonal component
 calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,convert=T, betas = list(), strict=F,project=F, 
-                                             useglm=getOption("glmnet",T), useoffset=F){
+                                             useglm=getOption("useglmnet",T), useoffset=F){
   if(convert){
     b_i = self$convert(b_i)
     if(length(b_i)<2) {
@@ -632,7 +633,7 @@ getTransforms=function(vars1, inv_transform=T){
 },
 calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=F, 
                     
-                      useglm=getOption("glmnet",T)){
+                      useglm=getOption("useglmnet",T)){
   #b_i = b_i1
   if(length(prev_var)>0) stop("problem")
   data = self
@@ -773,7 +774,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
         
       }else{
         stop("here")
-        m1=glm(y~x, family="binomial", weights=w)
+        m1=glm1(y~x, family="binomial", weights=w)
         sm  = summary(m1)
         coeff = sm$coeff[2,]
         pv1 = coeff[4]
@@ -916,7 +917,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
 ## Wall1 is projection from previous
 calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,betas1, project=F, strict=F, 
                          CHECK=getOption("fspls.check",T),
-                                              useoffset = F,useglm=getOption("glmnet",T)){
+                                              useoffset = F,useglm=getOption("useglmnet",T)){
   data = self 
   inv_transform=T
   if(!useoffset) project=F
@@ -946,7 +947,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
   if(!project) Wall2 = diag(ncol(Wall2))
   x1_ = x_[,ncol(x_), drop=F]
   transf1 = transf[[ncol(x_)]]
-  if(useoffset && project){
+  if(project){
         x1_ = x1_ - UDV$P %*% (UDV$VDU %*% x1_)
         if(CHECK){ ##THIS DEMONSTRATE ORTHOGONALITY
              d3 = self$extractData(UDV$var, adjust=T)
@@ -1047,7 +1048,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
         
       }else{
         stop("here")
-        m1=glm(y~as.matrix(x), family="binomial", weights=w)
+        m1=glm1(y~as.matrix(x), family="binomial", weights=w)
         sm  = summary(m1)
         beta_new1=sm$coefficients[-1,1]
         const_term = -1*sm$coefficients[1,1]
@@ -1061,7 +1062,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
        
         if(useglm){
           if(CHECK && FALSE){
-            print(summary(glm(y~x[,1])))
+            print(summary(glm1(y~x[,1])))
             ridge=glmnet(cbind(1,x[nonNAy,1,drop=F]),y[nonNAy],family=family,weights=w[nonNAy], alpha = 0)
             rbeta <- coef(ridge,s=min(ridge$lambda))
             print(rbeta)
@@ -1245,7 +1246,7 @@ makeModels=function(phens1, vars2,k,
   data = self;
   len = length(vars2)
   models = vector("list", len)
-  useglm=getOption("glmnet",T)
+  useglm=getOption("useglmnet",T)
   fams1 = lapply(names(phens1), function(st1)strsplit(st1,"\\.")[[1]][1])
   family = getOption("fspls.family",fams1) #ypred$family[[1]]
   if(family[[1]]=="multinomial") useoffset=F
@@ -1335,7 +1336,7 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
     self$weights[naInds] = min(w1)
   }
 },
-checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=!getOption("x_transform",T),verbose=F, useglm=T){
+checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=F,verbose=F, useglm=T){
   #transform_y1 = self$transforms[[nme_c1]]
   #inv_funcst = transform_y1[[2]]
   data=self
@@ -1419,7 +1420,7 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=!getOption("x
           y11 = self$y[[subnme]][,subphens[[subnme]],drop=F]
           self$updateWeights(subphens)
           nonNAy = !is.na(y11[,1])
-          ab=glm(y11[,1] ~as.matrix(extractd0))
+          ab=glm1(y11[,1] ~as.matrix(extractd0))
         ridge=glmnet(cbind(1,extractd0[nonNAy,]),y11[nonNAy,,drop=F] ,family=family, alpha = 0, weights =self$weights[nonNAy])
         rbeta <- coef(ridge,s=min(ridge$lambda))
         aa = predict(ridge,cbind(1,extractd0[nonNAy,]),s=min(ridge$lambda), family=family)
@@ -1506,7 +1507,7 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x 
     pvs=lapply(nmes_df, function(nme_df_){
       lapply(nmes_df2, function(nme_df2_){
           m2=lm(df2[[nme_df2_]] ~df[[nme_df_]])
-          m1=glm(df2[[nme_df2_]] ~1)
+          m1=glm1(df2[[nme_df2_]] ~1)
         ll2 = logLik(m2)
         ll1 =  logLik(m1)
         pv1 = .lrt(ll2,ll1,2,1, log.p=F)
@@ -2169,7 +2170,7 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
   },
 
 ## gets ready for training - updates train, prev looc
-updateTrain=function(phens,flags, transform_y= flags$transform_y, verbose=F, force=F){ ## this updates the reps and train  ## called after updateLOOC
+updateTrain=function(phens,flags, transform_y, verbose=F, force=F){ ## this updates the reps and train  ## called after updateLOOC
   transforms =  .convertToTransform(transform_y)
     self$transforms = transforms
   nrep = ncol(self$looc$incl)
@@ -2197,8 +2198,9 @@ updateTrain=function(phens,flags, transform_y= flags$transform_y, verbose=F, for
 updateLOOC=function(phens,flags,varn=c(), force=F, verbose=F){
   seed=.readFlag(flags,"seed",42)
   #incl = incls_all
-  batch=.readFlag(flags, "batch",0)
-  nrep = .readFlag(flags,"nrep",if(batch>0) 0 else 1)
+  batch=.readFlag(flags, "batchsize",0)
+  nrep = .readFlag(flags,"nfold",if(batch>0) 0 else 1)
+  if(batch>0 && nrep>0) warning("only one of batch or nrep greater than zero")
   nrows=nrow(self$data[[1]])
   if(!force && !is.null(self$looc) && nrep ==self$looc$nrep && batch == self$looc$batch && seed == self$looc$seed && nrows ==self$looc$nrows){
     if(verbose)print("no need to update, although we should probably check if the phens changed")
@@ -2347,7 +2349,7 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
       names(nme_data) = nme_data
       mem_dirs = lapply(nme_data,function(xx){
         d1 = paste(mem_dirp,nme,xx,sep="/") 
-        dir.create(d1, recursive=TRUE)
+        dir.create(d1, recursive=TRUE, showWarnings = FALSE)
         d1
       })
       self$norm_done = lapply(mem_dirs,function(xx){
@@ -2446,21 +2448,13 @@ split=function(proportions){
 },
   initialize=function( cohort,  db_name,dbDir,flags,
                       incl_full=T,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores
-   #print("H")
-   #print(transform_y)
-    
-  #  self$sigs =sigEnv$new(self$sigsdir,db_name, clear=F, user="")
-   # self$sigs$updateData(data_flags = self$flags, 
-    #                             data_names =cohort, 
-     #                            data_types = names(self$datas[[1]]$data),
-      #                           dims = self$dims(),
-       #                          phenos =self$datas[[1]]$pheno())
+  
     self$direction = .readFlag(flags,'direction','none');
     self$db_name=db_name;
     if(!is.null(memDir)){
       mem_dirp = memDir
       mem_dirp = paste(memDir,nrow(cohort$rna$matrix),sep="/")  #getOption("fspls.mem_dir", NULL)
-      dir.create(mem_dirp, recursive = T);
+      dir.create(mem_dirp, recursive = T, showWarnings=FALSE);
      nme_data = names(data)
      names(nme_data) = nme_data
      mem_dirs = lapply(nme_data,function(xx){
@@ -2527,11 +2521,15 @@ split=function(proportions){
     
   
     nmes1 = names(self$data)
+    #print("HHHH");
     self$norm = lapply(self$data, function(d1) {
+      
       normm = attr(d1,"norm")
       if(is.null(normm)){
         if(typeof(d1)=="S4"){ ## this not efficient
-          means = rowMeans(d1)
+         # print(dim(d1))
+        #  print(typeof(d1))
+          means = Matrix::rowMeans(d1)
           
          # normm=   -1 *apply(d1,2, function(g) sqrt(sum((g-mean(g))^2)))
           normm = -1*sparse_norm(d1)
