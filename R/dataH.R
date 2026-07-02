@@ -207,11 +207,16 @@ return(list(ggp1, ggp2, ggp3))
 }
 
 ## this is a class which holds a data object and interacts with the coordination node
-.getAllSparseMatrices<-function(data, hasNA=T, convertToBigMatrix=F){
+.getAllSparseMatrices<-function(data, hasNA=T, convertToBigMatrix=F, min_variance =0.001, max_na_proportion=0.5){
   rn = unlist(lapply(data, function(d1) rownames(d1)))
   rn = rn[!duplicated(rn)]
   lapply(data, function(mat){
-    .getSparseMatrices(mat, hasNA=hasNA, convertToBigMatrix = convertToBigMatrix,rn = rn)
+   m1 =  .getSparseMatrices(mat, hasNA=hasNA, convertToBigMatrix = convertToBigMatrix,rn = rn)
+   
+     sv = sparse_variance(m1$matrix)
+     na_cnt = colSums(m1$matrixNA)/nrow(m1$matrixNA)
+     m2 = lapply(m1, function(m11) m11[,sv>min_variance & na_cnt<=max_na_proportion])
+  m2
   })
   
 }
@@ -224,7 +229,7 @@ return(list(ggp1, ggp2, ggp3))
   if(length(mi1)==length(rn)){
     if(max(abs(apply(cbind(mi1, 1:length(rn)),1,diff)))==0) newNA=F
   }
-  newNA = length(which(is.na(mi0))>0)
+  newNA = length(which(is.na(mi0)))>0
   
   if(!hasNA& !newNA){
     if(convertToBigMatrix){
@@ -244,6 +249,7 @@ return(list(ggp1, ggp2, ggp3))
       m1=apply(mat,2,function(v){
         v1 = v[mi0]
         mv = mean(v, na.rm=T)
+        if(is.na(mv)) mv =0
         v1[is.na(v1)]=mv
         v1
       })
@@ -258,6 +264,7 @@ return(list(ggp1, ggp2, ggp3))
     }else{
       m1=apply(mat,2,function(v){
         mv = mean(v, na.rm=T)
+        if(is.na(mv)) mv =0
         v[is.na(v)]=mv
         v
       })
@@ -288,7 +295,12 @@ getFullModels<-function(all_models){
 }
 
 
-.getFamily<-function(y_mat, family1=NULL, max_ordinal=getOption("max_ordinal",20)){
+#' Infer the statistical families of the phenotypes
+#' @param y_mat a matrix of phenotypes, with columns as variables and rows as samples
+#' @param max_ordinal  maximum number of values before we consider an ordinal value as a continuous value
+#' @returns a list with the statistical families detected
+#' @export
+getFamily<-function(y_mat, max_ordinal=getOption("max_ordinal",10)){
   types = attr(y_mat, "types")
   
   if(!is.null(types)){
@@ -358,7 +370,7 @@ getFullModels<-function(all_models){
 
 #' dataH
 #'
-#' @description A class that encapsulates a dataset
+#' @description A class that encapsulates a single dataset
 #'
 #' @export
 dataH<-R6::R6Class("dataH", 
@@ -435,8 +447,11 @@ dataH<-R6::R6Class("dataH",
          plot_grid(ggps[[1]], ggps[[2]], ggps[[3]])
        }
        data_nme=self$name();
-       comb2 = lapply(comb2_new, function(x) x$pvs)
        vars_l_todo_new=analysis$savePvalsAndNextVars(flags,phens,vars_l_todo,comb2,data_nme,  k1)
+       if(length(vars_l_todo$todo1)==length(vars_l_todo_new$todo1)){ ## to account for continuing via shortening todo rather than adding variable
+         comb2 = lapply(comb2_new, function(x) x$pvs)
+         
+       }
        vars_l_todo = vars_l_todo_new
        nvar = length(vars_l_todo$vars_l[[1]]$var)
        if(verbose) print(names(vars_l_todo$vars_l))
@@ -634,21 +649,21 @@ dataH<-R6::R6Class("dataH",
  
  public = list(
    #' @description Create a new instance
-   #' @param data matrix
-   #' @param y phenotype matrix
-   #' @param nme Name of data object
-   #' @param flags list of options
-   #' @param transform_y a transformation object
-   #' @param family the statistical family of phenotype y
+   #' @param data a matrix, with columns as variables and rows as samples
+   #' @param y phenotype matrix, with columns as outcomes and rows as samples
+   #' @param nme The name of the data objetct. 
+   #' @param flags list of options, described in the vignette
+   #' @param transform_y a transformation object from the function getYTransformation
+   #' @param family the statistical family of phenotype y, can be calculated by getFamily
    
-   #' @param dbDir dir for databases
+   #' @param dbDir dir for database to store results to speed up re-reruns.  Can be NULL, if not required
      initialize=function(
     data,
     y,
     nme,
     flags ,
     transform_y=getYTransform(pow = 1,  n_random=1, perm=F),
-    family= .getFamily(y),
+    family= getFamily(y),
       dbDir=tempdir()
    ){
        
@@ -696,14 +711,14 @@ dataH<-R6::R6Class("dataH",
       
     
   },
-  #' multiAngles and pv
+  #' Calculate the angles and pv across multiple phenotypes.  This is an internal function and should not need to be called by user
   #'
-  #' @param comb20 drop the tables instead of clear
-  #' @param phens1 drop the tables instead of clear
-  #' @param k1 k1 the tables instead of clear
-  #' @param flags drop the tables instead of clear
-  #' @param expt_id drop the tables instead of clear
-  #' @param vars_l_todo  drop the tables instead of clear
+  #' @param comb20 values from previous iteration
+  #' @param phens1 phenotypes being used
+  #' @param k1 k1 is the current fold
+  #' @param flags list of options
+  #' @param expt_id and ID for the experiment (can be 0)
+  #' @param vars_l_todo  the variables under consideration
     multiAnglesAndPv=function(comb20, phens1,  k1,flags, expt_id, vars_l_todo){
             
     verbose=.readFlag(flags,'verbose',F)
@@ -732,7 +747,7 @@ dataH<-R6::R6Class("dataH",
     }))
     comb2_new
   },
-  #' clear database
+  #' clear database. This is only used if you want to clear the database.  Internal function
   #'
   #' @param drop drop the tables instead of clear
   #' @param exclude which tables not to clear
@@ -752,6 +767,8 @@ dataH<-R6::R6Class("dataH",
   #' split dataset into smaller datasets
   #'
   #' @param proportions what proportions to split into
+  #' @returns a list of dataH objects with data partiioned according to proportions
+  
  split=function(proportions = c(0.5,0.5)){
    datas = private$data$split(proportions);
    mats = datas$mats;
@@ -793,7 +810,7 @@ dataH<-R6::R6Class("dataH",
    ncol(private$data$looc$incl)
  },
  
- #' update the phenotypes without remaking the entire object
+ #' update the phenotypes without remaking the entire object. You can provide many phenotypes in the initialisation stage, but only consider a subset in model fitting stage in this way.
  #' @param phens phenotypes
  #' @param flags list of options
  #' @param transform_y transformation object 
@@ -1002,8 +1019,8 @@ makeAllModels=function(vars_all,
   names(rem_inds) = as.character(rem_inds)
   names(rem_inds)[which(rem_inds==self$nreps())]="full"
   all_models = private$makeModels(list(),rem_inds , phens, flags)
-  
-  if(length(variables)==0) return(list(models=all_models, flags = flags, phens = phens))
+
+  if(length(variables)==0)  return(all_models) ;#return(list(models=all_models, flags = flags, phens = phens, trainedOn=private$nme))
   ord = order(unlist(lapply(variables, length)),decreasing=T)
   variables = variables[ord]
   var_inds = var_inds[ord]
@@ -1034,8 +1051,6 @@ makeAllModels=function(vars_all,
               if(is.null(mod3)){
                 all_models[[names(models1)[[k]]]][[r_nme]]= models1[[k]][[r_nme]] #[[p_nme]][[r_nme]] #[[p_nme]][[r_nme]] 
                 
-              }else{
-                print("already calculated!")
               }
             }
           }
@@ -1119,6 +1134,7 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
   if(is.null(eval1)) return(NULL)
   #  eval1 = subset(eval1, model!="avg")
   eval2 = eval1|> pivot_wider(names_from="submeasure") #|> tibble::add_column(transform_y=strsplit(transform_y[[1]]," ")[[1]][2])
+  
   #  isfull=eval2$model %in% full_model_nmes
   #  eval2|>tibble::add_column(isfull=isfull)
   if(!is.null(sigDB) ){
@@ -1128,7 +1144,16 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
   }
   #print("HH")
   #  if(T) return(eval2)
-  .calcEval1(eval2, rename=F)
+  eval3 = .calcEval1(eval2, rename=F)
+  eval4 = eval3 |> tibble::add_column(variable= unlist(lapply(eval3$model, function(x){
+    if(x=="cv" || x=="") return("");
+    x1 =rev(strsplit(x,";")[[1]])[1]
+    
+    x2 = strsplit(x1,"\\.")[[1]]
+    x2[min(length(x2), 2)]
+  })))
+  eval4$variable[is.na(eval4$variable)]=""
+  eval4
 }
     
 )

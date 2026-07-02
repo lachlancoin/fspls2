@@ -4,7 +4,6 @@
 #'
 #' @param ... Arguments passed to glm
 #' @return A fitted glm object
-#' @export
 glm1 <- function(...) {
   withCallingHandlers(
     glm(...),
@@ -86,8 +85,23 @@ countsMatrix
   }
 }
 
-
-
+#' Plot the results from evaluateAll
+#'
+#' @param flags a list of options
+#' @return corrected flags
+#' @export
+check_flags<-function(flags){
+  if(!is.null(.readFlag(flags,"nrep",NULL))){
+    flags[['nfold']] = flags[['nrep']]
+    warning("replaced nrep with nfold")
+  }
+  if(!is.null(.readFlag(flags,"batch",NULL))){
+    flags[['batchsize']] = flags[['batch']]
+    
+   warning("replace batch with batchsize")
+  }
+  flags
+}
 .avg<-function(eval0){
   nme_cols1 = c("data","subpheno","measure","pheno","trainedOn","pheno_group","numvars","cv","family")
   rem_cols = names(eval0)[!(names(eval0) %in% nme_cols1)]
@@ -171,8 +185,10 @@ plotEval2<-function(eval1,...){
 .plotEval1<-function(eval3,
           shape_color=c("pheno","subpheno"),
           shape=shape_color,
+          text ="variable",dotsize="nsamps",
            color=shape_color,linetype=shape,showranges=TRUE, ## linetype="fullmodel"
-           txtsize=1,logy=F,legend=F,sep_by="",scales="free",point=TRUE,line=TRUE,
+           txtsize=1,logy=F,legend=F,sep_by="",scales="free",point=TRUE,line=TRUE,showtext = text!="",
+       labelsize=2,
            grid0 = c("cohort","measure"),grid1 = "cv_full",title="", title1=""
           ){
   linetype_nme = paste(linetype, collapse="_");
@@ -180,6 +196,7 @@ plotEval2<-function(eval1,...){
   grid1_nme = if(length(grid1)==0) NULL else  paste(grid1,collapse="_");
   shape_nme = paste(shape,collapse="_")
   color_nme = paste(color,collapse="_")
+  text_nme = paste(text,collapse="_")
   
   sep_by_nme = "sep_by"
   subphens = table(eval3$subpheno)
@@ -188,6 +205,7 @@ plotEval2<-function(eval1,...){
   eval3$measure = factor(eval3$measure)
   eval3 = .modify(eval3, color, color_nme)
   eval3 = .modify(eval3, shape, shape_nme)
+  eval3 = .modify(eval3, text, text_nme)
   
   eval3 = .modify(eval3, linetype, linetype_nme)
   eval3 = .modify(eval3, sep_by, sep_by_nme)
@@ -209,8 +227,17 @@ plotEval2<-function(eval1,...){
     eval5 = subset(eval2, sep_by==ph & !is.na(mid))
     ph3 = paste(sort(unique(apply(eval5[,names(eval5) %in% title1, drop=F],1,paste,collapse=","))), collapse=" ")
   ggp<-ggplot(eval5);
-  if(point) ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_nme,size="nsamps", color=color_nme))
+  if(point) {
+    if(dotsize %in% names(eval5)){
+    ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_nme,size=dotsize, color=color_nme))
+    }else{
+      ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_nme, color=color_nme),size=dotsize)
+      
+    }
+  }
   if(line)  ggp<-ggp+geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=color_nme)) #+ggtitle(paste(title,ph, ph3))
+  if(showtext) ggp<-ggp+geom_text_repel(aes_string(x="numvars", y="mid", label=text_nme,color=color_nme),size=labelsize) #+ggtitle(paste(title,ph, ph3))
+  
   if(showranges){ ## geom_ribbon vs geom_errorbar
     
    ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype_nme,color=color_nme, fill = color_nme ), alpha = 0.1)
@@ -515,7 +542,6 @@ expandSparseMatrix<-function(counts, n,  vec, by="row"){
 #' @param inds indices for subsetting
 #' @param by can be col or row
 #' @return sparse sub matrix
-#' @export
 getSparseSubMatrix<-function(counts, inds,by='col'){
   colInds = inds
   rowInds = inds

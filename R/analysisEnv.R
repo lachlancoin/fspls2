@@ -167,12 +167,13 @@ analysisEnv<-R6::R6Class("analysisEnv",
         #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
         # stop_random= min(gp1)<=min(gp)
         #print(head(sort(ord[stop_ind])))
-        print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles))
-        print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
-        print("cumulative ")
-        print(unlist(list(rand=min(logpvs_all[gp1]),nonrand= min(logpvs_all[gp]))))
-        
-        if(!useAngles) print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
+        if(verbose && FALSE){
+              print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles))
+              print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
+              print("cumulative ")
+              print(unlist(list(rand=min(logpvs_all[gp1]),nonrand= min(logpvs_all[gp]))))
+        }
+        if(!useAngles && verbose) print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
         
       }
       logpv =min(logpvs)
@@ -198,11 +199,11 @@ analysisEnv<-R6::R6Class("analysisEnv",
         
         return(vars_l_todo)
       }
-      if(length(todo1)==1){
-        print("could consider saving the vars at this point to the DB.  Maybe also need to record dataset included")
-      }
-      print("shortening _todo")
-      vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
+     # if(length(todo1)==1){
+    #    print("could consider saving the vars at this point to the DB.  Maybe also need to record dataset included")
+    #  }
+     # print("shortening _todo")
+      vars_l_todo = list( stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
       return(vars_l_todo)
     },
     savePvals=function(flags,phens,k1, data_nme, vars_l, comb2){
@@ -221,6 +222,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     select_k=function(datasH,phens1,flags, k1,expt_id,
                       vars_l_todo ,
                       verbose=F){
+      print(paste("fold",k1))
      # get_plots=.readFlag(flags, "get_plots",F) 
       stop_y = .readFlag(flags, 'stop_y',"rand")
       logpvthresh = log(.readFlag(flags,"pthresh",0.1))
@@ -233,7 +235,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
       names(datasH) = nmesH;
       names(nmesH) = nmesH
       comb2 = lapply(datasH, function(x) return(NULL))
-      
+    #  comb2_old = comb2
       useDB = !is.null(private$sigs)
      # nmesH = names(datasH); names(nmesH) = nmesH;
       while(length(vars_l_todo$todo1)>0 ){
@@ -246,11 +248,15 @@ analysisEnv<-R6::R6Class("analysisEnv",
            comb21
         }))
         if(inherits(comb2_news,"try-error")) break;
-        comb2 = comb2_news
+      
         vars_l_todo_new= private$nextVars(flags,phens1, vars_l_todo,  k1,logpvthresh,beam, 
                                           comb2_news=if(useDB) NULL else comb2_news, 
                                           stop_y = stop_y, verbose=verbose)
+        if(length(vars_l_todo$todo1)==length(vars_l_todo_new$todo1)){
+            comb2 = comb2_news
+        }
         vars_l_todo = vars_l_todo_new
+        
         nvar = length(vars_l_todo$vars_l[[1]]$var)
         if(verbose) print(names(vars_l_todo$vars_l))
         if(length(vars_l_todo$vars_l[[1]]$var_names)>=flags$max) break;
@@ -280,9 +286,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
   #'
   #' @param flags list of options
   #' @param phens phenotypes
-  #' @param logpv starting logpv
-  #' @return object outlining what is left to do
-  getTodo=function(flags, phens, logpv = -100){
+  #' @return object outlining what is left to do for next iteration, 
+  getTodo=function(flags, phens){
+    logpv = -100
     incls = fromJSON(.readFlag(flags,'data_types','{}'))
     genes_incls=fromJSON(.readFlag(flags,"genes_incls",'{"all":["all"]}')) #,getOption("genes_incls",NULL)
     quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
@@ -308,7 +314,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     vars_l_todo
   },
   
-  #' Get clear the databases
+  #' Clear the databases.  Only necessary if using a database and re-running analyses
   #'
   #' @param drop completely drop tables and start from scratch
   #' @param exclude tables to exclue from clearing
@@ -326,7 +332,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
   },  
   
  
-  #' Get the next vars in iteration
+  #' Get the next vars in iteration.  Internal function
   #'
   #' @param flags list of options
   #' @param phens phenotypes
@@ -356,7 +362,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
                  phens=datasH[[1]]$pheno()$all,
                  useDB=F){#c(y="function(y) y","function(y) y")
    phens1 = phens
-   mc.cores = .readFlag(flags, "mc.cores",2)
+   mc.cores = .readFlag(flags, "mc.cores",1)
    ##if(mc.cores>1 && )
    flags$transform_y = toJSON(transform_y);
    verbose=.readFlag(flags,'verbose',F);

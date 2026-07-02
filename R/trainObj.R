@@ -122,7 +122,8 @@ trainObj<-R6::R6Class("trainObj",
                       
                       if(!force && toJSON(subphens)==toJSON(self$subphens) && k == self$k){
                         if(length(which(unlist(lapply(self$products, is.null))))==0){
-                        print("not updating"); return(NULL)
+                        ##print("not updating"); 
+                          return(NULL)
                         }
                       }
                      

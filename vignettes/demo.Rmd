@@ -25,28 +25,31 @@ library(fspls2)
   options("fspls.types"= jsonlite::fromJSON('{"gaussian":["correlation","rms"],"binomial":["AUC"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
 
   ## set the y_transforms to explore  
-  transform_y=getYTransform(pow = 1,  n_random=1, perm=F)
+  transform_y=getYTransform(pow = 1,    ## transformations raise to the powers indicated here.  Default is 1 but can add others
+                            n_random=1  ## number of random transformations, also used in stopping critera
+                            )
   ## set the flags
   flags = list(min=0,  #minimum number of variables
                max=200, # maximum number of variables,  
                nfold=10,## number of folds.  10 fold implies a 10 non-overlapping 10% splits
                batchsize=0, ##batchsize can be specified alternatively to nfold, but only one can be nonzero
-               angles_only=F, ## whether to use purely angles to find best variables
-               topn=50,  ## if using model fit to rank variables, how many top angles to take  (larger takes more time)
+               angles_only=FALSE, ## whether to use purely angles to find best variables (RECOMMENDED FALSE)
+               topn=20,  ## if using model fit to rank variables, how many top angles to take  (larger takes more time)
                beam=1, ## how many best combinations to take through to next round of iteration. minimum value is 1, but higher explores more combinations
-               all_v_all=F,  ## for multi-class outcomes, this builds all vs all classifier, instead of a one vs all
-               project=T,   ## whether to use the projection approach in model building (TRUE recommended)
-            useglmnet=T,  ##whether to useglmnet for model fitting (after variables selected) (TRUE recommoneded)
-                        verbose=F,
-            mc.cores=2,  ## only works in unix
+               all_v_all=FALSE,  ## for multi-class outcomes, this builds all vs all classifier, instead of a one vs all
+               project=TRUE,   ## whether to use the projection approach in model building (TRUE recommended)
+            useglmnet=TRUE,  ##whether to useglmnet for model fitting (after variables selected) (TRUE recommoneded)
+                        verbose=FALSE,
+            mc.cores=1,  ## only works in unix
             direction="none" ## can be + , - or none
     )
+  check_flags(flags)
 
 ```
 
 ```{r example}
   examples = c("binomial", "gaussian", "ordinal", "multinomial");
-  example="gaussian"
+  #example="gaussian"
   
   #FUNCTION TO SHOW HOW TO RUN EACH EXAMPLE
   runExample<-function(example){
@@ -54,16 +57,16 @@ library(fspls2)
     dataset = readRDS(fi)
     dh = dataH$new(dataset$dataset, y = dataset$y, nme=example, flags=flags, transform_y = transform_y, dbDir=NULL)
     analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
-    #analysis$clear_db(drop=T, datasH = list(dh))
+    
     datasH = list(dh)   
   #  system.time({
-#this is the step that has parallelisation over folds
+   #this is the step that has parallelisation over folds, and also most time consuming step
     vars_all = analysis$select(datasH,  flags, transform_y, phens = dh$pheno()$all)
   #  })
     all_models =dh$makeAllModels(vars_all,useDB=F)
     eval1= dh$evaluateAllModels(all_models, useDB=F)
-    ggps1=plotEval2(eval1,legend=T, grid1=c("subpheno","pheno","cv_full"), grid0="measure",linetype="data", ##"full_model"
-                   shape_color=c("data","transf"),sep_by=c("beam"), showranges=T,
+    ggps1=plotEval2(eval1,legend=T, grid1=c("subpheno","pheno"), grid0=c("measure","cv_full"),linetype="data", ##"full_model"
+                   shape_color=c("data","transf"),sep_by=c("beam"), showranges=T,text="variable",
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   
     return(ggps1[[1]])

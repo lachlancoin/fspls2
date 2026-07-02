@@ -96,7 +96,7 @@ lapply(str1, function(t_y){
 .getZetaBinary<-function(x,y, w){
   levsy =sort(unique(y[!is.na(y)]))
   yn = .mkBinary(y)
-  m1=glm1(yn~as.matrix(x),  family="binomial", weights=w)
+  m1=glm(yn~as.matrix(x),  family="binomial", weights=w)
   ll1 = logLik(m1)
   ll2 =  logLik(update(m1, ~1))
   pv = pchisq((2*(ll1 - ll2)),attr(ll1,"df")[1]-attr(ll2,"df")[1],lower.tail=FALSE,log.p=F)
@@ -113,7 +113,7 @@ lapply(str1, function(t_y){
   const_term=unlist(lapply(levsy1, function(l1){
     y2 = .mkBinary(y, thresh = l1)
   
-    m1=glm1(y2~1, offset=prod, family="binomial", weights=w)
+    m1=glm(y2~1, offset=prod, family="binomial", weights=w)
     -m1$coefficients[[1]]
   }))
   list(beta_new1 = beta_new1, const_term = const_term, pv = pv)
@@ -146,9 +146,9 @@ lapply(str1, function(t_y){
       df1 = data.frame(cbind(y,as.matrix(yp1k )));
       df1$y=factor(df1$y, levels = sort(unique(df1$y)))  
       func = paste0("y~",paste(colnames(df1)[-1], collapse="+"))
-      m1=polr(func,  data=df1,weights=w,Hess=T, method="logistic")
+      m1=suppressWarnings(polr(func,  data=df1,weights=w,Hess=T, method="logistic"))
       df1[,2] =  yp_new[,1]
-      m2=polr(func,  data=df1,weights=w,Hess=T, method="logistic")
+      m2=suppressWarnings(polr(func,  data=df1,weights=w,Hess=T, method="logistic"))
       ll1 = logLik(m1)
       ll2 =  logLik(m2)
       .lrt(ll2,ll1,2,1,log.p=T)  
@@ -752,7 +752,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
         df = data.frame(cbind(y,x ))
         df$y = factor(y, levels = sort(unique(y,na.rm=T)))  
         # print("using polr") 
-        m1=try(polr(y~x,  data=df,weights=w,Hess=T, method="logistic"),silent=T)
+        m1=try(suppressWarnings(polr(y~x,  data=df,weights=w,Hess=T, method="logistic")),silent=T)
         #predict(m1, df, type = "p")
         
         if(inherits(m1,"try-error")){
@@ -1031,11 +1031,11 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
         df$y = factor(y, levels = sort(unique(y)))  
         # print("using polr")
         func = paste0("y~",paste(colnames(x), collapse="+"))
-        m1=try(polr(func,  data=df,weights=w,Hess=T, method="logistic"),silent=T)
+        m1=try(suppressWarnings(polr(func,  data=df,weights=w,Hess=T, method="logistic")),silent=T)
         #predict(m1, df, type = "p")
         
         if(inherits(m1,"try-error")){
-          if(strict) warning("polr!!!")
+        #  if(strict) warning("polr!!!")
           resz = .getZetaBinary(x,y, w)  ##need as.matrix(x) ??
           beta_new1=resz$beta_new1
           const_term =resz$const_term
@@ -1617,7 +1617,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
   if(length(all_models_y)==0) return(NULL)
   #
   #
-  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[1]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
@@ -1691,7 +1691,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
 
 
   updateModel=function(k,best_all_i, model_prev,to_keep,CHECK=T){
-    if(TRUE) stop("not updating")
+    if(TRUE) stop("not updating..")
     sprev = self$train$prev[[k]]
     best_all=lapply(1:length(best_all_i), function(j){
       prev_i= sprev[[to_keep[j]]]
