@@ -1,0 +1,18 @@
+bibentry(
+  bibtype = "Article",
+  title = "A flexible framework for minimal biomarker signature discovery from clinical omics studies without library size normalisation",
+  author = c(
+    person("Daniel", "Rawlinson"),
+    person("Chenxi", "Zhou"),
+    person("Myrsini", "Kaforou"),
+    person("Kim-Anh", "Le Cao"),
+    person("Lachlan JM", "Coin"),
+    person("RAPIDS Study Group")
+  ),
+  journal ="PLOS Digital Health" ,
+  year = "2025",
+  volume ="4" ,
+  number = "3",
+  pages ="e0000780" ,
+  doi ="10.1371/journal.pdig.0000780"
+)

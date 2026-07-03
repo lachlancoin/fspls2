@@ -1,0 +1,9 @@
+^\.gitignore$
+^\.Rhistory$
+^R/\.Rhistory$
+^vignettes/\.gitignore$
+^\.\.Rcheck$
+^\.git$
+^doc$
+^Meta$
+^cran-comments\.md$

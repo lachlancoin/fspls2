@@ -1,0 +1,8 @@
+analysisBase            analysisBase
+analysisEnv             analysisEnv
+check_flags             Plot the results from evaluateAll
+dataH                   dataH
+getFamily               Infer the statistical families of the
+                        phenotypes
+getYTransform           Get object for transforming the y variables
+plotEval                Plot the results from evaluateAll

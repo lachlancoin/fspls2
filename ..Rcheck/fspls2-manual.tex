@@ -1,0 +1,1209 @@
+\nonstopmode{}
+\documentclass[letterpaper]{book}
+\usepackage[times,inconsolata,hyper]{Rd}
+\usepackage{makeidx}
+\makeatletter\@ifl@t@r\fmtversion{2018/04/01}{}{\usepackage[utf8]{inputenc}}\makeatother
+% \usepackage{graphicx} % @USE GRAPHICX@
+\makeindex{}
+\begin{document}
+\chapter*{}
+\begin{center}
+{\textbf{\huge Package `fspls2'}}
+\par\bigskip{\large \today}
+\end{center}
+\ifthenelse{\boolean{Rd@use@hyper}}{\hypersetup{pdftitle = {fspls2: A Package to Find Minimal Transcriptional Signatures}}}{}
+\ifthenelse{\boolean{Rd@use@hyper}}{\hypersetup{pdfauthor = {Lachlan Coin}}}{}
+\begin{description}
+\raggedright{}
+\item[Type]\AsIs{Package}
+\item[Title]\AsIs{A Package to Find Minimal Transcriptional Signatures}
+\item[Version]\AsIs{0.1}
+\item[Date]\AsIs{2026-06-25}
+\item[Author]\AsIs{Lachlan Coin [aut, cre]}
+\item[Imports]\AsIs{R6, jsonlite, Matrix, glmnet, tidyr, MASS, ggplot2, pROC,
+binom, confintr, DBI, RSQLite, methods,tibble, ggrepel,
+RColorBrewer, parallel}
+\item[Maintainer]\AsIs{Lachlan Coin }\email{l.coin@imb.uq.edu.au}\AsIs{}
+\item[Description]\AsIs{Identifies minimal gene signatures from multiomic data.}
+\item[License]\AsIs{GPL-2}
+\item[LazyLoad]\AsIs{yes}
+\item[NeedsCompilation]\AsIs{no}
+\item[Repository]\AsIs{CRAN}
+\item[Date/Publication]\AsIs{2026-06-25 13:50:02 UTC}
+\item[Config/roxygen2/version]\AsIs{8.0.0}
+\item[Encoding]\AsIs{UTF-8}
+\item[Suggests]\AsIs{knitr, rmarkdown}
+\item[VignetteBuilder]\AsIs{knitr}
+\end{description}
+\Rdcontents{Contents}
+\HeaderA{analysisBase}{analysisBase}{analysisBase}
+%
+\begin{Description}
+A class that encapsulates a dataset
+\end{Description}
+%
+\begin{Section}{Methods}
+%
+\begin{SubSection}{Public methods}
+\begin{itemize}
+
+\item{} \Rhref{\#method-analysisBase-initialize}{\code{analysisBase\$new()}}
+\item{} \Rhref{\#method-analysisBase-name}{\code{analysisBase\$name()}}
+\item{} \Rhref{\#method-analysisBase-clone}{\code{analysisBase\$clone()}}
+
+\end{itemize}
+
+\end{SubSection}
+
+
+
+\hypertarget{method-analysisBase-initialize}{}
+%
+\begin{SubSection}{\code{analysisBase\$new()}}
+Create a new instance of base class
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}analysisBase$new(nme, dims = NULL, flags = list(), dbDir = tempdir())\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{nme}] name
+\item[\code{dims}] dims
+\item[\code{flags}] a list object specifying options
+\item[\code{dbDir}] location for database to be written, default to tempdir
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-analysisBase-name}{}
+%
+\begin{SubSection}{\code{analysisBase\$name()}}
+get dataset name;
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}analysisBase$name()\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+assigned name of dataset
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-analysisBase-clone}{}
+%
+\begin{SubSection}{\code{analysisBase\$clone()}}
+The objects of this class are cloneable with this method.
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}analysisBase$clone(deep = FALSE)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{deep}] Whether to make a deep clone.
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+\end{Section}
+\HeaderA{analysisEnv}{analysisEnv}{analysisEnv}
+%
+\begin{Description}
+A class that encapsulates a FSPLS analysis of multiple datasets
+\end{Description}
+%
+\begin{Section}{Super class}
+\code{\LinkA{analysisBase}{analysisBase}} -> \code{analysisEnv}
+\end{Section}
+%
+\begin{Section}{Methods}
+%
+\begin{SubSection}{Public methods}
+\begin{itemize}
+
+\item{} \Rhref{\#method-analysisEnv-initialize}{\code{analysisEnv\$new()}}
+\item{} \Rhref{\#method-analysisEnv-getTodo}{\code{analysisEnv\$getTodo()}}
+\item{} \Rhref{\#method-analysisEnv-clear_db}{\code{analysisEnv\$clear\_db()}}
+\item{} \Rhref{\#method-analysisEnv-savePvalsAndNextVars}{\code{analysisEnv\$savePvalsAndNextVars()}}
+\item{} \Rhref{\#method-analysisEnv-select}{\code{analysisEnv\$select()}}
+\item{} \Rhref{\#method-analysisEnv-clone}{\code{analysisEnv\$clone()}}
+
+\end{itemize}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-analysisEnv-initialize}{}
+%
+\begin{SubSection}{\code{analysisEnv\$new()}}
+Create a new instance
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}analysisEnv$new(flags = list(), dbDir = tempdir())\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{flags}] a list object specifying options
+\item[\code{dbDir}] location for database to be written. If NULL then no DB 
+Get todo
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-analysisEnv-getTodo}{}
+%
+\begin{SubSection}{\code{analysisEnv\$getTodo()}}
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}analysisEnv$getTodo(flags, phens)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{flags}] list of options
+\item[\code{phens}] phenotypes
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+object outlining what is left to do for next iteration, 
+Clear the databases.  Only necessary if using a database and re-running analyses
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-analysisEnv-clear_db}{}
+%
+\begin{SubSection}{\code{analysisEnv\$clear\_db()}}
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}analysisEnv$clear_db(drop = F, exclude = "vars", datasH = NULL)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{drop}] completely drop tables and start from scratch
+\item[\code{exclude}] tables to exclue from clearing
+\item[\code{datasH}] list of dataH objects to clear
+Get the next vars in iteration.  Internal function
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-analysisEnv-savePvalsAndNextVars}{}
+%
+\begin{SubSection}{\code{analysisEnv\$savePvalsAndNextVars()}}
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}analysisEnv$savePvalsAndNextVars(
+  flags,
+  phens,
+  vars_l_todo,
+  comb2,
+  data_nme,
+  k1
+)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{flags}] list of options
+\item[\code{phens}] phenotypes
+\item[\code{vars\_l\_todo}] vars\_l\_todo
+\item[\code{comb2}] results
+\item[\code{data\_nme}] name of dataset
+\item[\code{k1}] which repetition
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+object outlining what is left to do
+main function for variable selection
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-analysisEnv-select}{}
+%
+\begin{SubSection}{\code{analysisEnv\$select()}}
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}analysisEnv$select(
+  datasH,
+  flags,
+  transform_y,
+  phens = datasH[[1]]$pheno()$all,
+  useDB = F
+)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{datasH}] a list of dataH objects
+\item[\code{flags}] list of options
+\item[\code{transform\_y}] transformation object
+\item[\code{phens}] list of phenotypes
+\item[\code{useDB}] boolean to indicate if results should be saved to database
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-analysisEnv-clone}{}
+%
+\begin{SubSection}{\code{analysisEnv\$clone()}}
+The objects of this class are cloneable with this method.
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}analysisEnv$clone(deep = FALSE)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{deep}] Whether to make a deep clone.
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+\end{Section}
+\HeaderA{check\_flags}{Plot the results from evaluateAll}{check.Rul.flags}
+%
+\begin{Description}
+Plot the results from evaluateAll
+\end{Description}
+%
+\begin{Usage}
+\begin{verbatim}
+check_flags(flags)
+\end{verbatim}
+\end{Usage}
+%
+\begin{Arguments}
+\begin{ldescription}
+\item[\code{flags}] a list of options
+\end{ldescription}
+\end{Arguments}
+%
+\begin{Value}
+corrected flags
+\end{Value}
+\HeaderA{dataH}{dataH}{dataH}
+%
+\begin{Description}
+A class that encapsulates a single dataset
+\end{Description}
+%
+\begin{Section}{Super class}
+\code{\LinkA{analysisBase}{analysisBase}} -> \code{dataH}
+\end{Section}
+%
+\begin{Section}{Methods}
+%
+\begin{SubSection}{Public methods}
+\begin{itemize}
+
+\item{} \Rhref{\#method-dataH-initialize}{\code{dataH\$new()}}
+\item{} \Rhref{\#method-dataH-multiAnglesAndPv}{\code{dataH\$multiAnglesAndPv()}}
+\item{} \Rhref{\#method-dataH-clear_db}{\code{dataH\$clear\_db()}}
+\item{} \Rhref{\#method-dataH-data_types}{\code{dataH\$data\_types()}}
+\item{} \Rhref{\#method-dataH-split}{\code{dataH\$split()}}
+\item{} \Rhref{\#method-dataH-pheno}{\code{dataH\$pheno()}}
+\item{} \Rhref{\#method-dataH-dims}{\code{dataH\$dims()}}
+\item{} \Rhref{\#method-dataH-nreps}{\code{dataH\$nreps()}}
+\item{} \Rhref{\#method-dataH-update}{\code{dataH\$update()}}
+\item{} \Rhref{\#method-dataH-select}{\code{dataH\$select()}}
+\item{} \Rhref{\#method-dataH-extractPredictions}{\code{dataH\$extractPredictions()}}
+\item{} \Rhref{\#method-dataH-plotData}{\code{dataH\$plotData()}}
+\item{} \Rhref{\#method-dataH-getProjectedData}{\code{dataH\$getProjectedData()}}
+\item{} \Rhref{\#method-dataH-getVariance}{\code{dataH\$getVariance()}}
+\item{} \Rhref{\#method-dataH-makeAllModels}{\code{dataH\$makeAllModels()}}
+\item{} \Rhref{\#method-dataH-evaluateAllModels}{\code{dataH\$evaluateAllModels()}}
+\item{} \Rhref{\#method-dataH-clone}{\code{dataH\$clone()}}
+
+\end{itemize}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-initialize}{}
+%
+\begin{SubSection}{\code{dataH\$new()}}
+Create a new instance
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$new(
+  data,
+  y,
+  nme,
+  flags,
+  transform_y = getYTransform(pow = 1, n_random = 1, perm = F),
+  family = getFamily(y),
+  dbDir = tempdir()
+)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{data}] a matrix, with columns as variables and rows as samples
+\item[\code{y}] phenotype matrix, with columns as outcomes and rows as samples
+\item[\code{nme}] The name of the data objetct.
+\item[\code{flags}] list of options, described in the vignette
+\item[\code{transform\_y}] a transformation object from the function getYTransformation
+\item[\code{family}] the statistical family of phenotype y, can be calculated by getFamily
+\item[\code{dbDir}] dir for database to store results to speed up re-reruns.  Can be NULL, if not required
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-multiAnglesAndPv}{}
+%
+\begin{SubSection}{\code{dataH\$multiAnglesAndPv()}}
+Calculate the angles and pv across multiple phenotypes.  This is an internal function and should not need to be called by user
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$multiAnglesAndPv(comb20, phens1, k1, flags, expt_id, vars_l_todo)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{comb20}] values from previous iteration
+\item[\code{phens1}] phenotypes being used
+\item[\code{k1}] k1 is the current fold
+\item[\code{flags}] list of options
+\item[\code{expt\_id}] and ID for the experiment (can be 0)
+\item[\code{vars\_l\_todo}] the variables under consideration
+clear database. This is only used if you want to clear the database.  Internal function
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-clear_db}{}
+%
+\begin{SubSection}{\code{dataH\$clear\_db()}}
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$clear_db(drop = FALSE, exclude = "vars")\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{drop}] drop the tables instead of clear
+\item[\code{exclude}] which tables not to clear
+get the data types
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-data_types}{}
+%
+\begin{SubSection}{\code{dataH\$data\_types()}}
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$data_types()\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+which data types are in the dataset
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-split}{}
+%
+\begin{SubSection}{\code{dataH\$split()}}
+split dataset into smaller datasets
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$split(proportions = c(0.5, 0.5))\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{proportions}] what proportions to split into
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+a list of dataH objects with data partiioned according to proportions
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-pheno}{}
+%
+\begin{SubSection}{\code{dataH\$pheno()}}
+get the phenotyeps
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$pheno()\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+phenotypes
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-dims}{}
+%
+\begin{SubSection}{\code{dataH\$dims()}}
+get the dimensions
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$dims()\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+dimensions
+get the nreps
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-nreps}{}
+%
+\begin{SubSection}{\code{dataH\$nreps()}}
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$nreps()\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+nreps
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-update}{}
+%
+\begin{SubSection}{\code{dataH\$update()}}
+update the phenotypes without remaking the entire object. You can provide many phenotypes in the initialisation stage, but only consider a subset in model fitting stage in this way.
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$update(phens, flags, transform_y = fromJSON(flags$transform_y))\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{phens}] phenotypes
+\item[\code{flags}] list of options
+\item[\code{transform\_y}] transformation object
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-select}{}
+%
+\begin{SubSection}{\code{dataH\$select()}}
+main function for variable selection
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$select(analysis, phens, flags, transform_y, useDB = F)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{analysis}] an analysisEnv object
+\item[\code{phens}] list of phenotyps
+\item[\code{flags}] list of options
+\item[\code{transform\_y}] transformation object
+\item[\code{useDB}] boolean to indicate if results should be saved to database
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-extractPredictions}{}
+%
+\begin{SubSection}{\code{dataH\$extractPredictions()}}
+extract the predictions for the fitted models
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$extractPredictions(
+  all_modelsh,
+  phens = all_modelsh$phens,
+  flags = all_modelsh$flags,
+  CV = FALSE,
+  liab = T
+)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{all\_modelsh}] fitted models from makeAllModels
+\item[\code{phens}] list of phenotyps
+\item[\code{flags}] list of options
+\item[\code{CV}] cross validation predictions
+\item[\code{liab}] return liability score, or probability (for binomial, ordinal multinomial)
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+a table with results
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-plotData}{}
+%
+\begin{SubSection}{\code{dataH\$plotData()}}
+plot all data for selected variables
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$plotData(
+  vars_all,
+  phens = vars_all$phens,
+  all_types = FALSE,
+  transform_x = NULL,
+  violin = FALSE,
+  assoc = F
+)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{vars\_all}] variables
+\item[\code{phens}] list of phenotyps
+\item[\code{all\_types}] use all types?
+\item[\code{transform\_x}] which transform to use on x
+\item[\code{violin}] violin plots
+\item[\code{assoc}] use association
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+a table with results
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-getProjectedData}{}
+%
+\begin{SubSection}{\code{dataH\$getProjectedData()}}
+get data after projection
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$getProjectedData(varnames)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{varnames}] varnames
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+projected data after projecting out varnames
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-getVariance}{}
+%
+\begin{SubSection}{\code{dataH\$getVariance()}}
+get variance of data
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$getVariance(varnames)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{varnames}] varnames
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+variance
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-makeAllModels}{}
+%
+\begin{SubSection}{\code{dataH\$makeAllModels()}}
+fit models based on variables
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$makeAllModels(
+  vars_all,
+  phens = vars_all[[1]]$phens,
+  flags = vars_all[[1]]$flags,
+  transform_y = fromJSON(flags$transform_y),
+  useDB = F
+)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{vars\_all}] list of variables selected by select method
+\item[\code{phens}] list of phenotypes
+\item[\code{flags}] flags
+\item[\code{transform\_y}] an object to determine the y transformaton
+\item[\code{useDB}] whether to use the DB to save the reuslt
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+fitted models
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-evaluateAllModels}{}
+%
+\begin{SubSection}{\code{dataH\$evaluateAllModels()}}
+evaluate the fit of models
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$evaluateAllModels(
+  all_modelsh,
+  phens = all_modelsh$phens,
+  flags = all_modelsh$flags,
+  useDB = F
+)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{all\_modelsh}] models fitted from makeAllModels
+\item[\code{phens}] list of phenotypes
+\item[\code{flags}] flags
+\item[\code{useDB}] whether to save results to DB
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Returns}
+evaluation of models
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+
+
+\hypertarget{method-dataH-clone}{}
+%
+\begin{SubSection}{\code{dataH\$clone()}}
+The objects of this class are cloneable with this method.
+%
+\begin{SubSubSection}{Usage}
+
+\begin{alltt}dataH$clone(deep = FALSE)\end{alltt}
+
+
+
+\end{SubSubSection}
+
+%
+\begin{SubSubSection}{Arguments}
+
+\begin{description}
+
+\item[\code{deep}] Whether to make a deep clone.
+
+\end{description}
+
+
+
+\end{SubSubSection}
+
+\end{SubSection}
+
+
+\end{Section}
+\HeaderA{getFamily}{Infer the statistical families of the phenotypes}{getFamily}
+%
+\begin{Description}
+Infer the statistical families of the phenotypes
+\end{Description}
+%
+\begin{Usage}
+\begin{verbatim}
+getFamily(y_mat, max_ordinal = getOption("max_ordinal", 10))
+\end{verbatim}
+\end{Usage}
+%
+\begin{Arguments}
+\begin{ldescription}
+\item[\code{y\_mat}] a matrix of phenotypes, with columns as variables and rows as samples
+
+\item[\code{max\_ordinal}] maximum number of values before we consider an ordinal value as a continuous value
+\end{ldescription}
+\end{Arguments}
+%
+\begin{Value}
+a list with the statistical families detected
+\end{Value}
+\HeaderA{getYTransform}{Get object for transforming the y variables}{getYTransform}
+%
+\begin{Description}
+Get object for transforming the y variables
+\end{Description}
+%
+\begin{Usage}
+\begin{verbatim}
+getYTransform(
+  pows = c(1),
+  offset = 0,
+  n_random = 1,
+  perm = F,
+  norm = 1,
+  CHECK = F
+)
+\end{verbatim}
+\end{Usage}
+%
+\begin{Arguments}
+\begin{ldescription}
+\item[\code{pows}] power to raise to
+
+\item[\code{offset}] offset to subtract
+
+\item[\code{n\_random}] how many random variables
+
+\item[\code{perm}] whether random is permutation
+
+\item[\code{norm}] rescaling factor
+
+\item[\code{CHECK}] check whether inverse function works
+\end{ldescription}
+\end{Arguments}
+%
+\begin{Value}
+ggplot2 plot
+\end{Value}
+\HeaderA{plotEval}{Plot the results from evaluateAll}{plotEval}
+%
+\begin{Description}
+Plot the results from evaluateAll
+\end{Description}
+%
+\begin{Usage}
+\begin{verbatim}
+plotEval(
+  eval3,
+  shape_color = c("pheno", "subpheno"),
+  shape = shape_color,
+  text = "variable",
+  dotsize = "nsamps",
+  color = shape_color,
+  linetype = shape,
+  showranges = TRUE,
+  txtsize = 1,
+  logy = F,
+  legend = F,
+  sep_by = "",
+  scales = "free",
+  point = TRUE,
+  line = TRUE,
+  labelsize = 2,
+  grid0 = c("cohort", "measure"),
+  grid1 = "cv_full",
+  title = "",
+  title1 = ""
+)
+\end{verbatim}
+\end{Usage}
+%
+\begin{Arguments}
+\begin{ldescription}
+\item[\code{eval3}] a tibble or data frame from evaluateAll method from dataH
+
+\item[\code{shape\_color}] a list of column names to encode as both shape and color
+
+\item[\code{shape}] defaults to shape\_color but can be specified separately
+
+\item[\code{text}] a list of column names to include as text labels
+
+\item[\code{dotsize}] a numerical column to encode dotsize, or a number for constant sizes
+
+\item[\code{color}] defaults to shape\_color but can be specified separately
+
+\item[\code{linetype}] column controlling the type of line
+
+\item[\code{showranges}] whether to show 95\% CI as ribbon
+
+\item[\code{txtsize}] size of text
+
+\item[\code{logy}] whether to log y axis
+
+\item[\code{legend}] whether to show a legend
+
+\item[\code{sep\_by}] list of column names to separate into diff plots
+
+\item[\code{scales}] used in faceting can be free or fixed
+
+\item[\code{point}] whether to show dots
+
+\item[\code{line}] whether to include line
+
+\item[\code{labelsize}] the size of the text labels
+
+\item[\code{grid0}] how to facet on y
+
+\item[\code{grid1}] how to facet on x
+
+\item[\code{title}] the title
+
+\item[\code{title1}] columns to include in the title
+\end{ldescription}
+\end{Arguments}
+%
+\begin{Value}
+ggplot2 plot
+\end{Value}
+\printindex{}
+\end{document}

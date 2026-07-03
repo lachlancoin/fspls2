@@ -1,24 +1,10 @@
----
-title: "demo"
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{demo}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
----
-
-## Introduction
-
-This is a simple demo to carry out variable selection 
-
-```{r, include = FALSE}
+## ----include = FALSE----------------------------------------------------------
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
-```
 
-```{r setup}
+## ----setup--------------------------------------------------------------------
 library(fspls2)
 
 ##set the types
@@ -45,9 +31,8 @@ library(fspls2)
     )
   check_flags(flags)  ## runs som simple checks
 
-```
 
-```{r example}
+## ----example------------------------------------------------------------------
   examples = c("binomial", "gaussian", "ordinal", "multinomial");
   #example="gaussian"
   
@@ -77,21 +62,17 @@ system.file("extdata", package = "fspls2")
   
     return(ggps1[[1]])
   }
-```
-Example 1
-```{r, eval = FALSE}
-runExample("binomial")
-```
-Example 2
-```{r, eval = FALSE}
 
-  runExample(examples[2])
-```
-Example 3
-```{r, eval = FALSE }
-  runExample(examples[3])
-```
-Example 4
-```{r, eval = FALSE}
-  runExample(examples[4])
-```
+## ----eval = FALSE-------------------------------------------------------------
+# runExample("binomial")
+
+## ----eval = FALSE-------------------------------------------------------------
+# 
+#   runExample(examples[2])
+
+## ----eval = FALSE-------------------------------------------------------------
+#   runExample(examples[3])
+
+## ----eval = FALSE-------------------------------------------------------------
+#   runExample(examples[4])
+
