@@ -4,7 +4,7 @@
 \alias{analysisBase}
 \title{Analysis Base Class}
 \description{
-A class that encapsulates a dataset.
+A class that encapsulates a dataset holder and/or analysis of datasets
 }
 \details{
 Available methods:

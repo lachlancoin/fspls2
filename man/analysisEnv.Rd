@@ -4,7 +4,7 @@
 \alias{analysisEnv}
 \title{Analysis  Class}
 \description{
-A class that encapsulates a dataset.
+A class that encapsulates analysis of one or more datasets
 }
 \details{
 Available methods:

@@ -4,7 +4,7 @@
 \alias{dataH}
 \title{Data holder class}
 \description{
-A class that encapsulates a dataset.
+A class that encapsulates a dataset holder
 }
 \details{
 Available methods:
