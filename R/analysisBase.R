@@ -1,6 +1,17 @@
-#' analysisBase
+#' Analysis Base Class
 #'
-#' @description A class that encapsulates a dataset
+#' @description
+#' A class that encapsulates a dataset.
+#'
+#' @details
+#' Available methods:
+#' \itemize{
+#'   \item \code{new()} - Create a new instance
+#'   \item \code{name()} - Get dataset name
+#'   \item \code{clone()} - Clone the object
+#' }
+#'
+#' @export
 analysisBase<-R6::R6Class("analysisBase", 
                    private = list(
                      sigsdir="character",
@@ -82,9 +93,7 @@ analysisBase<-R6::R6Class("analysisBase",
                      }
                    ),
                    public = list(
-                     
-                   
-                     
+                                          
                      #' @description Create a new instance of base class
                      #' @param nme name
                      #' @param dims dims
@@ -116,6 +125,8 @@ analysisBase<-R6::R6Class("analysisBase",
                        
                      },
                    #' @description get dataset name;
+                   #' @returns assigned name of dataset
+                   
                    name = function(){
                      return (private$nme)
                    }

@@ -87,9 +87,18 @@
 #    }
 
 
-#' analysisEnv
+#' Analysis  Class
 #'
-#' @description A class that encapsulates a FSPLS analysis of multiple datasets
+#' @description
+#' A class that encapsulates a dataset.
+#'
+#' @details
+#' Available methods:
+#' \itemize{
+#'   \item \code{new()} - Create a new instance
+#'   \item \code{name()} - Get dataset name
+#'   \item \code{clone()} - Clone the object
+#' }
 #'
 #' @export
 analysisEnv<-R6::R6Class("analysisEnv", 
@@ -268,9 +277,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     
   ),                      
   public = list(
-  #datasH = "list",
- 
-  #transform_y="character",
+  
     #' @description Create a new instance
     #' @param flags a list object specifying options
     #' @param dbDir location for database to be written. If NULL then no DB 

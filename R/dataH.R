@@ -368,9 +368,18 @@ getFamily<-function(y_mat, max_ordinal=getOption("max_ordinal",10)){
 
 
 
-#' dataH
+#' Data holder class
 #'
-#' @description A class that encapsulates a single dataset
+#' @description
+#' A class that encapsulates a dataset.
+#'
+#' @details
+#' Available methods:
+#' \itemize{
+#'   \item \code{new()} - Create a new instance
+#'   \item \code{name()} - Get dataset name
+#'   \item \code{clone()} - Clone the object
+#' }
 #'
 #' @export
 dataH<-R6::R6Class("dataH", 
@@ -649,13 +658,12 @@ dataH<-R6::R6Class("dataH",
  
  public = list(
    #' @description Create a new instance
-   #' @param data a matrix, with columns as variables and rows as samples
+   #' @param data a list of matrices (of different modalities), with columns as variables and rows as samples
    #' @param y phenotype matrix, with columns as outcomes and rows as samples
    #' @param nme The name of the data objetct. 
    #' @param flags list of options, described in the vignette
    #' @param transform_y a transformation object from the function getYTransformation
    #' @param family the statistical family of phenotype y, can be calculated by getFamily
-   
    #' @param dbDir dir for database to store results to speed up re-reruns.  Can be NULL, if not required
      initialize=function(
     data,
@@ -711,8 +719,7 @@ dataH<-R6::R6Class("dataH",
       
     
   },
-  #' Calculate the angles and pv across multiple phenotypes.  This is an internal function and should not need to be called by user
-  #'
+  #' @description Calculate the angles and pv across multiple phenotypes.  This is an internal function and should not need to be called by user
   #' @param comb20 values from previous iteration
   #' @param phens1 phenotypes being used
   #' @param k1 k1 is the current fold
@@ -764,11 +771,9 @@ dataH<-R6::R6Class("dataH",
   data_types=function(){
     names(private$data$data)
   },
-  #' split dataset into smaller datasets
-  #'
+  #' @description split dataset into smaller datasets
   #' @param proportions what proportions to split into
   #' @returns a list of dataH objects with data partiioned according to proportions
-  
  split=function(proportions = c(0.5,0.5)){
    datas = private$data$split(proportions);
    mats = datas$mats;
@@ -786,7 +791,7 @@ dataH<-R6::R6Class("dataH",
    })
  },
  
- #' get the phenotyeps
+ #' @description get the phenotyeps
  #' @returns  phenotypes
   pheno=function(){
     maxpheno=1e9;sep=F; sep_group = F;exclude=NULL; code=NULL; memb=NULL
@@ -799,7 +804,7 @@ dataH<-R6::R6Class("dataH",
    
    res
  },
- #' get the dimensions
+ #' @description get the dimensions
  #' @returns  dimensions
  dims=function(){
    private$data$dims()
@@ -810,7 +815,7 @@ dataH<-R6::R6Class("dataH",
    ncol(private$data$looc$incl)
  },
  
- #' update the phenotypes without remaking the entire object. You can provide many phenotypes in the initialisation stage, but only consider a subset in model fitting stage in this way.
+ #' @description update the phenotypes without remaking the entire object. You can provide many phenotypes in the initialisation stage, but only consider a subset in model fitting stage in this way.
  #' @param phens phenotypes
  #' @param flags list of options
  #' @param transform_y transformation object 
@@ -829,7 +834,7 @@ dataH<-R6::R6Class("dataH",
    names(nreps) = nreps
    nreps
  },
-#' main function for variable selection
+#' @description main function for variable selection
 #' @param analysis an analysisEnv object
 #' @param phens list of phenotyps
 #' @param flags list of options
@@ -875,7 +880,7 @@ dataH<-R6::R6Class("dataH",
 #  })
 # },
  
-#' extract the predictions for the fitted models
+#' @description extract the predictions for the fitted models
 #' @param all_modelsh fitted models from makeAllModels
 #' @param phens list of phenotyps
 #' @param flags list of options
@@ -898,7 +903,7 @@ extractPredictions=function(all_modelsh,phens=all_modelsh$phens, flags=all_model
   predictions0 # 
 },
 
-#' plot all data for selected variables
+#' @description plot all data for selected variables
 #' @param vars_all variables
 #' @param phens list of phenotyps
 #' @param all_types use all types?
@@ -964,7 +969,7 @@ plotData=function(vars_all, phens = vars_all$phens, all_types=FALSE, transform_x
 #  } 
 #},
 
-#' get data after projection
+#' @description get data after projection
 #' @param varnames varnames
 #' @returns projected data after projecting out varnames
 getProjectedData=function(varnames){
@@ -974,7 +979,7 @@ getProjectedData=function(varnames){
  # })
 },
 
-#' get variance of data
+#' @description get variance of data
 #' @param varnames varnames
 #' @returns variance
 getVariance=function(varnames){
@@ -982,7 +987,7 @@ getVariance=function(varnames){
     d$getVariance();      
 },
 
-#' fit models based on variables
+#' @description fit models based on variables
 #' @param vars_all list of variables selected by select method
 #' @param phens list of phenotypes
 #' @param flags flags
@@ -1095,7 +1100,7 @@ makeAllModels=function(vars_all,
   #combined_models
   all_models_
 },
-#' evaluate the fit of models
+#' @description evaluate the fit of models
 #' @param all_modelsh  models fitted from makeAllModels
 #' @param phens list of phenotypes
 #' @param flags flags

@@ -4,6 +4,7 @@
 #'
 #' @param ... Arguments passed to glm
 #' @return A fitted glm object
+#' @noRd
 glm1 <- function(...) {
   withCallingHandlers(
     glm(...),
@@ -26,12 +27,11 @@ is.big.matrix<-function(mat){
 }
 
 ###used strictly for debugging
-.self<-function(dh){
-  assign("self", dh, envir = .GlobalEnv) 
-  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) 
-  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
-  
-}
+#.self<-function(dh){
+#  assign("self", dh, envir = .GlobalEnv) 
+#  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) 
+#  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
+#}
 
 ## this from sce single cell format
 .convertSCEToSparse<-function(sce){
@@ -100,7 +100,7 @@ check_flags<-function(flags){
     
    warning("replace batch with batchsize")
   }
-  flags
+  invisible(flags)
 }
 .avg<-function(eval0){
   nme_cols1 = c("data","subpheno","measure","pheno","trainedOn","pheno_group","numvars","cv","family")
@@ -162,35 +162,55 @@ length(unique(eval1$`data:family`))
   eval3
 }
 
-#' Plot the results from evaluateAll
-#'
-#' @param eval1 a tibble or data frame from evaluateAll method from dataH
-#' @param ... other params passsed to plotEval1
-#' @return ggplot2 plot
-#' @export
+
 plotEval2<-function(eval1,...){
   if(is.null(eval1[['experiment_id']])){
-    return(.plotEval1(eval1,...))
+    return(plotEval(eval1,...))
   }
   expt1 = unique(eval1$experiment_id)
   names(expt1) = expt1
   lapply(expt1,function(expt) {
     eval3 = subset(eval1, experiment_id==expt)
-    .plotEval1(eval3,...)
+    plotEval(eval3,...)
   })
 }
 
-#      maxn = max(eval2$nsamps)
-  #head(eval4)#pivot_wider(eval2, names_from = c("cv", "fullmodel", "numvars"), values_from ="value")
-.plotEval1<-function(eval3,
+#'  Plot the results from evaluateAll
+#' @param eval3 a tibble or data frame from evaluateAll method from dataH
+#' @param shape_color a list of column names to encode as both shape and color
+#' @param shape defaults to shape_color but can be specified separately
+#' @param text a list of column names to include as text labels
+#' @param dotsize a numerical column to encode dotsize, or a number for constant sizes
+#' @param color defaults to shape_color but can be specified separately 
+#' @param linetype column controlling the type of line
+#' @param showranges whether to show 95\% CI as ribbon
+#' @param txtsize size of text
+#' @param logy whether to log y axis
+#' @param legend whether to show a legend
+#' @param sep_by list of column names to separate into diff plots
+#' @param scales used in faceting can be free or fixed
+#' @param point whether to show dots
+#' @param line whether to include line
+#' @param labelsize the size of the text labels
+#' @param grid0 how to facet on y 
+#' @param grid1 how to facet on x
+#' @param title the title
+#' @param title1 columns to include in the title
+#' @returns ggplot2 plot
+#' @export
+plotEval<-function(eval3,
           shape_color=c("pheno","subpheno"),
           shape=shape_color,
-          text ="variable",dotsize="nsamps",
-           color=shape_color,linetype=shape,showranges=TRUE, ## linetype="fullmodel"
-           txtsize=1,logy=F,legend=F,sep_by="",scales="free",point=TRUE,line=TRUE,showtext = text!="",
+          text ="variable",
+          dotsize="nsamps",
+           color=shape_color,
+          linetype=shape,
+          showranges=TRUE, ## linetype="fullmodel"
+           txtsize=1,logy=F,legend=F,sep_by="",scales="free",point=TRUE,line=TRUE,
        labelsize=2,
            grid0 = c("cohort","measure"),grid1 = "cv_full",title="", title1=""
           ){
+  showtext = text!=""
   linetype_nme = paste(linetype, collapse="_");
   grid0_nme = paste(grid0, collapse="_")
   grid1_nme = if(length(grid1)==0) NULL else  paste(grid1,collapse="_");
@@ -236,7 +256,7 @@ plotEval2<-function(eval1,...){
     }
   }
   if(line)  ggp<-ggp+geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=color_nme)) #+ggtitle(paste(title,ph, ph3))
-  if(showtext) ggp<-ggp+geom_text_repel(aes_string(x="numvars", y="mid", label=text_nme,color=color_nme),size=labelsize) #+ggtitle(paste(title,ph, ph3))
+  if(showtext) ggp<-ggp+geom_text_repel(aes_string(x="numvars", y="mid", label=text_nme,color=color_nme),size=labelsize,max.overlaps = 1000) #+ggtitle(paste(title,ph, ph3))
   
   if(showranges){ ## geom_ribbon vs geom_errorbar
     
@@ -407,10 +427,9 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
 #' @param perm  whether random is permutation
 #' @param norm rescaling factor
 #' @param CHECK check whether inverse function works
-#' @return ggplot2 plot
+#' @return transformation object
 #' @export
 getYTransform<-function(pows = c(1),offset=0,  n_random=1,perm=F, norm=1,CHECK=F){
- # offset= 1e-3; norm=1;
   if(n_random <1) warning(" recommended to have at least one random permutation");
   if(!( 1 %in% pows)) warning("recommended to have a pow of 1, which is the untransformed y ")
   funcs = list()
@@ -542,6 +561,7 @@ expandSparseMatrix<-function(counts, n,  vec, by="row"){
 #' @param inds indices for subsetting
 #' @param by can be col or row
 #' @return sparse sub matrix
+#' @noRd
 getSparseSubMatrix<-function(counts, inds,by='col'){
   colInds = inds
   rowInds = inds
