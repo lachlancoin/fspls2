@@ -76,19 +76,19 @@ library(fspls2)
   }
 ```
 Example 1
-```{r, eval = !identical(Sys.getenv("NOT_CRAN"), "true")}
+```{r, eval = FALSE}
 runExample("binomial")
 ```
 Example 2
-```{r, eval = !identical(Sys.getenv("NOT_CRAN"), "true")}
+```{r, eval = FALSE}
 
   runExample(examples[2])
 ```
 Example 3
-```{r, eval = !identical(Sys.getenv("NOT_CRAN"), "true")}
+```{r, eval = FALSE }
   runExample(examples[3])
 ```
 Example 4
-```{r, eval = !identical(Sys.getenv("NOT_CRAN"), "true")}
+```{r, eval = FALSE}
   runExample(examples[4])
 ```
