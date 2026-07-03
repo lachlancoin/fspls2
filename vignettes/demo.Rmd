@@ -54,6 +54,8 @@ library(fspls2)
   #FUNCTION TO SHOW HOW TO RUN EACH EXAMPLE
   runExample<-function(example){
     fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
+    if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
+
     dataset = readRDS(fi)
     ## set up the objects
     dh = dataH$new(dataset$dataset, y = dataset$y, nme=example, flags=flags, transform_y = transform_y, dbDir=NULL)
