@@ -17,7 +17,7 @@
 #' @importFrom DBI dbConnect dbDisconnect dbWriteTable dbReadTable dbListTables dbGetQuery
 #' @importFrom RSQLite SQLite SQLITE_RWC
 #' @importFrom R6 R6Class
-#' @importFrom parallel mclapply
+
 
 #' @importFrom ggplot2 ggplot aes geom_point geom_line theme_bw labs geom_ribbon aes_string geom_hline facet_grid facet_wrap scale_color_manual geom_abline ggtitle geom_text ggsave guides element_text scale_shape_manual scale_x_continuous scale_y_continuous scale_y_log10 sec_axis theme
 #' @importFrom RColorBrewer brewer.pal

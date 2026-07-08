@@ -1,4 +1,68 @@
 
+rbind_sparse <- function(mats) {
+  # sanity check: all matrices must have the same number of columns
+  ncols <- vapply(mats, ncol, integer(1))
+  stopifnot(length(unique(ncols)) == 1)
+  ncol_total <- ncols[1]
+  
+  # row offset for each matrix = cumulative sum of preceding row counts
+  nrows <- vapply(mats, nrow, integer(1))
+  offsets <- c(0, cumsum(nrows)[-length(nrows)])
+  
+  # extract triplets from each matrix and shift row indices
+  triplets <- Map(function(m, off) {
+    t <- Matrix::mat2triplet(m)
+    list(i = t$i + off, j = t$j, x = t$x)
+  }, mats, offsets)
+  i_all <- unlist(lapply(triplets, `[[`, "i"), use.names = FALSE)
+  j_all <- unlist(lapply(triplets, `[[`, "j"), use.names = FALSE)
+  x_all <- unlist(lapply(triplets, `[[`, "x"), use.names = FALSE)
+  
+  sparseMatrix(i = i_all, j = j_all, x = x_all,
+               dims = c(sum(nrows), ncol_total))
+}
+
+
+##drop, which are the info cols, not numerical
+##assumes first col is rowname
+.processBigCSV<-function(filename, rownames = 1, drop=2:6, chunk_size=100000, output = paste0(filename,".mm"), row_mean_thresh=0){
+  
+        dt <- data.table::fread(filename, drop = drop,
+                                skip = 0, nrows = 0, header = TRUE)
+        #chunk_size <- 50000
+        coln =names(dt)
+      nrow_total=NA
+      mats <- list()
+      mats_type = list()
+      i <- 1
+      skip <- 1  # header
+    max = 3e9
+      repeat {
+        print(paste("skip", skip, i))
+        dt <- data.table::fread(filename, drop = drop,
+                    skip = skip, nrows = chunk_size, header = FALSE)
+      
+        if (nrow(dt) == 0) break
+        m1 = as(as.matrix(dt[,-1,drop=F]), "sparseMatrix")
+        rs = rowSums(m1)/ncol(m1)
+        print(length(which(rs>=row_mean_thresh))/length(rs))
+        subind = rs>=row_mean_thresh
+        print(paste("keep",length(which(subind))/nrow(m1)))
+        m1 = m1[subind,,drop=F]
+        rownames(m1) = dt[[1]][subind]
+        mats[[i]] <- m1
+        skip <- skip + chunk_size
+        i <- i + 1
+        if(i>max) break
+        if (nrow(dt) < chunk_size) break
+      }
+     mat1 = rbind_sparse(mats)
+    colnames(mat1) = coln[-1]
+    Matrix::writeMM(mat1, output)
+    
+}
+#writeMM(m1, "counts.mm")
+
 
 #' Fit a GLM, suppressing perfect separation warnings
 #'
@@ -210,6 +274,10 @@ plotEval<-function(eval3,
        labelsize=2,
            grid0 = c("cohort","measure"),grid1 = "cv_full",title="", title1=""
           ){
+  eval3 = eval3[,names(eval3) %in% c(shape_color,sep_by, linetype, text, dotsize, color, title1, grid0, grid1, "numvars","mid","low","high"),drop=F]
+  l1 = apply(eval3,1,paste, collapse="::");
+  #print(which(duplicated(l1)))
+  eval3 = eval3[!duplicated(l1),,drop=F]
   showtext = text!=""
   linetype_nme = paste(linetype, collapse="_");
   grid0_nme = paste(grid0, collapse="_")

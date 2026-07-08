@@ -188,6 +188,10 @@ sigEnv<-R6::R6Class("sigEnv", public = list(
  user="", ## default user
   initialize=function(dbDir,subnme,flags, dims, user="",
                       clear=FALSE){ #there is duplication in phenosdir and dbDir .. fix later
+    if (!requireNamespace("RSQLite", quietly = TRUE)) {
+      stop("This function requires the 'RSQLite' package. Please install it with install.packages('RSQLite').")
+    }
+    
     if(!file.exists(dbDir)) dir.create(dbDir,recursive=T, showWarnings=FALSE)
     self$subnme = subnme
     self$user=user

@@ -150,7 +150,8 @@ return(list(ggp1, ggp2, ggp3))
       if(is.null(ang1)) return(NULL)
       col_incl = cols_incl1[[inc1]]
       ang2=ang1[[1]][[nme_t1]][[nme_p1]]
-      ang2[,match(comb_all2[[nme_t1]][[nme_p1]]$names,colnames(ang2)),drop=F]
+      mi2 = match(comb_all2[[nme_t1]][[nme_p1]]$names,colnames(ang2))
+      ang2[,mi2,drop=F]
       })
       ea_all = ea1[[1]]
       if(length(ea1)>1){
@@ -437,9 +438,10 @@ dataH<-R6::R6Class("dataH",
      #  print(names(models2))
      models2
    },
-   select_k=function(analysis,phens,flags, k1,expt_id,
+   select_k=function(analysis,phens,flags, k1,
                      vars_l_todo ,
                      verbose=F){
+     expt_id = super$expt_id();
      get_plots=.readFlag(flags, "get_plots",F) 
      stop_y = .readFlag(flags, 'stop_y',"rand")
      logpvthresh = log(.readFlag(flags,"pthresh",0.1))
@@ -618,7 +620,7 @@ dataH<-R6::R6Class("dataH",
      ri_out
    },
    
-   combinedAngles=function(phens, varnames, incl, k, g_incl, qq_t, flags, sumAngle){ #phens, varnames, incl=incl, k=k, type=type
+   combinedAngles=function(phens, varnames, incl, k, g_incl, qq_t, flags, sumAngle, addPlot=F){ #phens, varnames, incl=incl, k=k, type=type
       type=private$type
      prev_signature =paste(unlist(lapply(varnames, function(vn)vn[2])),collapse=";")
      var_t = private$var_thresh(qq_t)
@@ -628,8 +630,10 @@ dataH<-R6::R6Class("dataH",
      angleH=list(angles=angles,
                  cols_incl = private$data$cols_incl(var_t,incl, g_incl,excl=varnames)) ### fix 
      comb_angle1 =  .combineAngles1(angleH, incl, flags, sumAngle, prev_signature, excl=varnames)
-     all_angles = .extrAngles(angleH,comb_angle1, incl)
-     attr(comb_angle1,"all")=all_angles;
+     if(addPlot){
+       all_angles = .extrAngles(angleH,comb_angle1, incl)
+        attr(comb_angle1,"all")=all_angles;
+     }
      comb_angle1
    },
    getPvsAll=function(subphens, prev_i, b_i_name,k, #   prev_i = vars_l1[[nmed]]
@@ -668,6 +672,7 @@ dataH<-R6::R6Class("dataH",
      initialize=function(
     data,
     y,
+    weights = rep(1, nrow(y)),
     nme,
     flags ,
     transform_y=getYTransform(pow = 1,  n_random=1, perm=F),
@@ -676,6 +681,11 @@ dataH<-R6::R6Class("dataH",
    ){
        
     super$initialize(nme,dims =lapply(data, dim),  flags=flags, dbDir=dbDir);
+       colnames(y) = gsub("\\.","_",colnames(y))  ## no . allowed
+      for(k in 1:length(data)){
+        colnames(data[[k]]) = gsub("\\.","_",colnames(data[[k]]))  ## no . allowed
+        
+      }
        
     memDir=NULL
     useDB=!is.null(dbDir);
@@ -710,7 +720,7 @@ dataH<-R6::R6Class("dataH",
     varn = getOption("varn",c())
     #invisible(lapply(1:length(datas), function(ik) {
      # family = families[[ik]]
-        private$data$updateY(y,preprocessed=preprocessed, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
+        private$data$updateY(y,weights, preprocessed=preprocessed, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
     
     #  private$sigsdir=paste(dbDir,"fspls_signatures1",sep="/")
       #dir.create(private$sigsdir, recursive=FALSE, showWarnings=F)
@@ -727,8 +737,8 @@ dataH<-R6::R6Class("dataH",
   #' @param expt_id and ID for the experiment (can be 0)
   #' @param vars_l_todo  the variables under consideration
     multiAnglesAndPv=function(comb20, phens1,  k1,flags, expt_id, vars_l_todo){
-            
-    verbose=.readFlag(flags,'verbose',F)
+      get_plots=.readFlag(flags, "get_plots",F) 
+      verbose=.readFlag(flags,'verbose',F)
     saveAngles=FALSE
     if(is.null(expt_id)) stop("expt_id is NULL")
     vars_l = vars_l_todo$vars_l
@@ -740,7 +750,7 @@ dataH<-R6::R6Class("dataH",
       prev_i2 = private$findPrev(comb20, expt_id, prev_i, k1);
       varnames = prev_i2$var_names; 
       sumAngle =sum(prev_i2$angles)
-      comb_=private$combinedAngles(phens1, varnames, incl, k1,  g_incl, qq_t, flags, sumAngle) ;
+      comb_=private$combinedAngles(phens1, varnames, incl, k1,  g_incl, qq_t, flags, sumAngle,addPlot=get_plots) ;
       if(length(comb_)==0) stop("length zero")
       # return(list(comb_angle1, all_angles));
       
@@ -823,6 +833,8 @@ dataH<-R6::R6Class("dataH",
  update=function(phens, flags, transform_y=fromJSON(flags$transform_y)){
     verbose=.readFlag(flags,'verbose',F)
     force=.readFlag(flags,'force',F);
+    flags$transform_y = transform_y;
+    super$updateExpt(phens, flags)
 #   flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
 
    if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(names(private$data$data))
@@ -844,20 +856,21 @@ dataH<-R6::R6Class("dataH",
                  ## expt_id specific to this database .. might be diff for global
                ){#c(y="function(y) y","function(y) y")
    verbose=.readFlag(flags,'verbose',F);
+   super$updateExpt(phens, flags);
    flags$transform_y = toJSON(transform_y);
    if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(self$data_types())
       if(flags$topn<flags$beam) stop("beam should be less than topn")
    if(is.null(flags[['data_types']])) flags[['data_types']] = names(private$data$data)
    nreps = self$update(phens, flags, transform_y);
-   if( useDB && !is.null(private$sigs)){
-     vars_all = private$sigs$loadVars(flags, phens)
+   
+     vars_all = private$loadVars(phens)
      if(!is.null(vars_all)) return(vars_all)
-   }
+   
    vars_l_todo = analysis$getTodo(flags, phens)
-   expt_id=super$getExpt(flags, phens, add_new=T)
+  # expt_id=super$getExpt(flags, phens, add_new=T)
    variables=lapply(nreps, function(k1){
      if(verbose) print(paste("cv",k1,"of",length(nreps)))
-    private$select_k(analysis, phens,flags, k1, expt_id, vars_l_todo,verbose=verbose)
+    private$select_k(analysis, phens,flags, k1, vars_l_todo,verbose=verbose)
                })
    variables1 = lapply(variables, function(vars_l_todo){
      vars_l_todo$vars_l 
@@ -865,7 +878,9 @@ dataH<-R6::R6Class("dataH",
   
    get_plots=.readFlag(flags, "get_plots",F) 
 #   private$sigs$clearPvals(expt_id)
-   vars_all=private$post_process(variables1,flags,phens)
+   vars_all=post_process(variables1,flags,phens)
+   private$saveVars(vars_all);
+   
    if(get_plots){
    attr(vars_all,"plots") = .merge1_new(lapply(variables, function(vars_l_todo){
      attr(vars_l_todo,"plots") 

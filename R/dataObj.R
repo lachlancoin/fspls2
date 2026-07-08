@@ -162,8 +162,8 @@ lapply(str1, function(t_y){
   }else{
     if(ncol(yp_new)>1 || ncol(yp1k)>1) stop("not expecting")
    
-    m1=glm1(y~yp1k[,1],family=family)# weights=w[nonNAy], weights should be integer
-    m2=glm1(y~yp_new[,1], family=family)#weights = w[nonNAy], 
+    m1=glm1(y~yp1k[,1],family=family,weights=w[nonNAy]) ##, weights should be integer
+    m2=glm1(y~yp_new[,1], family=family, weights = w[nonNAy]) 
     ll2 = logLik(m2)
     ll1 =  logLik(m1)
     if(ll1==0)warning("problem, zero likelihood")
@@ -2267,7 +2267,7 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
       var_res
   })
 },
-  updateY=function(y1,preprocessed=F,family=NULL,CHECK=T, all_v_all=F, one_v_rest=F){ ## updates y
+  updateY=function(y1,weights, preprocessed=F,family=NULL,CHECK=T, all_v_all=F, one_v_rest=F){ ## updates y
     if(preprocessed){
       self$y = y1;
       self$family = family;
@@ -2336,7 +2336,7 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
    self$family = unlist(lapply(names(y), function(nme) rep(gsub(".multiway","",nme),
                                                            if(is.list(y[[nme]])) length(y[[nme]]) else ncol(y[[nme]]))),recursive=FALSE)
    self$y = unlist(y, recursive=FALSE)
-   self$weights = rep(1, length(mi1))
+   self$weights = weights
     return(NULL)
    # list(missing=missing_vals, matching=matching_vals)
    #self$weights = weights
