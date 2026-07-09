@@ -13,6 +13,20 @@ mergeAll = function(comb2_new, beam){
   
 }
 
+.check_data<-function(data, y){
+  rn_y = rownames(y);
+  if(length(rn_y)==0) warning(" define rownames for y");
+  rns = lapply(data, function(d){
+    rnd = rownames(d);
+    if(length(rnd)==0) warning(" define rownames for each data object");
+    mi1 = match(rnd, rn_y)  ;mi2 = match(rn_y,rnd)  ;
+    if(length(which(is.na(mi1)))>0) warning(" cannot match rownames from data  to y")
+    if(length(which(is.na(mi2)))>0) warning(" cannot match rownames from data to y")
+    if(mi1[!is.na(mi1)][1]!=1) warning("not a match")
+  });
+  
+}
+
 get_comb_plot<-function(plot_results, nvar){
   if(length(plot_results)==0) return(NULL)
   names(plot_results) = 1:length(plot_results)
@@ -208,7 +222,7 @@ return(list(ggp1, ggp2, ggp3))
 }
 
 ## this is a class which holds a data object and interacts with the coordination node
-.getAllSparseMatrices<-function(data, hasNA=T, convertToBigMatrix=F, min_variance =0.001, max_na_proportion=0.5){
+.getAllSparseMatrices<-function(data, hasNA=T, convertToBigMatrix=F, min_variance =0.001, max_na_proportion=0.99){
   rn = unlist(lapply(data, function(d1) rownames(d1)))
   rn = rn[!duplicated(rn)]
   lapply(data, function(mat){
@@ -686,14 +700,16 @@ dataH<-R6::R6Class("dataH",
         colnames(data[[k]]) = gsub("\\.","_",colnames(data[[k]]))  ## no . allowed
         
       }
-       
+       .check_data(data, y)  ## checks rownames match
     memDir=NULL
     useDB=!is.null(dbDir);
     convertToBigMatrix=F #.readFlag(flags,"covertToBigMatrix", F)
     hasNA=.readFlag(flags,"hasNA", T)
     preprocessed=.readFlag(flags,"preprocessed", F)
+    max_na_proportion =.readFlag(flags,"max_na_proportion",0.99)
+    min_variance =.readFlag(flags,"max_na_proportion",0.001)
     
-    mat = .getAllSparseMatrices(data,hasNA=hasNA, convertToBigMatrix=convertToBigMatrix)
+    mat = .getAllSparseMatrices(data,hasNA=hasNA, convertToBigMatrix=convertToBigMatrix,min_variance = min_variance, max_na_proportion=max_na_proportion)
     #print("HHHHH")
     #print(mat)
     private$dbDir = dbDir

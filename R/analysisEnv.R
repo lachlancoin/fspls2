@@ -341,7 +341,8 @@ analysisEnv<-R6::R6Class("analysisEnv",
       
       nvar = length(vars_l_todo$vars_l[[1]]$var)
       if(verbose) print(names(vars_l_todo$vars_l))
-      if(length(vars_l_todo$vars_l[[1]]$var_names)>=flags$max) break;
+      
+      if(length(vars_l_todo$vars_l[[1]]$var_names)>=flags$max  ) break;
     }
     vars_l_todo
   },

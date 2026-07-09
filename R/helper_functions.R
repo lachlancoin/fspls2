@@ -70,8 +70,9 @@ rbind_sparse <- function(mats) {
 #' @return A fitted glm object
 #' @noRd
 glm1 <- function(...) {
+  args <- list(...)
   withCallingHandlers(
-    glm(...),
+    do.call(glm, args),
     warning = function(w) {
       if (grepl("fitted probabilities numerically 0 or 1 occurred", conditionMessage(w))) {
         invokeRestart("muffleWarning")
@@ -79,7 +80,6 @@ glm1 <- function(...) {
     }
   )
 }
-
 
 
 ##BIG MATRIX NOT SUPPORTED IN THIS VERSION
