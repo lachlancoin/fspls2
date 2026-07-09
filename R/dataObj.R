@@ -162,8 +162,8 @@ lapply(str1, function(t_y){
   }else{
     if(ncol(yp_new)>1 || ncol(yp1k)>1) stop("not expecting")
    
-    m1=glm1(y~yp1k[,1],family=family,weights=w[nonNAy]) ##, weights should be integer
-    m2=glm1(y~yp_new[,1], family=family, weights = w[nonNAy]) 
+    m1=glm(y~yp1k[,1],family=family,weights=w) ##, weights should be integer
+    m2=glm(y~yp_new[,1], family=family, weights = w) 
     ll2 = logLik(m2)
     ll1 =  logLik(m1)
     if(ll1==0)warning("problem, zero likelihood")
@@ -774,7 +774,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
         
       }else{
         stop("here")
-        m1=glm1(y~x, family="binomial", weights=w)
+        m1=glm(y~x, family="binomial", weights=w)
         sm  = summary(m1)
         coeff = sm$coeff[2,]
         pv1 = coeff[4]
@@ -1048,7 +1048,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
         
       }else{
         stop("here")
-        m1=glm1(y~as.matrix(x), family="binomial", weights=w)
+        m1=glm(y~as.matrix(x), family="binomial", weights=w)
         sm  = summary(m1)
         beta_new1=sm$coefficients[-1,1]
         const_term = -1*sm$coefficients[1,1]
@@ -1062,7 +1062,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
        
         if(useglm){
           if(CHECK && FALSE){
-            print(summary(glm1(y~x[,1])))
+            print(summary(glm(y~x[,1])))
             ridge=glmnet(cbind(1,x[nonNAy,1,drop=F]),y[nonNAy],family=family,weights=w[nonNAy], alpha = 0)
             rbeta <- coef(ridge,s=min(ridge$lambda))
             print(rbeta)
@@ -1420,7 +1420,7 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=F,verbose=F, 
           y11 = self$y[[subnme]][,subphens[[subnme]],drop=F]
           self$updateWeights(subphens)
           nonNAy = !is.na(y11[,1])
-          ab=glm1(y11[,1] ~as.matrix(extractd0))
+          ab=glm(y11[,1] ~as.matrix(extractd0))
         ridge=glmnet(cbind(1,extractd0[nonNAy,]),y11[nonNAy,,drop=F] ,family=family, alpha = 0, weights =self$weights[nonNAy])
         rbeta <- coef(ridge,s=min(ridge$lambda))
         aa = predict(ridge,cbind(1,extractd0[nonNAy,]),s=min(ridge$lambda), family=family)
@@ -1507,7 +1507,7 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x 
     pvs=lapply(nmes_df, function(nme_df_){
       lapply(nmes_df2, function(nme_df2_){
           m2=lm(df2[[nme_df2_]] ~df[[nme_df_]])
-          m1=glm1(df2[[nme_df2_]] ~1)
+          m1=glm(df2[[nme_df2_]] ~1)
         ll2 = logLik(m2)
         ll1 =  logLik(m1)
         pv1 = .lrt(ll2,ll1,2,1, log.p=F)
