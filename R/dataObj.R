@@ -1530,76 +1530,107 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=F, transform_x 
   df4
 },
 
-extractPredictions=function(all_models_,phens1, flags, CV = FALSE,liab=T,
-                           
-                            ypred = self$ypred(phens1)){
-  d = self
-  inv_transform=T
-  inv_transform_y = !inv_transform
-  nmesp = names(phens1)
-  names(nmesp)= nmesp
-  #all_models1_ = all_models_[[1]]
-  all_models1 = all_models_
- # res_all = lapply(all_models_, function(all_models1_){
-  #  all_models1 = all_models1_[[nme_p]]
- # evals = .merge1_new(lapply(all_models, function(all_models1){
-    full_ind = names(all_models1)=="full"
-    full_model = all_models1[["full"]]
-    nmesm = names(all_models1)[!full_ind];
-    inds=as.numeric(nmesm)
-#    nmes_models = names(all_models1[[1]]);
- #   names(nmes_models) = nmes_models
-  #  ypred = ypredObj$new(d,NULL, d$family)
-    #evals = lapply(nmes_models, function(nmes1){
-    #  dim(ypred$ypreds[[1]])
-    evals = NULL
-      if(!is.null(full_model) && ! CV){
-        nonNA =self$looc$incl[,self$nreps()]
-        prev_i1 = full_model#[[nmes1]]
-       # inv_func=transform_func[[prev_i1$transf]]
-        ypred$updateYP(d,prev_i1, nonNA, inv_transform_y=inv_transform_y, flip=FALSE, liab=liab )
-
-        evals = (lapply(nmesp, function(nmesp1){
-          phens1[[nmesp1]]
-          yy2 = d$y[[nmesp1]]
-          mi  = match(phens1[[nmesp1]],dimnames(yy2)[[2]])
-          list(y=d$y[[nmesp1]][,mi,drop=F], ypred= ypred$ypreds[[nmesp1]])
-        } )    )   
-#        d$updateYpredsInds(phens,full_model[[nmes1]], d$nreps(), ypred )
-      }
-      if(length(nmesm)>0 && CV){
-        inds = as.numeric(nmesm)
-        for(j in 1:length(nmesm)){
-          nonNA =self$looc$incl[,inds[[j]]]
-          prev_i1 = all_models1[[j]]
-        #  inv_func=transform_func[[prev_i1$transf]]
-          ypred$updateYP(self, prev_i1, nonNA,inv_transform_y=inv_transform_y, flip=TRUE, liab=liab)
-#          d$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
-        }
-        nonNA=self$getNonNAInds(inds)
-        evals=(lapply(nmesp, function(nmesp1){
-          yy2 = d$y[[nmesp1]]
-          mi  = match(phens1[[nmesp1]],dimnames(yy2)[[2]])
-        list(y=d$y[[nmesp1]][!nonNA,mi,drop=F], ypred=ypred$ypreds[[nmesp1]][!nonNA,,drop=F]) 
-        }))
-       
-      }
-      #     rbind(res1,res2)
-      #    }),addName="variable")
-    #,addName="trainedOn")
-    #}),addName="fullmodel")
-  
-  
- # })
-#res_all[lapply(res_all,length)>0]
-evals
-},
 ypred=function(phens1){
   family = unlist(lapply(names(phens1), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1])))
   ypr = ypredObj$new(self,self$phensi(phens1),family=family)
   ypr
 },# inverse_func_strs = jsonlite::fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
 #all_models_y = all_models$y; inverse_func_str = jsonlite::fromJSON(flags1$transform_y_inverse)[[1]]; self = datasAll$datas[[1]]
+
+extractPredictions=function(all_models_y,phens, flags,  ypred = self$ypred(phens)
+                            ){
+  inv_transform_y=F
+  d = self
+  self$updateLOOC(phens,flags)
+  liab = .readFlag(flags,"liab",T)  ## whether to evaluate with liability , default is true
+  #  ypred = self$ypred(phens)
+  minv = .readFlag(flags,"min",0)
+  maxv = .readFlag(flags,"max",1e6)
+  verbose=.readFlag(flags, "verbose",FALSE)
+  group_names= names(all_models_y); names(group_names)=group_names
+  numvars = unlist(lapply(group_names, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]])))
+  numvars1 = sort(unique(numvars))
+  names(numvars1) = numvars1
+  numvars1 = numvars1[numvars1>=minv & numvars1<=maxv]
+  #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
+  if(length(all_models_y)==0) return(NULL)
+  #
+  #
+  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  
+  #group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+  evals_all =lapply(numvars1, function(numvar){
+    if(verbose)print(paste("numvar",numvar))
+    #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
+    #ypred = ypreds[[pheno_nme]]; 
+    if(is.null(ypred)) stop("ypred is null")
+    # .merge1_new(lapply(nmes_models, function(nmes1){
+    group_names2 = group_names[numvars==numvar]
+    # evals = .merge1_new(lapply(group_names2, function(group_name){
+    #    if(verbose) print(paste(numvar,nmes1,group_name))
+    all_models1 = all_models_y[names(all_models_y) %in% group_names2]#[[pheno_nme]]   
+    all_models2 = lapply(all_models1, function(am) lapply(am, function(am1) am1))
+    all_models2_full = all_models2[unlist(lapply(all_models2, function(am)"full" %in% names(am) ))]
+    if(length(all_models2)>0){
+      all_models2 = all_models2[!unlist(lapply(all_models2, is.null))]
+    }
+    names(all_models2) = NULL
+    names(all_models2_full) = NULL
+    all_models3 = unlist(all_models2,recursive=FALSE)
+    all_models3_full = unlist(all_models2_full,recursive=FALSE)
+    full_model = all_models3[["full"]]
+    full_model_nme=paste(names(full_model$var_names), collapse=";")
+    nmesm = grep("full",names(all_models3),inv=T,value=TRUE);
+    nmesm_full = grep("full",names(all_models3_full),inv=T,value=TRUE);
+    inds=as.numeric(nmesm); 
+    inds_full = as.numeric(nmesm_full)
+    res1 = list(); #res2 = list(); res3 = list()
+    if(!is.null(full_model)){
+      #ypredObj$updateYP(self, phens, )#= self$looc$incl[,k2]
+      nonNA =self$looc$incl[,self$nreps()]
+      ypred$updateYP(d, full_model, nonNA, inv_transform_y = inv_transform_y, flip=FALSE, liab=liab)
+      #res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)
+      # print(res1);
+      res1 [["full"]] =  ypred$predictions(nonNA, flip=FALSE)
+      #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
+    }
+    if(length(nmesm)>0){
+      #transf=c()
+      for(j in 1:length(nmesm)){
+        nonNA =self$looc$incl[,inds[[j]]]
+        prev_i1 = all_models3[[j]]
+        #   transf = c(transf,prev_i1$transf)
+        ypred$updateYP(d, prev_i1, nonNA,inv_transform_y=inv_transform_y, flip=TRUE)
+        #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
+      }
+      nonNA=self$getNonNAInds(inds)
+      #res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=F,model="cv")
+      res1[["cv"]] =  ypred$predictions(nonNA, flip=TRUE)
+    }
+    if(length(nmesm_full)>0){
+      #transf=c()
+      for(j in 1:length(nmesm_full)){
+        nonNA =self$looc$incl[,inds_full[[j]]]
+        prev_i1 = all_models3_full[[j]]
+        #   transf = c(transf,prev_i1$transf)
+        ypred$updateYP(d, prev_i1, nonNA,inv_transform_y=inv_transform_y, flip=TRUE)
+        #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
+      }
+      nonNA=self$getNonNAInds(inds_full)
+     # res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=T,model=full_model_nme)
+      res1[['cv_full']] = ypred$predictions(nonNA, flip=TRUE)
+    }
+    res1
+  #  rbind(res1,res2,res3)
+    #        }),addName="model")
+    #     }),addName="trainedOn")
+    # }),addName="pheno_group")
+  })
+  #if(!is.null(evals_all$numvars)){
+  #  evals_all$numvars = as.numeric(evals_all$numvars)
+  #}
+  evals_all
+
+},
 evaluateAllModels=function(all_models_y,phens,flags,
                            ypred = self$ypred(phens), #lapply(phens, function(phens1) self$ypred(phens1)),
                            verbose=F

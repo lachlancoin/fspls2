@@ -669,6 +669,21 @@ updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, li
     }
     
   },
+
+ predictions=function(nonNA, flip=F){
+   ypreds = self$ypreds
+   ind_1 = if(flip) nonNA else !nonNA  ## because we setting to NA
+   i1 = which(ind_1);
+   l1 = length(i1)
+  # if(length(which(ind_1))==0) return ypreds
+   lapply(ypreds, function(yp){
+     yp1 = yp;
+     if(l1>0){
+      yp1[ind_1,,drop=F]=NA
+     }
+     yp1
+   })
+ },
 calcRMSV=function(y, nonNA,      flip=F){
   phensi = self$phensi
   ypreds = self$ypreds

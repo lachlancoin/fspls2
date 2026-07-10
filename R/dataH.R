@@ -913,6 +913,12 @@ dataH<-R6::R6Class("dataH",
 #  })
 # },
  
+#' @description provides access to internal storage of phenotype data
+#' @returns list of matrices
+y=function(){
+  private$data$y
+},
+
 #' @description extract the predictions for the fitted models
 #' @param all_modelsh fitted models from makeAllModels
 #' @param phens list of phenotyps
@@ -920,19 +926,20 @@ dataH<-R6::R6Class("dataH",
 #' @param CV cross validation predictions
 #' @param liab return liability score, or probability (for binomial, ordinal multinomial)
 #' @returns  a table with results
-extractPredictions=function(all_modelsh,phens=all_modelsh$phens, flags=all_modelsh$flags, CV = FALSE, liab=T){
+extractPredictions=function(all_modelsh,phens=all_modelsh$phens, flags=all_modelsh$flags){
   private$updateLOOC(phens, flags)
-  all_models_y = all_modelsh$models
   
-  res3 = lapply(all_models_y, function(all_models_){
-      d = private$data
-      if(is.null(d)){
-        print(d_nme)
-        stop("!!")
-      }
-       d$extractPredictions(all_models_, phens, flags, CV=CV, liab=liab)
+  all_models_y0 = all_modelsh$models#[[mod_nme]]
+  # eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
+  #print(nme1)
+  d = private$data
+  #all_models_y = all_models_y0[[1]]
+  predictions0 = lapply(all_models_y0, function(all_models_y){
+    d$extractPredictions(all_models_y, phens, flags)
+  ##  d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
   })
-  predictions0=res3[unlist(lapply(res3, function(x) length(x[[1]])))>0]
+ 
+#  predictions0=res3[unlist(lapply(res3, function(x) length(x[[1]])))>0]
   predictions0 # 
 },
 
@@ -1157,7 +1164,7 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
  # eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
     #print(nme1)
     d = private$data
-    all_models_y = all_models_y0[[1]]
+  #  all_models_y = all_models_y0[[1]]
     eval1 =   .merge1_new(lapply(all_models_y0, function(all_models_y){
    d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
   }), addName="beam")  #if(inherits(resd,"try-error")) {
