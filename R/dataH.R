@@ -507,6 +507,9 @@ dataH<-R6::R6Class("dataH",
        nmes= unlist(lapply(prev_i$var_names, function(x) paste(x,collapse=".")))
        if(length(nmes)==0)nmes="empty"
        nme1 = strsplit(nmes[length(nmes)],"\\.")[[1]]
+       if(length(nme1)>4){
+         nme1[4] = paste(nme1[4:length(nme1)], collapse=".")
+       }
        str = paste(nmes[-length(nmes)], collapse=";")
        if(str=="") str="empty"
        prev_i2= comb20[[str]][[nme1[3]]][[nme1[4]]][[nme1[2]]]

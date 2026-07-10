@@ -432,7 +432,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
                  useDB=F){#c(y="function(y) y","function(y) y")
    phens1 = phens
    super$updateExpt( phens1, flags)
-   mc.cores = .readFlag(flags, "mc.cores",1)
+   #mc.cores = .readFlag(flags, "mc.cores",1)
    ##if(mc.cores>1 && )
    flags$transform_y = toJSON(transform_y);
    verbose=.readFlag(flags,'verbose',F);
