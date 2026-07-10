@@ -14,6 +14,8 @@ mergeAll = function(comb2_new, beam){
 }
 
 .check_data<-function(data, y){
+  non_na = apply(y,2,function(x) length(x[!is.na(x)]))
+  if(min(non_na)==0) warning("one y column has all NA")
   rn_y = rownames(y);
   if(length(rn_y)==0) warning(" define rownames for y");
   rns = lapply(data, function(d){

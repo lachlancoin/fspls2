@@ -278,7 +278,7 @@ plotEval<-function(eval3,
   l1 = apply(eval3,1,paste, collapse="::");
   #print(which(duplicated(l1)))
   eval3 = eval3[!duplicated(l1),,drop=F]
-  showtext = text!=""
+  showtext = length(text)>0
   linetype_nme = paste(linetype, collapse="_");
   grid0_nme = paste(grid0, collapse="_")
   grid1_nme = if(length(grid1)==0) NULL else  paste(grid1,collapse="_");
@@ -826,10 +826,10 @@ isbigmatrix<-function(x){
     })
     t = t1
   }
+  t = t[!unlist(lapply(t, is.null))]
   
   if(length(t)==0) return(NULL)
   if(!is.data.frame(t[[1]])) stop("not dataframe")
-  t = t[!unlist(lapply(t, is.null))]
   t = t[unlist(lapply(t,nrow))>0]
   
   if(length(t)==0) return(NULL)
