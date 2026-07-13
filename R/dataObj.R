@@ -1538,8 +1538,9 @@ ypred=function(phens1){
 #all_models_y = all_models$y; inverse_func_str = jsonlite::fromJSON(flags1$transform_y_inverse)[[1]]; self = datasAll$datas[[1]]
 
 extractPredictions=function(all_models_y,phens, flags,  ypred = self$ypred(phens)
-                            ){
+                                   ){
   inv_transform_y=F
+  self$updateTransforms(jsonlite::fromJSON(flags$transform_y)   )      
   d = self
   self$updateLOOC(phens,flags)
   liab = .readFlag(flags,"liab",T)  ## whether to evaluate with liability , default is true
