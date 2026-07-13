@@ -1537,13 +1537,13 @@ ypred=function(phens1){
 },# inverse_func_strs = jsonlite::fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
 #all_models_y = all_models$y; inverse_func_str = jsonlite::fromJSON(flags1$transform_y_inverse)[[1]]; self = datasAll$datas[[1]]
 
-extractPredictions=function(all_models_y,phens, flags,  ypred = self$ypred(phens)
+extractPredictions=function(all_models_y,phens, flags,  ypred = self$ypred(phens), liab=T
                                    ){
   inv_transform_y=F
   self$updateTransforms(jsonlite::fromJSON(flags$transform_y)   )      
   d = self
   self$updateLOOC(phens,flags)
-  liab = .readFlag(flags,"liab",T)  ## whether to evaluate with liability , default is true
+    ## whether to evaluate with liability , default is true
   #  ypred = self$ypred(phens)
   minv = .readFlag(flags,"min",0)
   maxv = .readFlag(flags,"max",1e6)

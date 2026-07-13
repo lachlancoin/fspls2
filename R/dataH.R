@@ -933,7 +933,7 @@ y=function(){
 #' @param CV cross validation predictions
 #' @param liab return liability score, or probability (for binomial, ordinal multinomial)
 #' @returns  a table with results
-extractPredictions=function(all_modelsh,phens=all_modelsh$phens, flags=all_modelsh$flags){
+extractPredictions=function(all_modelsh,phens=all_modelsh$phens, flags=all_modelsh$flags, liab=TRUE){
   private$updateLOOC(phens, flags)
   
   all_models_y0 = all_modelsh$models#[[mod_nme]]
@@ -942,7 +942,7 @@ extractPredictions=function(all_modelsh,phens=all_modelsh$phens, flags=all_model
   d = private$data
   #all_models_y = all_models_y0[[1]]
   predictions0 = lapply(all_models_y0, function(all_models_y){
-    d$extractPredictions(all_models_y, phens, flags)
+    d$extractPredictions(all_models_y, phens, flags, liab= liab)
   ##  d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
   })
  

@@ -1,34 +1,38 @@
 
 
 ## expands to replace proportion with NA
-expandData<-function(dataset1, mult = 100 
+expandData<-function(dataset, mult = 100 
 ){
-  na_inds = which(is.na(dataset1$y[,1]))
-  non_na_inds = 1:nrow(dataset1$y)
+  na_inds = which(dataset$certainty<1)
+    non_na_inds = 1:nrow(dataset$y)
   non_na_inds = non_na_inds[-na_inds]
-  y_orig = dataset1$y[na_inds,,drop=F]
-  y_ = dataset1$y[-na_inds,,drop=F]
-  y0 = matrix(0, nrow = length(na_inds), ncol = ncol(y_))
-  y1 = matrix(1, nrow = length(na_inds), ncol = ncol(y_))
-  rownames(y0) = paste0(rownames(y_orig),".0")
-  rownames(y1) = paste0(rownames(y_orig),".1")
-  colnames(y0) = colnames(y_orig); colnames(y1) = colnames(y_orig)
-  y_new = rbind(y0, y1,y_)
-  weights = round(mult*c(rep(0.5, 2*length(na_inds)), rep(1, nrow(y_))))
+      
+  y_alt = 1- dataset$y[na_inds,,drop=F]
+  if(max(abs(apply(cbind(sort(unique(y_alt[,1])),c(0,1)),1,diff)))>0) stop("need to have 0 1 values for y")
+  if(max(dataset$certainty)>1.0) stop("!!")
+  if(min(dataset$certainty<0.0)) stop("!!")
+  rownames(y_alt) = paste0(rownames(dataset$y)[na_inds], ".alt")
   
-  d_new =  lapply(dataset1$dataset, function(d){
-    d1 = d[na_inds,,drop=F];d2 = d[na_inds,,drop=F]
-    d_out = rbind(d1,d2,d[-na_inds,,drop=F])
-    rownames(d_out) = rownames(y_new)
+  y_new = rbind(dataset$y, y_alt)
+  weights = c(dataset$certainty, 1-dataset$certainty[na_inds])* mult
+  names(weights) = c(rownames(dataset$y), paste0(rownames(dataset$y)[na_inds],".alt"))
+  d_new =  lapply(dataset$dataset, function(d){
+    d1 = d[na_inds,,drop=F];
+    rownames(d1) = paste0(rownames(d)[na_inds],".alt")
+    d_out = rbind(d,d1)
     d_out
   })
   list(y = y_new, dataset=d_new, na_inds=na_inds,non_na_inds = non_na_inds, 
-       zero_inds = 1:length(na_inds), one_inds = 1:length(na_inds) + length(na_inds),
-       fixed_inds = ((2*length(na_inds))+1) : nrow(y_new),
-       weights =weights)
+       orig_inds = 1:nrow(dataset$y), alt_inds = nrow(dataset$y)+1:length(na_inds),
+              weights =weights)
   
 }
 
+getYNew<-function(dataset1, mult = 100,thresh =0.8){
+ 
+
+ 
+}
 
 #' main function for variable selection with unknown values
 #' @param dataset a list with y and data value
@@ -36,49 +40,90 @@ expandData<-function(dataset1, mult = 100
 #' @param transform_y transformation object 
 #' @param phens list of phenotypes
 #' @param dbDir y_orig the original y (for testing only)
-fspls.iterative<-function(dataset,flags, transform_y,
-                                               y_orig=NULL ){
-  dataset$weights = rep(1, nrow(dataset$y));
-  flags$nfold=1
-  mult=100
-  flags$verbose=F
+fspls.iterative<-function(dataset,flags, transform_y
+                                            ){
+  if(is.null(dataset$y) || length(dataset$dataset)==0 || is.null(dataset$certainty)) stop(" dataset not well defined")
+  flags$nfold=1; flags$verbose=F;
   iterations = .readFlag(flags, "iterations",10)
+  mult = .readFlag(flags, "mult",100)
+  thresh = .readFlag(flags,"thresh",0.75)
+  #print_model = .readFlag(flags,"print_betas",FALSE)
+  
   dataset1 =expandData(dataset,mult = mult); 
-  dh = NULL; vars_all = NULL; all_models = NULL; preds1 = NULL; auc = list();
-  for(k in 1:iterations){
+  dh = NULL; vars_all = NULL; all_models = NULL; preds1 = NULL;
+  auc = list();
+  betas_all  = list()
+  probs_ordered0 = sort(unlist(lapply( dataset1$weights[dataset1$na_inds], function(x) max(x,mult-x))))/mult
+ k=0
+  repeat  {
+    k = k+1
     dh = dataH$new(dataset1$dataset, y = dataset1$y, 
                    weights = dataset1$weights,
                    nme="iterative", flags=flags, transform_y = transform_y, dbDir=NULL)
     
     vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
-    #print(names(vars_all[[1]]$variables))
-    #Step 2. make models with selected variables
     all_models =dh$makeAllModels(vars_all,useDB=F)
-    
-    predictions =     dh$extractPredictions(all_models)
-    
+    predictions =     dh$extractPredictions(all_models, liab=TRUE) ## extract predictions in liability space
     pr =predictions[[1]][[length(predictions[[1]])]]$full[[1]]
-   
-    dataset1$weights[dataset1$zero_inds] = round(  (1-pr[dataset1$zero_inds,])*mult)
-    dataset1$weights[dataset1$one_inds] = round(pr[dataset1$zero_inds,] * mult)
-    preds1 = cbind(pr[dataset1$zero_inds,],pr[dataset1$one_inds])
-    if(!is.null(y_orig)){
-      rn = rownames(y_orig[dataset1$na_inds,,drop=F])
-      rn1 = rownames(pr[dataset1$zero_inds,,drop=F])
-      #print(cbind(rn, rn1))
-        df1 =cbind(preds1,y_orig[dataset1$na_inds,,drop=F])
-        df2=(df1[order(df1[[1]]),]);
-       # print(df2)
-        roc1 = roc(df1[[3]],df1[[1]])
-        print(roc1)
-        auc[[k]] = roc1$auc
+    calcAUC=TRUE;calcWeights=TRUE;
+    if(calcAUC){
+      
+      df1 =cbind( pr[dataset1$na_inds],dataset1$y[dataset1$na_inds,,drop=F])
+      roc1 = roc(df1[,2],df1[,1])
+      print(roc1)
+      auc[[k]] = roc1$auc
     }
+    if(calcWeights){
+      am = all_models$models[[1]]
+      betas = (am[[length(am)]]$full$betas[[1]])
+      rownames(betas) =  names(am[[length(am)]]$full$var_names)
+      print(betas)
+      betas_all[[k]] = betas
+    }
+    
+    ##following converts the prediction to a probability of the given y
+    zero_inds = which(dataset1$y==0)
+    pr[zero_inds] = 1-pr[zero_inds]
+  
+    dataset1$weights[dataset1$na_inds] = round(mult * pr[dataset1$na_inds,])
+    dataset1$weights[dataset1$alt_inds] = round(mult*pr[dataset1$alt_inds,])
+   # print(cbind(dataset1$weights[dataset1$na_inds], dataset1$weights[dataset1$alt_inds]))
+   
+    
+      weights = dataset1$weights/mult 
+      assignment = cbind(weights[dataset1$na_inds], weights[dataset1$alt_inds], dataset1$y[dataset1$na_inds,])
+      y_new = t(apply(assignment, 1, function(v){
+        res = if(v[1]>v[2])  v[3] else  1-v[3];
+                return(c(res, max(v[1:2])))
+      }))
+      
+      
+      perc_remaining = length(which(y_new[,2]<thresh))/nrow(y_new)
+      print(paste("REMAINING NA", perc_remaining))
+      err = sum(abs(y_new[,1] - dataset1$y[dataset1$na_inds,]))/nrow(y_new)
+      print(paste("ERR",err))
+      
+      probs_ordered = sort(unlist(lapply( dataset1$weights[dataset1$na_inds], function(x) max(x,mult-x))))/mult
+      diff =(probs_ordered - probs_ordered0)
+       
+      print(probs_ordered)
+      probs_ordered0 = probs_ordered
+      if(sum(diff)<=1e-5) {
+        message("breaking since probs ordered not improving")
+        break;
+        
+      }
   }
+  y_new1 = dataset$y
+  certainty_new = rep(1, nrow(y_new1))
+  y_new1[dataset1$na_inds,] = y_new[,1]
+  certainty_new[dataset1$na_inds] = y_new[,2]
   
   ##eval1= dh$evaluateAllModels(all_models, useDB=F)
   
-   list(dh = dh, vars_all = vars_all, all_models = all_models, roc = roc, auc =auc,
-        weights = dataset1$weights, preds1 = preds1, na_inds = dataset1$na_inds)
+   list(dh = dh, vars_all = vars_all, all_models = all_models, auc =auc,
+        y_new = y_new1, certainty_new = certainty_new,
+                weights = dataset1$weights, preds1 = preds1, na_inds = dataset1$na_inds, betas_all = betas_all)
 #  plot(roc1)
   
 }
