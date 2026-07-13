@@ -312,6 +312,7 @@ getFullModels<-function(all_models){
 }
 
 
+
 #' Infer the statistical families of the phenotypes
 #' @param y_mat a matrix of phenotypes, with columns as variables and rows as samples
 #' @param max_ordinal  maximum number of values before we consider an ordinal value as a continuous value
@@ -495,7 +496,7 @@ dataH<-R6::R6Class("dataH",
    var_thresh = function(qq_t){
      lapply(private$data$vars, function(v) quantile(v, qq_t))
    },
-  
+ 
    updateTrain=function( phens, flags, transform_y,  verbose=FALSE, force=F){
      private$data$updateTrain( phens,flags,transform_y, verbose=verbose, force=force)
    },
@@ -736,6 +737,8 @@ dataH<-R6::R6Class("dataH",
     if(nrep>0 && batch>0)warning("only one of nfold or batchsize should be non zero")
     pheno_balance=.readFlag(flags,"pheno_balance",NULL)
     varn = getOption("varn",c())
+    if(is.null(weights)) stop("data weights need to be defined");
+    
     #invisible(lapply(1:length(datas), function(ik) {
      # family = families[[ik]]
         private$data$updateY(y,weights, preprocessed=preprocessed, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
@@ -794,6 +797,7 @@ dataH<-R6::R6Class("dataH",
     }
     
   },
+
   #' get the data types
   #' @returns which data types are in the dataset
   data_types=function(){

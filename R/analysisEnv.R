@@ -1,5 +1,87 @@
 
 
+## expands to replace proportion with NA
+expandData<-function(dataset1, mult = 100 
+){
+  na_inds = which(is.na(dataset1$y[,1]))
+  non_na_inds = 1:nrow(dataset1$y)
+  non_na_inds = non_na_inds[-na_inds]
+  y_orig = dataset1$y[na_inds,,drop=F]
+  y_ = dataset1$y[-na_inds,,drop=F]
+  y0 = matrix(0, nrow = length(na_inds), ncol = ncol(y_))
+  y1 = matrix(1, nrow = length(na_inds), ncol = ncol(y_))
+  rownames(y0) = paste0(rownames(y_orig),".0")
+  rownames(y1) = paste0(rownames(y_orig),".1")
+  colnames(y0) = colnames(y_orig); colnames(y1) = colnames(y_orig)
+  y_new = rbind(y0, y1,y_)
+  weights = round(mult*c(rep(0.5, 2*length(na_inds)), rep(1, nrow(y_))))
+  
+  d_new =  lapply(dataset1$dataset, function(d){
+    d1 = d[na_inds,,drop=F];d2 = d[na_inds,,drop=F]
+    d_out = rbind(d1,d2,d[-na_inds,,drop=F])
+    rownames(d_out) = rownames(y_new)
+    d_out
+  })
+  list(y = y_new, dataset=d_new, na_inds=na_inds,non_na_inds = non_na_inds, 
+       zero_inds = 1:length(na_inds), one_inds = 1:length(na_inds) + length(na_inds),
+       fixed_inds = ((2*length(na_inds))+1) : nrow(y_new),
+       weights =weights)
+  
+}
+
+
+#' main function for variable selection with unknown values
+#' @param dataset a list with y and data value
+#' @param flags list of options
+#' @param transform_y transformation object 
+#' @param phens list of phenotypes
+#' @param dbDir y_orig the original y (for testing only)
+fspls.iterative<-function(dataset,flags, transform_y,
+                                               y_orig=NULL ){
+  dataset$weights = rep(1, nrow(dataset$y));
+  flags$nfold=1
+  mult=100
+  flags$verbose=F
+  iterations = .readFlag(flags, "iterations",10)
+  dataset1 =expandData(dataset,mult = mult); 
+  dh = NULL; vars_all = NULL; all_models = NULL; preds1 = NULL; auc = list();
+  for(k in 1:iterations){
+    dh = dataH$new(dataset1$dataset, y = dataset1$y, 
+                   weights = dataset1$weights,
+                   nme="iterative", flags=flags, transform_y = transform_y, dbDir=NULL)
+    
+    vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
+    #print(names(vars_all[[1]]$variables))
+    #Step 2. make models with selected variables
+    all_models =dh$makeAllModels(vars_all,useDB=F)
+    
+    predictions =     dh$extractPredictions(all_models)
+    
+    pr =predictions[[1]][[length(predictions[[1]])]]$full[[1]]
+   
+    dataset1$weights[dataset1$zero_inds] = round(  (1-pr[dataset1$zero_inds,])*mult)
+    dataset1$weights[dataset1$one_inds] = round(pr[dataset1$zero_inds,] * mult)
+    preds1 = cbind(pr[dataset1$zero_inds,],pr[dataset1$one_inds])
+    if(!is.null(y_orig)){
+      rn = rownames(y_orig[dataset1$na_inds,,drop=F])
+      rn1 = rownames(pr[dataset1$zero_inds,,drop=F])
+      #print(cbind(rn, rn1))
+        df1 =cbind(preds1,y_orig[dataset1$na_inds,,drop=F])
+        df2=(df1[order(df1[[1]]),]);
+       # print(df2)
+        roc1 = roc(df1[[3]],df1[[1]])
+        print(roc1)
+        auc[[k]] = roc1$auc
+    }
+  }
+  
+  ##eval1= dh$evaluateAllModels(all_models, useDB=F)
+  
+   list(dh = dh, vars_all = vars_all, all_models = all_models, roc = roc, auc =auc,
+        weights = dataset1$weights, preds1 = preds1, na_inds = dataset1$na_inds)
+#  plot(roc1)
+  
+}
 
 #' main function for variable selection
 #' @param datasH a list of dataH objects
@@ -429,7 +511,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
  select=function(datasH, flags,
                  transform_y, 
                  phens=datasH[[1]]$pheno()$all,
-                 useDB=F){#c(y="function(y) y","function(y) y")
+                 useDB=FALSE){#c(y="function(y) y","function(y) y")
    phens1 = phens
    super$updateExpt( phens1, flags)
    mc.cores = .readFlag(flags, "mc.cores",1)

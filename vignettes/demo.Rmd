@@ -40,7 +40,6 @@ library(fspls2)
                project=TRUE,   ## whether to use the projection approach in model building (TRUE recommended)
             useglmnet=TRUE,  ##whether to useglmnet for model fitting (after variables selected) (TRUE recommoneded)
                         verbose=FALSE,
-            mc.cores=1,  ## only works in unix
             direction="none" ## can be + , - or none
     )
   check_flags(flags)  ## runs som simple checks
@@ -49,9 +48,22 @@ library(fspls2)
 
 ```{r example}
   examples = c("binomial", "gaussian", "ordinal", "multinomial");
-  #example="gaussian"
+#  example="binomial"
   
-system.file("extdata", package = "fspls2")
+testIterative<-function(dataset1){
+  prop_na=0.2
+    fi = system.file("extdata", paste0("binomial","_data.rds"), package = "fspls2")
+     if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
+    dataset = readRDS(fi); 
+      y_orig = dataset$y[,1,drop=F]
+
+    ##set some NA
+  na_inds=sort(sample.int(nrow(dataset$y),nrow(dataset$y)*prop_na))
+  dataset$y[na_inds,] = NA
+  flags$iterations = 3;
+  results = fspls.iterative(dataset, flags, transform_y, y_orig = y_orig)
+  
+}
 
 
   #FUNCTION TO SHOW HOW TO RUN EACH EXAMPLE
@@ -60,14 +72,21 @@ system.file("extdata", package = "fspls2")
     if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
 
     dataset = readRDS(fi)
+   
     ## set up the objects
-    dh = dataH$new(dataset$dataset, y = dataset$y, nme=example, flags=flags, transform_y = transform_y, dbDir=NULL)
-    analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
+    dh = dataH$new(dataset$dataset, y = dataset$y, 
+                 
+                   nme=example, flags=flags, transform_y = transform_y, dbDir=NULL)
+#    analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
   
     ##Step 1. run variable selection 
-    vars_all = analysis$select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
+    #vars_all = analysis$select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
+    vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
     all_models =dh$makeAllModels(vars_all,useDB=F)
+    
+    #optionally get predictions
+    
     #Step 3. evaluate the models
     eval1= dh$evaluateAllModels(all_models, useDB=F)
     ## Now visuaise the results
@@ -75,6 +94,9 @@ system.file("extdata", package = "fspls2")
                    shape_color=c("data","transf"),sep_by=c("beam"), showranges=T,text="variable",
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   
+    ##optionally get all predictions
+    predictions =     dh$extractPredictions(all_models)
+   
     return(ggps1[[1]])
   }
 ```
