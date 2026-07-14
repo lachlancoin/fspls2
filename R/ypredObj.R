@@ -489,7 +489,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
 #           rep(mean(vv, na.rm=T), length(vv))
          }))
          rr = do.call(rbind, replicate(length(yi),rr1, simplify=FALSE))
-         dimnames(rr) = list(dimnames(y)[[1]],levs1)
+         dimnames(rr) = list(dimnames(y[[1]])[[1]],levs1)
        }else if(family[[i]]=="ordinal"){
            levs1 = min(yi,na.rm=T):max(yi,na.rm=T)
            names(levs1) = levs1
@@ -500,7 +500,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
            }))
           rr1 = cumsum(rr0)
           rr = do.call(rbind, replicate(length(yi),rr1, simplify=FALSE))
-          dimnames(rr) = list(dimnames(y)[[1]],levs1[-length(levs1)])
+          dimnames(rr) = list(dimnames(y[[1]])[[1]],levs1[-length(levs1)])
     }else{
       subinds = phensi[[i]]
       dimn = list(rownames(y[[i]]), colnames(y[[i]])[subinds])

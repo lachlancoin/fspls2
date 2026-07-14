@@ -842,13 +842,19 @@ isbigmatrix<-function(x){
   add = !is.null(addName)
   if(!is.null(addName)) colnames = c(colnames, addName)
   df = data.frame(array(dim = c(sum(nrows), length(colnames)), dimnames = list(NULL, colnames)))
+  rownames = 1:sum(nrows)
   for(k in 1:length(t)){
     range = start[[k]] : end[[k]]
     df[range,1:ncol] = t[[k]]
+    rn = rownames(t[[k]])
+    if(!is.null(rn)){
+      rownames[range] = rn
+    }
     if(add){
       df[range,ncol+1] = names(t)[[k]]
     }
   }
+  rownames(df) = rownames
   df
 }
 

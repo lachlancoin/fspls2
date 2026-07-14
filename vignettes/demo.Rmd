@@ -52,20 +52,22 @@ library(fspls2)
   
 testIterative<-function(){
   prop_na=0.2;  seed=42
-  example="binomial"
+  example="multinomial"
      fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
     # if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
     
     dataset = readRDS(fi); 
+    
     if(FALSE){
      load("~/github/fspls2_old/data/w.tbod.binomial.11.dat.rdat")
      rownames(data$data) = 1:nrow((data$data)); data$y = as.matrix(data$y); rownames(data$y) = 1:nrow(data$y); colnames(data$y) = "y"
     dataset = list(y = data$y, dataset = list('expr' = data$data))
     }
+    if(example=="binomial") dataset$y$y = factor(dataset$y$y, labels=c("A","B"))
     dataset$certainty = rep(1, nrow(dataset$y));
     set.seed(seed)
     na_inds=sort(sample.int(nrow(dataset$y),nrow(dataset$y)*prop_na))
-  dataset$certainty[na_inds]=0.5;  ## set some to be unsure
+  dataset$certainty[na_inds]=0.8;##1/length(levels(dataset$y[[1]]))
   #dataset$y[na_inds,] = NA
   
   flags$mult = 500

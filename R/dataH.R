@@ -12,13 +12,62 @@ mergeAll = function(comb2_new, beam){
    comb1[o[1:beam],]
   
 }
-permuteLabel<-function(y, levs = levels(y)){
-  len = length(levs);
-  offset = 2:length(levs)-1
- # y1 = as.numeric(y)
-  lapply(offset, function(i){
-   factor(y, levels = rotate(levs,i), labels = levs)
+permuteLabel<-function(y,certainty,na_inds,
+                       levs = levels(y[,1]),
+                       offset = 2:length(levs)-1
+                       ){
+  y_orig = y[na_inds,,drop=F]
+  names(certainty) = rownames(y)
+  alt_inds=lapply(offset, function(i){
+    nrow(y)+(i-1) * length(na_inds) +  1:length(na_inds)
   })
+  
+  
+  weights_new = rep(1, nrow(y))
+  names(weights_new) = rownames(y)
+  y_new = as.character(y[,1])
+  y_new[na_inds] = levs[1]
+  names(y_new)[1:nrow(y)] = rownames(y)
+  
+  for(i in 1:length(alt_inds)){
+    ai = alt_inds[[i]]
+    weights_new[ai] = rep(1, length(ai)) #(1-certainty[na_inds])/length(alt_inds)
+    names(weights_new)[ai] = paste(rownames(y)[na_inds],"alt",i,sep=".")
+   
+    y_new[ai] = levs[i+1]
+    names(y_new)[ai] = names(weights_new)[ai]
+  }
+  mi1 = match(y_orig[,1], levs)
+  original_inds = rep(0, length(mi1));
+  cert1 = certainty[na_inds]
+  mat1 = cbind(mi1, cert1)
+  mat2 = t(apply(mat1, 1,function(v){
+    v1 = rep(0, length(levs))
+    v1[v[1]] = v[2]
+    v1[-v[1]] = (1-v[2])/(length(levs)-1)
+    v1
+  }))
+  weights_new[na_inds] = mat2[,1]
+  for(i in 1:length(alt_inds)){
+    weights_new[alt_inds[[i]]] = mat2[,i+1] 
+  }
+  for(i in 1:length(mi1)){
+    x = mi1[i];
+    if(x==1){
+      original_inds[i] =  (na_inds[i]) 
+    }else{
+      original_inds[i] =  alt_inds[[x-1]][i]
+    }
+  }
+  
+ #weights_new[original_inds]
+ 
+  y_new2 = data.frame(list(y=factor(y_new, levels = levs)))
+ 
+  list(y = y_new2,
+#       y_orig = y_orig,
+       original_inds = original_inds,
+       weights = weights_new, offset = offset, alt_inds = alt_inds)
 }
 
 ## expands to replace proportion with NA
@@ -28,31 +77,31 @@ expandData<-function(data, y, certainty,family,weights,  mult = 100
   non_na_inds = 1:nrow(y)
   non_na_inds = non_na_inds[-na_inds]
   if(length(na_inds)==0){
-    return(list(dataset = data, y= y, weights =weights, na_inds = na_inds, non_na_inds = non_na_inds, alt_inds = c()))
+    return(list(dataset = data, y= y, y_orig = y_orig, weights =weights, na_inds = na_inds, non_na_inds = non_na_inds, alt_inds = c()))
   }
+  .check_data(data, y)  ## checks rownames match
   if(max(certainty)>1.0) stop("!!")
   if(min(certainty<0.0)) stop("!!")
-  levels = sort(unique(y[,1]))
-  if(length(levels)>2){
-    #y_alt = y[na_inds,1]
-  }else{
-    y_alt = 1- y[na_inds,,drop=F]
-    if(max(abs(apply(cbind(sort(unique(y_alt[,1])),c(0,1)),1,diff)))>0) stop("need to have 0 1 values for y")
-   
-    rownames(y_alt) = paste0(rownames(y)[na_inds], ".alt")
-    
-    y_new = rbind(y, y_alt)
-    weights = c(certainty, 1-certainty[na_inds])* mult
-    names(weights) = c(rownames(y), paste0(rownames(y)[na_inds],".alt"))
-  }
+     y_alts = permuteLabel(y, certainty, na_inds)  
+    y_new = y_alts$y
+    weights = y_alts$weights * mult
+  offset = y_alts$offset
   d_new =  lapply(data, function(d){
-    d1 = d[na_inds,,drop=F];
-    rownames(d1) = paste0(rownames(d)[na_inds],".alt")
-    d_out = rbind(d,d1)
+    d_out = d;
+    for(i1 in offset){
+      d1 = d[na_inds,,drop=F];
+      rownames(d1) = paste(rownames(d)[na_inds],"alt", i1, sep=".")
+      d_out = rbind(d_out,d1)
+    }
     d_out
   })
+  if(family[[1]]=="binomial"){
+    y_new[,1] = as.numeric(y_new[,1])
+  }
   list(y = y_new, dataset=d_new, na_inds=na_inds,non_na_inds = non_na_inds, 
-      alt_inds = nrow(y)+1:length(na_inds),
+       y_orig = y_alts$y_orig,
+       original_inds = y_alts$original_inds,
+      alt_inds = y_alts$alt_inds,
        weights =weights)
   
 }
@@ -454,6 +503,7 @@ dataH<-R6::R6Class("dataH",
   #nme="character",
    type="character",  
    flags="list",
+  levs="list",
    data_id="character",
    #transform_y="character",
    #var_t = "list",
@@ -463,19 +513,31 @@ dataH<-R6::R6Class("dataH",
   alt_inds = "list",
   mult="numeric",
   na_probs_ordered="list",
+  original_inds ="list",  ## what is the indices in new matrix of the na_inds original values
+  original_rows = "list", ## what is indices of original rows
   #returns the weights of the uncertain samples ordered
   sample_na_weights=function(){
     mult = private$mult
-    sort(unlist(lapply(private$data$weights[private$na_inds], function(x) max(x,mult-x))))/mult
+    w = private$data$weights[private$na_inds]
+    for(alt in private$alt_inds){
+      w = cbind(w,private$data$weights[alt])
+    }
+    sort(apply(w, 1, function(v) max(v)) )/mult
   },
   #auc for na samples
   sample_auc=function(pr){
     na_inds = private$na_inds
-    y = self$y()
-    df1 =cbind( pr[[1]][na_inds],y[[1]][na_inds,,drop=F])
-    roc1 = roc(df1[,2],df1[,1])
-    #print(roc1)
-    roc1$auc
+    y = self$y()[[1]]
+    orig_inds = private$original_inds
+  
+    #y = y_orig ## already na_inds
+    #df1 =cbind( pr[[1]][na_inds,,drop=F],y[[1]][na_inds,,drop=F])
+    rocs =lapply(1:ncol(y),function(jk){
+        roc1 = roc(  y[orig_inds,jk],
+                     pr[[1]][na_inds,jk])
+        roc1$auc
+    })
+    rocs
   },
    makeModels=function(vars2, inds, phens,flags){
      checkRMSV = .readFlag(flags,"checkRMSV",FALSE)
@@ -770,14 +832,13 @@ dataH<-R6::R6Class("dataH",
         colnames(data[[k]]) = gsub("\\.","_",colnames(data[[k]]))  ## no . allowed
         
       }
-       
-       .check_data(data, y)  ## checks rownames match
-    
+    private$levs = lapply(y,function(yc) levels(yc) )       
     private$mult= .readFlag(flags,"mult",100)
+    private$original_rows = 1:nrow(y)
+    
     d = expandData(data, y, certainty,family,  weights, mult = private$mult)
     private$na_inds = d$na_inds; private$alt_inds = d$alt_inds;
-   
-    
+   private$original_inds = d$original_inds
     memDir=NULL
     useDB=!is.null(dbDir);
     convertToBigMatrix=F #.readFlag(flags,"covertToBigMatrix", F)
@@ -1099,13 +1160,24 @@ updateWeights=function(all_models){
   rownames(betas) =  names(am[[length(am)]]$full$var_names)
   mult = private$mult;
   y = self$y()[[1]]
-  na_inds = private$na_inds; alt_inds = private$alt_inds;
-  for(kk in 1:ncol(y)){
-    zero_inds = which(y[,kk]==0)
-    pr[[1]][zero_inds,kk] = 1-pr[[1]][zero_inds,kk]
+  na_inds = private$na_inds; alt_inds = private$alt_inds; original_inds = private$original_inds
+  #pr[[1]][na_inds,]
+  #for(kk in 1:ncol(y)){
+  #  zero_inds = which(y[,kk]==0)
+  #  pr[[1]][zero_inds,kk] = 1-pr[[1]][zero_inds,kk]
+  #}
+  binom = names(pr)[[1]]=="binomial"
+  pr2 = pr[[1]][na_inds,,drop=F]
+  if(binom){
+    pr2 = cbind(1-pr2, pr2)
+     
   }
-  private$data$weights[na_inds] = round(mult * pr[[1]][na_inds,])
-  private$data$weights[alt_inds] = round(mult*pr[[1]][alt_inds,])
+  private$data$weights[na_inds] =round(pr2[,1]*mult)
+    
+  for(jk in 1:length(alt_inds)){
+    private$data$weights[alt_inds[[jk]]] = round(mult*pr2[,jk+1])
+  }
+
   probs_ordered = private$sample_na_weights()
   diff =(probs_ordered - private$na_probs_ordered)
   private$na_probs_ordered = probs_ordered
@@ -1117,30 +1189,37 @@ updateWeights=function(all_models){
 #' @description return updated y after iterative imputation
 #' @returns updated y, updated certainty and indices which were updated
 getYNew=function(){
-   mult  = private$mult
-  y = self$y()[[1]][,1]
-  alt_inds = private$alt_inds;
-  na_inds = private$na_inds; 
-
-  weights = private$data$weights/mult 
-  
-  
-  assignment = cbind(weights[na_inds], weights[alt_inds],y[na_inds])
-  y_new = t(apply(assignment, 1, function(v){
-    res = if(v[1]>v[2])  v[3] else  1-v[3];
-    return(c(res, max(v[1:2])))
-  }))
-  certainty = rep(1, length(y)); names(certainty) = rownames(y)
-  certainty[na_inds] = y_new[,2]
-  
-  y[na_inds] = y_new[,1]
-  
-  if(length(private$alt_inds)>0){
-    y = y[-alt_inds]
-    certainty = certainty[-alt_inds]
+  #predictions =     self$extractPredictions(all_models, liab=TRUE) ## extract predictions in liability space
+  #pr =predictions[[1]][[length(predictions[[1]])]]$full
+  mult = private$mult
+  w = private$data$weights[private$na_inds]
+  for(alt in private$alt_inds){
+    w = cbind(w,private$data$weights[alt])
   }
+  w =  w/mult
+  y = self$y()[[1]]
+  if(names(self$y())[[1]]=="binomial"){  ## to make it like multinomial
+    y = cbind(1-y,y)
+  }
+  y2 = apply(y,1,function(v){
+    which.max(v)
+  })
+  y_orig = y2[private$original_inds]
+  y2 = y2[private$original_rows]
+  y_new=t(apply(w, 1, function(v){
+   c(which.max(v), max(v))
+  }))
   
-  list(y=y, certainty =certainty, na_inds = na_inds)
+  y2[na_inds] = y_new[,1]
+   
+  certainty = rep(1, length(y_old))
+  certainty[na_inds] = y_new[,2]
+  error_rate = sum(abs(y2[na_inds] - y_orig))/ length(na_inds)
+    levs = private$levs
+    if(length(levs[[1]])>0){
+     y2 =  factor(y2, levels = sort(unique(y2)), labels = levs[[1]])
+    }
+  list(y=y2, certainty =certainty, na_inds = na_inds, error_rate = error_rate)
 },
 
 

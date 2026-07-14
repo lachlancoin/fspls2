@@ -38,6 +38,7 @@ expandData<-function(dataset, mult = 100
 #' @param dbDir y_orig the original y (for testing only)
 fspls.iterative<-function(dataset,flags, transform_y  ){
   if(is.null(dataset$y) || length(dataset$dataset)==0 || is.null(dataset$certainty)) stop(" dataset not well defined")
+  if(!is.factor(dataset$y[[1]])) stop("y should be a factor")
   flags$nfold=1; flags$verbose=F;
   mult = .readFlag(flags, "mult",100)
   dh = dataH$new(dataset$dataset, y = dataset$y, 
@@ -49,24 +50,25 @@ fspls.iterative<-function(dataset,flags, transform_y  ){
  k=0
   repeat  {
     if(k==0 || select_each_iteration) vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
-    
     k = k+1
-    
-    all_models =dh$makeAllModels(vars_all,useDB=F)
+   all_models =dh$makeAllModels(vars_all,useDB=F)
    updated =  dh$updateWeights(all_models)
+   print(updated)
    updates[[k]] = updated
-  if(updated$sumdiff<=1e-5) {
+  if(abs(updated$sumdiff)<=1e-5 && k>2) {
         message("breaking since probs ordered not improving")
         break;
         
       }
   }
   y_new =     dh$getYNew();
-   error_rate = sum(abs(y_new$y[y_new$na_inds] - dataset$y[y_new$na_inds,]))/ length(y_new$na_inds)
-
-  
+ # equals= apply(cbind(dataset$y, y_new$y)[na_inds,],1, function(v) v[1]==v[2])
+#  print(which(!(equals)))
+print(paste("error",y_new$error_rate))
+print(y_new$y)
+#y_new$certainty
    list(dh = dh, vars_all = vars_all, all_models = all_models,updates = updates, 
-        y_new = y_new$y, certainty_new = y_new$certainty,error_rate = error_rate, na_inds = na_inds
+        y_new = y_new$y, certainty_new = y_new$certainty,error_rate = y_new$error_rate, na_inds = na_inds
         
          )
 #  plot(roc1)
