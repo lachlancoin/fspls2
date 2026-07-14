@@ -12,6 +12,51 @@ mergeAll = function(comb2_new, beam){
    comb1[o[1:beam],]
   
 }
+permuteLabel<-function(y, levs = levels(y)){
+  len = length(levs);
+  offset = 2:length(levs)-1
+ # y1 = as.numeric(y)
+  lapply(offset, function(i){
+   factor(y, levels = rotate(levs,i), labels = levs)
+  })
+}
+
+## expands to replace proportion with NA
+expandData<-function(data, y, certainty,family,weights,  mult = 100 
+){
+  na_inds = which(certainty<1)
+  non_na_inds = 1:nrow(y)
+  non_na_inds = non_na_inds[-na_inds]
+  if(length(na_inds)==0){
+    return(list(dataset = data, y= y, weights =weights, na_inds = na_inds, non_na_inds = non_na_inds, alt_inds = c()))
+  }
+  if(max(certainty)>1.0) stop("!!")
+  if(min(certainty<0.0)) stop("!!")
+  levels = sort(unique(y[,1]))
+  if(length(levels)>2){
+    #y_alt = y[na_inds,1]
+  }else{
+    y_alt = 1- y[na_inds,,drop=F]
+    if(max(abs(apply(cbind(sort(unique(y_alt[,1])),c(0,1)),1,diff)))>0) stop("need to have 0 1 values for y")
+   
+    rownames(y_alt) = paste0(rownames(y)[na_inds], ".alt")
+    
+    y_new = rbind(y, y_alt)
+    weights = c(certainty, 1-certainty[na_inds])* mult
+    names(weights) = c(rownames(y), paste0(rownames(y)[na_inds],".alt"))
+  }
+  d_new =  lapply(data, function(d){
+    d1 = d[na_inds,,drop=F];
+    rownames(d1) = paste0(rownames(d)[na_inds],".alt")
+    d_out = rbind(d,d1)
+    d_out
+  })
+  list(y = y_new, dataset=d_new, na_inds=na_inds,non_na_inds = non_na_inds, 
+      alt_inds = nrow(y)+1:length(na_inds),
+       weights =weights)
+  
+}
+
 
 .check_data<-function(data, y){
   non_na = apply(y,2,function(x) length(x[!is.na(x)]))
@@ -414,6 +459,24 @@ dataH<-R6::R6Class("dataH",
    #var_t = "list",
    
    dbDir="character",
+  na_inds = "list",  ## these are for imputing uncertain values
+  alt_inds = "list",
+  mult="numeric",
+  na_probs_ordered="list",
+  #returns the weights of the uncertain samples ordered
+  sample_na_weights=function(){
+    mult = private$mult
+    sort(unlist(lapply(private$data$weights[private$na_inds], function(x) max(x,mult-x))))/mult
+  },
+  #auc for na samples
+  sample_auc=function(pr){
+    na_inds = private$na_inds
+    y = self$y()
+    df1 =cbind( pr[[1]][na_inds],y[[1]][na_inds,,drop=F])
+    roc1 = roc(df1[,2],df1[,1])
+    #print(roc1)
+    roc1$auc
+  },
    makeModels=function(vars2, inds, phens,flags){
      checkRMSV = .readFlag(flags,"checkRMSV",FALSE)
      d = private$data
@@ -692,21 +755,29 @@ dataH<-R6::R6Class("dataH",
      initialize=function(
     data,
     y,
+    certainty = rep(1, nrow(y)),
     weights = rep(1, nrow(y)),
     nme,
     flags ,
     transform_y=getYTransform(pow = 1,  n_random=1, perm=F),
     family= getFamily(y),
-      dbDir=tempdir()
+         dbDir=tempdir()
    ){
        
-    super$initialize(nme,dims =lapply(data, dim),  flags=flags, dbDir=dbDir);
+    super$initialize(nme,dims =lapply(d$data, dim),  flags=flags, dbDir=dbDir);
        colnames(y) = gsub("\\.","_",colnames(y))  ## no . allowed
       for(k in 1:length(data)){
         colnames(data[[k]]) = gsub("\\.","_",colnames(data[[k]]))  ## no . allowed
         
       }
+       
        .check_data(data, y)  ## checks rownames match
+    
+    private$mult= .readFlag(flags,"mult",100)
+    d = expandData(data, y, certainty,family,  weights, mult = private$mult)
+    private$na_inds = d$na_inds; private$alt_inds = d$alt_inds;
+   
+    
     memDir=NULL
     useDB=!is.null(dbDir);
     convertToBigMatrix=F #.readFlag(flags,"covertToBigMatrix", F)
@@ -715,7 +786,7 @@ dataH<-R6::R6Class("dataH",
     max_na_proportion =.readFlag(flags,"max_na_proportion",0.99)
     min_variance =.readFlag(flags,"max_na_proportion",0.001)
     
-    mat = .getAllSparseMatrices(data,hasNA=hasNA, convertToBigMatrix=convertToBigMatrix,min_variance = min_variance, max_na_proportion=max_na_proportion)
+    mat = .getAllSparseMatrices(d$dataset,hasNA=hasNA, convertToBigMatrix=convertToBigMatrix,min_variance = min_variance, max_na_proportion=max_na_proportion)
     #print("HHHHH")
     #print(mat)
     private$dbDir = dbDir
@@ -744,8 +815,8 @@ dataH<-R6::R6Class("dataH",
     
     #invisible(lapply(1:length(datas), function(ik) {
      # family = families[[ik]]
-        private$data$updateY(y,weights, preprocessed=preprocessed, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
-    
+        private$data$updateY(d$y,d$weights, preprocessed=preprocessed, family=family, CHECK=T, all_v_all=all_v_all, one_v_rest = one_v_rest)
+    private$na_probs_ordered =private$sample_na_weights()
     #  private$sigsdir=paste(dbDir,"fspls_signatures1",sep="/")
       #dir.create(private$sigsdir, recursive=FALSE, showWarnings=F)
      # dims1 = list(private$data$dims()); names(dims1) = private$nme
@@ -926,6 +997,11 @@ y=function(){
   private$data$y
 },
 
+
+
+
+
+
 #' @description extract the predictions for the fitted models
 #' @param all_modelsh fitted models from makeAllModels
 #' @param phens list of phenotyps
@@ -1009,6 +1085,64 @@ plotData=function(vars_all, phens = vars_all$phens, all_types=FALSE, transform_x
   
   list("binomial"=ggp,"gaussian"=ggp1)
 },
+
+#' @description update the weights based on predictions from the model
+#' @param all_models the output of dataH function getAllModels
+#' @returns list of auc beta and updated sumdiff of weights used as stopping criteria
+updateWeights=function(all_models){
+  predictions =     self$extractPredictions(all_models, liab=TRUE) ## extract predictions in liability space
+  pr =predictions[[1]][[length(predictions[[1]])]]$full
+  #calcAUC=TRUE;calcWeights=TRUE;
+  auc = private$sample_auc(pr)
+  am = all_models$models[[1]]
+  betas = (am[[length(am)]]$full$betas[[1]])
+  rownames(betas) =  names(am[[length(am)]]$full$var_names)
+  mult = private$mult;
+  y = self$y()[[1]]
+  na_inds = private$na_inds; alt_inds = private$alt_inds;
+  for(kk in 1:ncol(y)){
+    zero_inds = which(y[,kk]==0)
+    pr[[1]][zero_inds,kk] = 1-pr[[1]][zero_inds,kk]
+  }
+  private$data$weights[na_inds] = round(mult * pr[[1]][na_inds,])
+  private$data$weights[alt_inds] = round(mult*pr[[1]][alt_inds,])
+  probs_ordered = private$sample_na_weights()
+  diff =(probs_ordered - private$na_probs_ordered)
+  private$na_probs_ordered = probs_ordered
+  
+  list(auc = auc, betas = betas, sumdiff = sum(diff))
+},
+
+
+#' @description return updated y after iterative imputation
+#' @returns updated y, updated certainty and indices which were updated
+getYNew=function(){
+   mult  = private$mult
+  y = self$y()[[1]][,1]
+  alt_inds = private$alt_inds;
+  na_inds = private$na_inds; 
+
+  weights = private$data$weights/mult 
+  
+  
+  assignment = cbind(weights[na_inds], weights[alt_inds],y[na_inds])
+  y_new = t(apply(assignment, 1, function(v){
+    res = if(v[1]>v[2])  v[3] else  1-v[3];
+    return(c(res, max(v[1:2])))
+  }))
+  certainty = rep(1, length(y)); names(certainty) = rownames(y)
+  certainty[na_inds] = y_new[,2]
+  
+  y[na_inds] = y_new[,1]
+  
+  if(length(private$alt_inds)>0){
+    y = y[-alt_inds]
+    certainty = certainty[-alt_inds]
+  }
+  
+  list(y=y, certainty =certainty, na_inds = na_inds)
+},
+
 
 #updateWeights=function(subphens = self$pheno()[[1]][1]){ ## upweights low count values
 #  for(k in 1:length(private$datas)){

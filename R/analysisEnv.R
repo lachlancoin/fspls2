@@ -28,11 +28,7 @@ expandData<-function(dataset, mult = 100
   
 }
 
-getYNew<-function(dataset1, mult = 100,thresh =0.8){
- 
 
- 
-}
 
 #' main function for variable selection with unknown values
 #' @param dataset a list with y and data value
@@ -40,90 +36,39 @@ getYNew<-function(dataset1, mult = 100,thresh =0.8){
 #' @param transform_y transformation object 
 #' @param phens list of phenotypes
 #' @param dbDir y_orig the original y (for testing only)
-fspls.iterative<-function(dataset,flags, transform_y
-                                            ){
+fspls.iterative<-function(dataset,flags, transform_y  ){
   if(is.null(dataset$y) || length(dataset$dataset)==0 || is.null(dataset$certainty)) stop(" dataset not well defined")
   flags$nfold=1; flags$verbose=F;
-  iterations = .readFlag(flags, "iterations",10)
   mult = .readFlag(flags, "mult",100)
-  thresh = .readFlag(flags,"thresh",0.75)
-  #print_model = .readFlag(flags,"print_betas",FALSE)
-  
-  dataset1 =expandData(dataset,mult = mult); 
-  dh = NULL; vars_all = NULL; all_models = NULL; preds1 = NULL;
-  auc = list();
-  betas_all  = list()
-  probs_ordered0 = sort(unlist(lapply( dataset1$weights[dataset1$na_inds], function(x) max(x,mult-x))))/mult
+  dh = dataH$new(dataset$dataset, y = dataset$y, 
+                 certainty = dataset$certainty,
+                 nme="iterative", flags=flags, transform_y = transform_y, dbDir=NULL)
+ vars_all = NULL; all_models = NULL; preds1 = NULL;
+ updates = list();
+ select_each_iteration = .readFlag(flags, "select_each_iteration",TRUE);
  k=0
   repeat  {
+    if(k==0 || select_each_iteration) vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
+    
     k = k+1
-    dh = dataH$new(dataset1$dataset, y = dataset1$y, 
-                   weights = dataset1$weights,
-                   nme="iterative", flags=flags, transform_y = transform_y, dbDir=NULL)
     
-    vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
     all_models =dh$makeAllModels(vars_all,useDB=F)
-    predictions =     dh$extractPredictions(all_models, liab=TRUE) ## extract predictions in liability space
-    pr =predictions[[1]][[length(predictions[[1]])]]$full[[1]]
-    calcAUC=TRUE;calcWeights=TRUE;
-    if(calcAUC){
-      
-      df1 =cbind( pr[dataset1$na_inds],dataset1$y[dataset1$na_inds,,drop=F])
-      roc1 = roc(df1[,2],df1[,1])
-      print(roc1)
-      auc[[k]] = roc1$auc
-    }
-    if(calcWeights){
-      am = all_models$models[[1]]
-      betas = (am[[length(am)]]$full$betas[[1]])
-      rownames(betas) =  names(am[[length(am)]]$full$var_names)
-      print(betas)
-      betas_all[[k]] = betas
-    }
-    
-    ##following converts the prediction to a probability of the given y
-    zero_inds = which(dataset1$y==0)
-    pr[zero_inds] = 1-pr[zero_inds]
-  
-    dataset1$weights[dataset1$na_inds] = round(mult * pr[dataset1$na_inds,])
-    dataset1$weights[dataset1$alt_inds] = round(mult*pr[dataset1$alt_inds,])
-   # print(cbind(dataset1$weights[dataset1$na_inds], dataset1$weights[dataset1$alt_inds]))
-   
-    
-      weights = dataset1$weights/mult 
-      assignment = cbind(weights[dataset1$na_inds], weights[dataset1$alt_inds], dataset1$y[dataset1$na_inds,])
-      y_new = t(apply(assignment, 1, function(v){
-        res = if(v[1]>v[2])  v[3] else  1-v[3];
-                return(c(res, max(v[1:2])))
-      }))
-      
-      
-      perc_remaining = length(which(y_new[,2]<thresh))/nrow(y_new)
-      print(paste("REMAINING NA", perc_remaining))
-      err = sum(abs(y_new[,1] - dataset1$y[dataset1$na_inds,]))/nrow(y_new)
-      print(paste("ERR",err))
-      
-      probs_ordered = sort(unlist(lapply( dataset1$weights[dataset1$na_inds], function(x) max(x,mult-x))))/mult
-      diff =(probs_ordered - probs_ordered0)
-       
-      print(probs_ordered)
-      probs_ordered0 = probs_ordered
-      if(sum(diff)<=1e-5) {
+   updated =  dh$updateWeights(all_models)
+   updates[[k]] = updated
+  if(updated$sumdiff<=1e-5) {
         message("breaking since probs ordered not improving")
         break;
         
       }
   }
-  y_new1 = dataset$y
-  certainty_new = rep(1, nrow(y_new1))
-  y_new1[dataset1$na_inds,] = y_new[,1]
-  certainty_new[dataset1$na_inds] = y_new[,2]
+  y_new =     dh$getYNew();
+   error_rate = sum(abs(y_new$y[y_new$na_inds] - dataset$y[y_new$na_inds,]))/ length(y_new$na_inds)
+
   
-  ##eval1= dh$evaluateAllModels(all_models, useDB=F)
-  
-   list(dh = dh, vars_all = vars_all, all_models = all_models, auc =auc,
-        y_new = y_new1, certainty_new = certainty_new,
-                weights = dataset1$weights, preds1 = preds1, na_inds = dataset1$na_inds, betas_all = betas_all)
+   list(dh = dh, vars_all = vars_all, all_models = all_models,updates = updates, 
+        y_new = y_new$y, certainty_new = y_new$certainty,error_rate = error_rate, na_inds = na_inds
+        
+         )
 #  plot(roc1)
   
 }
