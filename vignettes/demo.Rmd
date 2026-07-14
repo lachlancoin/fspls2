@@ -52,8 +52,8 @@ library(fspls2)
   
 testIterative<-function(){
   prop_na=0.2;  seed=42
- 
-    fi = system.file("extdata", paste0("binomial","_data.rds"), package = "fspls2")
+  example="binomial"
+     fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
     # if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
     
     dataset = readRDS(fi); 
@@ -67,9 +67,15 @@ testIterative<-function(){
     na_inds=sort(sample.int(nrow(dataset$y),nrow(dataset$y)*prop_na))
   dataset$certainty[na_inds]=0.5;  ## set some to be unsure
   #dataset$y[na_inds,] = NA
-  flags$iterations = 10;
+  
   flags$mult = 500
+  flags$select_each_iteration = TRUE;
   results = fspls.iterative(dataset, flags, transform_y)
+  print(results$updates)
+  na_remaining= length(which(results$certainty_new<0.8))
+  message(paste("na remaining", na_remaining))  
+  message(paste("error rate",results$error_rate))
+  print(results$vars_all[[1]]$variables)
   
 }
 
@@ -83,7 +89,6 @@ testIterative<-function(){
    
     ## set up the objects
     dh = dataH$new(dataset$dataset, y = dataset$y, 
-                 
                    nme=example, flags=flags, transform_y = transform_y, dbDir=NULL)
 #    analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
   
