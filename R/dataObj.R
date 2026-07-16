@@ -24,7 +24,7 @@ lapply(str1, function(t_y){
 }
 
 ###this function not used
-.eval1_noBETA<-function(x_, Wall2, transf, params, family,mean_x = apply(x_,2, mean,na.rm=T), CHECK=F){
+.eval1_noBETA<-function(x_, Wall2, transf, params, family, CHECK=F){
   #if(length(mean_x)>0){
   #  x_ = t(t(x_) - mean_x)
   #}
@@ -56,7 +56,7 @@ lapply(str1, function(t_y){
 ## assumes Wall1 is upper diagonal
 ## uses data with mean subtracted
 ## does not add any constant term
-.eval1_<-function(x_, beta_new2, Wall2, transf, params, family,mean_x = apply(x_,2, mean,na.rm=T), CHECK=F){
+.eval1_<-function(x_, beta_new2, Wall2, transf, params, family, CHECK=F){
   #if(length(mean_x)>0){
    # x_0 = t(t(x_) - mean_x)
   #}
@@ -132,9 +132,9 @@ lapply(str1, function(t_y){
 .calcPvalue<-function(x_,y, beta_new2, yp1k,w, family, Wall2, transf){   ## this seems to not work anymore for multinomial
   if(length(which(!is.na(y)))==0) return (0)
   if(family=="multinomial"){
-    yp_new = .eval1_noBETA(x_, Wall2, transf, family, mean_x=NULL)
+    yp_new = .eval1_noBETA(x_, Wall2, transf, family)
   }else{
-    yp_new = .eval1_(x_, beta_new2, Wall2, transf, family, mean_x = NULL)
+    yp_new = .eval1_(x_, beta_new2, Wall2, transf, family)
   }
   if(family=="multinomial"){
     m1 = multinom_ridge(yp1k,y,w)
@@ -655,8 +655,8 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
   
   data$updateUDVP(prev_var)
   transf = self$getTransforms(vars1)
-  print("HHHH");
-  print(transf);
+  #print("HHHH");
+  #print(transf);
   #train = data$train
   ys =self$y[[nme]]##  if(family %in% c("binomial","ordinal")) (d$y1) else if(family =="multinomial") d$y2 else d$y
   if(family=="multinomial"){
@@ -682,7 +682,8 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
   #UDV = UDVP_h[[i]]
   #     x = d$x[,vars1[j]]
   if(length(vars1[[j]])==0){
-    non_na_x = rep(T, self$nrow)
+   # stop(" this doesnt happen")
+    non_na_x = rep(TRUE, self$nrow)
     useglm=F
   }else{
     non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(T,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
@@ -692,6 +693,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
     stop("no non_zero");
   }
   if(length(vars1[[j]])==0){
+    #stop(" this doesnt happen")
     x_=rep(1, self$nrow)
     meanx = 1
     }else{
@@ -914,7 +916,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
                          CHECK=getOption("fspls.check",T),
                                               useoffset = F,useglm=getOption("useglmnet",T)){
   data = self 
-  inv_transform=T
+  #inv_transform=T
   if(!useoffset) project=F
   nonNA = self$looc$incl[,k]
   vars1 = c(prev_var,list(b_i)) 
@@ -936,22 +938,26 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
   j = length(vars1)
   non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(T,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
   x_ =self$extractData(vars1, adjust=F)
-  meanx = apply(x_,2,mean,na.rm=T)
+  meanx = t(replicate(nrow(x_), apply(x_,2,mean,na.rm=T)))
+  
   transf = self$getTransforms(vars1,inv_transform = inv_transform) #lapply(vars1, function(v1) self$transforms[[v1[[3]]]][[2]])
   UDV = data$UDVP ## should check it corresponds to prev_i
-  Wall2 = UDV$getWall(x_[,ncol(x_)]-meanx[ncol(x_)], Wall1) ## updated projection
+  Wall2 = UDV$getWall(x_[,ncol(x_)]-meanx[,ncol(x_)], Wall1) ## updated projection  may not need to subtract meanx  .. leaving it for now
   if(!project) Wall2 = diag(ncol(Wall2))
-  x1_ = x_[,ncol(x_), drop=F]
+  x1_ = x_[,ncol(x_), drop=F]  
   transf1 = transf[[ncol(x_)]]
   if(project){
-        x1_ = x1_ - UDV$P %*% (UDV$VDU %*% x1_)
+      #####  x1_ = (x_ %*% Wall2-x_)[,ncol(x_), drop=F] # should be zero for all except last column 
+    
+        x1_ = x1_ - UDV$P %*% (UDV$VDU %*% x1_)   
+        
         if(CHECK){ ##THIS DEMONSTRATE ORTHOGONALITY
              d3 = self$extractData(UDV$var, adjust=T)
           #   var_x1 = var(x1_[,1])
               x5=unlist(lapply( 1:length(UDV$var), function(jk){
                 
                 x2_ =d3[,jk] # self$data[[UDV$var[[jk]][1]]][,UDV$var[[jk]][2]]- self$mean__x(UDV$var[[jk]]) # [[UDV$var[[jk]][1]]][UDV$var[[jk]][2]]
-                x3=x2_%*%x1_
+                x3=x2_%*%x1_[,1]
                 x3[1,1]
               }))
               names(x5) = dimnames(x_)[[2]][-ncol(x_)]
@@ -959,8 +965,9 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
             if( length(inds111)){
               warning(paste("no longer orthogonal but might be due to transformation giving large SD", max(abs(x5)), dimnames(x_)[[2]][ncol(x_)], " vs " ,paste(names(inds111),collase=",")), sd(x1_[,1], sd(d3[,inds111[1]])))
             }
-          x3=x_ %*%Wall2
-          chck=sum(abs(x3[,ncol(x3)]-x1_))
+          x3=x_ %*%Wall2 #- meanx %*% Wall2
+          #plot(x3[,ncol(x3)], x1_[,1])
+          chck=sum(abs(x3[,ncol(x3)]-mean(x3[,ncol(x3)])-(x1_[,1] - mean(x1_[,1]))))
           if(chck>1e-5){
             warning(paste("problem with Wall",chck))
           }
@@ -989,8 +996,6 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
   for(kk in 1:ncoly){
     nonNAk = nonNA & non_na_x
     nonNAk1 = non_na_x[nonNA]; ## second subset
-    
-   # y = transform_func_y(ys[,kk])[nonNAk]
     y=ys[,kk][nonNAk]
     w = data$weights[nonNAk]
     beta_new1=0;
@@ -1004,7 +1009,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
       dimnames(x)[[2]] = c(paste0("A",1:(ncol(x)-1)),"x")
     }else{
      # warning("no transformation here without offset!")
-      x = x_[nonNAk,,drop=F];
+      x =cbind(yp1[,kk],transf1$func( x1_[nonNAk,,drop=F], transf1$param))
      # for(kk3 in 1:ncol(x)){
     #    transf1$func(x[,], transf1$param)
     #  }
@@ -1357,9 +1362,19 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_y=F,verbose=F, 
     self$updateUDVP(prev_var)
     #Wall = data$calcWall(b_i, prev_i$var, prev_i$Wall) ## WALL not important, we can get rid of it later
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
-    betas = prev_i$betas_proj
-    b_new_proj = self$calcBetaProj1(subphens,k,b_i,b_i_name, prev_var, Wall, betas = betas, project=project,convert=F,  
-                                    strict=T, useglm=useglm, useoffset=useoffset) 
+    betas = prev_i$betas_proj;
+  
+    b_new_proj <- withCallingHandlers(
+      self$calcBetaProj1(subphens, k, b_i, b_i_name, prev_var, Wall,
+                         betas = betas, project = project, convert = FALSE,
+                         strict = TRUE, useglm = useglm, useoffset = useoffset),
+      warning = function(w) {
+        if (grepl("fitted probabilities numerically 0 or 1 occurred", conditionMessage(w))) {
+          invokeRestart("muffleWarning")
+        }
+      }
+    )  
+   
     Wall2 = b_new_proj$Wall
    # b_new_proj1 = self$calcBetaProj1(subphens,k,b_i,prev_var,  betas = betas, project=!project,convert=F,    strict=T, useglm=useglm, useoffset=useoffset) 
     

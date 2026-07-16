@@ -654,10 +654,10 @@ dataH<-R6::R6Class("dataH",
      }
      return(prev_i2);
    },
-   res_inner=function(comb_,prev_i, flags,k, expt_id, phens){
-     
+   res_inner=function(comb_,prev_i2, flags,k, expt_id, phens){
+     prev_i = prev_i2
      nme_comb = names(comb_); names(nme_comb) = nme_comb
-     #nme_c1 = nme_comb[[1]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
+     #nme_c1 = nme_comb[[2]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
      res_inner=lapply(nme_comb, function(nme_c1){
        nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
        lapply(nmesp1, function(nme_p1){
@@ -787,9 +787,7 @@ dataH<-R6::R6Class("dataH",
    getPvsAll=function(subphens, prev_i, b_i_name,k, #   prev_i = vars_l1[[nmed]]
                       Wall, # =lapply(subphens, function(f) matrix(nrow=0,ncol=0)),
                       flags, angle=0){
-     #useglm=FALSE,,inv_transform=getOption("x_transform",T),
-     #project=T, useoffset=T){
-     #inv_transform=T
+  
      project=.readFlag(flags,"project",T)
      useoffset=.readFlag(flags,"useoffset",T)
      useglm = .readFlag(flags,'useglmnet',T)
@@ -820,10 +818,10 @@ dataH<-R6::R6Class("dataH",
      initialize=function(
     data,
     y,
-    certainty = rep(1, nrow(y)),
-    weights = rep(1, nrow(y)),
     nme,
     flags ,
+    certainty = rep(1, nrow(y)),
+    weights = rep(1, nrow(y)),
     transform_y=getYTransform(pow = 1,  n_random=1, perm=F),
     family= getFamily(y),
          dbDir=tempdir()
@@ -1213,7 +1211,7 @@ getYNew=function(){
   
   y2[na_inds] = y_new[,1]
    
-  certainty = rep(1, length(y_old))
+  certainty = rep(1, length(private$original_rows))
   certainty[na_inds] = y_new[,2]
   error_rate = sum(abs(y2[na_inds] - y_orig))/ length(na_inds)
     levs = private$levs

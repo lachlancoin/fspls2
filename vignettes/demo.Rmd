@@ -48,11 +48,11 @@ library(fspls2)
 
 ```{r example}
   examples = c("binomial", "gaussian", "ordinal", "multinomial");
-#  example="binomial"
+ example="binomial"
   
 testIterative<-function(){
   prop_na=0.2;  seed=42
-  example="multinomial"
+  example="binomial"
      fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
     # if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
     
@@ -110,7 +110,7 @@ testIterative<-function(){
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   
     ##optionally get all predictions
-    predictions =     dh$extractPredictions(all_models)
+    #predictions =     dh$extractPredictions(all_models)
    
     return(ggps1[[1]])
   }
