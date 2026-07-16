@@ -854,7 +854,10 @@ isbigmatrix<-function(x){
       df[range,ncol+1] = names(t)[[k]]
     }
   }
-  rownames(df) = rownames
+  if(length(which(duplicated(rownames)))==0){
+    #print(rownames)
+    rownames(df) = rownames
+  }
   df
 }
 

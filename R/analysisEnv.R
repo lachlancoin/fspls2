@@ -302,7 +302,10 @@ analysisEnv<-R6::R6Class("analysisEnv",
               print("cumulative ")
               print(unlist(list(rand=min(logpvs_all[gp1]),nonrand= min(logpvs_all[gp]))))
         }
-        if(!useAngles && verbose) print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
+        if(!useAngles && verbose) {
+          print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
+          print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
+        }
         
       }
       logpv =min(logpvs)

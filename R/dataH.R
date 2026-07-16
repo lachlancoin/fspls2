@@ -77,7 +77,9 @@ expandData<-function(data, y, certainty,family,weights,  mult = 100
   non_na_inds = 1:nrow(y)
   non_na_inds = non_na_inds[-na_inds]
   if(length(na_inds)==0){
-    return(list(dataset = data, y= y, y_orig = y_orig, weights =weights, na_inds = na_inds, non_na_inds = non_na_inds, alt_inds = c()))
+    return(list(dataset = data, y= y,  weights =weights, na_inds = na_inds, non_na_inds = non_na_inds, 
+                original_inds = c(),
+                alt_inds = c()))
   }
   .check_data(data, y)  ## checks rownames match
   if(max(certainty)>1.0) stop("!!")
@@ -99,7 +101,7 @@ expandData<-function(data, y, certainty,family,weights,  mult = 100
     y_new[,1] = as.numeric(y_new[,1])
   }
   list(y = y_new, dataset=d_new, na_inds=na_inds,non_na_inds = non_na_inds, 
-       y_orig = y_alts$y_orig,
+     
        original_inds = y_alts$original_inds,
       alt_inds = y_alts$alt_inds,
        weights =weights)
@@ -518,6 +520,7 @@ dataH<-R6::R6Class("dataH",
   #returns the weights of the uncertain samples ordered
   sample_na_weights=function(){
     mult = private$mult
+    if(length(private$na_inds)==0) return(c())
     w = private$data$weights[private$na_inds]
     for(alt in private$alt_inds){
       w = cbind(w,private$data$weights[alt])
@@ -769,7 +772,7 @@ dataH<-R6::R6Class("dataH",
       type=private$type
      prev_signature =paste(unlist(lapply(varnames, function(vn)vn[2])),collapse=";")
      var_t = private$var_thresh(qq_t)
-     
+     if(length(which(names(private$data$data) %in% incl))==0) stop("incl does not match data")
      angles=  private$data$getAngles1(phens,varnames,incl=incl,k=k, type=type)
      angles =angles[ unlist(lapply(angles, length))>0]
      angleH=list(angles=angles,
@@ -786,7 +789,7 @@ dataH<-R6::R6Class("dataH",
                       flags, angle=0){
      #useglm=FALSE,,inv_transform=getOption("x_transform",T),
      #project=T, useoffset=T){
-     inv_transform=T
+     #inv_transform=T
      project=.readFlag(flags,"project",T)
      useoffset=.readFlag(flags,"useoffset",T)
      useglm = .readFlag(flags,'useglmnet',T)
@@ -992,8 +995,6 @@ dataH<-R6::R6Class("dataH",
     force=.readFlag(flags,'force',F);
     flags$transform_y = transform_y;
     super$updateExpt(phens, flags)
-#   flags[['data_types']] =toJSON(names(datasH[[1]]$data$data))
-
    if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(names(private$data$data))
      private$updateLOOC(phens, flags, verbose=verbose,force=force)
      private$updateTrain(phens, flags,transform_y, verbose=verbose, force=force)
@@ -1258,7 +1259,6 @@ makeAllModels=function(vars_all,
                        phens=vars_all[[1]]$phens, flags=vars_all[[1]]$flags, 
                        transform_y =  fromJSON(flags$transform_y),
                        useDB=F){
-  
   self$update(phens, flags,transform_y);
   verbose=.readFlag(flags,'verbose',F); max = .readFlag(flags,'max',1e6)
   sigDB = if(useDB) private$sigs else NULL
