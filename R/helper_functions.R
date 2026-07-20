@@ -818,6 +818,23 @@ isbigmatrix<-function(x){
   }
 }
 
+.lapply_nme=function(y,FUN){
+  
+  res = lapply(names(y),FUN)
+  names(res) = names(y)
+  res
+}
+
+.merge_lapply=function(phens,nme, FUN){
+   .merge1_new(lapply(phens,FUN), addName=nme)
+  
+}
+
+.merge_lapply_nme=function(phens,nme, FUN){
+  .merge1_new(.lapply_nme(phens,FUN), addName=nme)
+  
+}
+
 .merge1_new<-function(t,num_cols = c(), addName=NULL, checkNames=TRUE){
   if(checkNames && length(t)>0){
     nme_aa = names(t[[1]])

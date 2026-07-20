@@ -1548,10 +1548,12 @@ ypred=function(phens1){
 },# inverse_func_strs = jsonlite::fromJSON(.readFlag(flags,"transform_y_inverse",'{"y":"function(y) y"}'))
 #all_models_y = all_models$y; inverse_func_str = jsonlite::fromJSON(flags1$transform_y_inverse)[[1]]; self = datasAll$datas[[1]]
 
-extractPredictions=function(all_models_y,phens, flags,  ypred = self$ypred(phens), liab=T
+extractPredictions=function(all_models_y,phens, flags, 
+                            transform_y = jsonlite::fromJSON(flags$transform_y),
+                            ypred = self$ypred(phens), liab=T
                                    ){
   inv_transform_y=F
-  self$updateTransforms(jsonlite::fromJSON(flags$transform_y)   )      
+  self$updateTransforms(transform_y   )      
   d = self
   self$updateLOOC(phens,flags)
     ## whether to evaluate with liability , default is true
@@ -1603,6 +1605,9 @@ extractPredictions=function(all_models_y,phens, flags,  ypred = self$ypred(phens
       #res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)
       # print(res1);
       res1 [["full"]] =  ypred$predictions(nonNA, flip=FALSE)
+      for(lk in 1:length(res1[['full']])){
+        attr(res1[['full']][[lk]],"betas") = full_model$betas[[lk]][numvar,]
+      }
       #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
     }
     if(length(nmesm)>0){
@@ -1660,7 +1665,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
   if(length(all_models_y)==0) return(NULL)
   #
   #
-  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[1]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
@@ -1693,7 +1698,13 @@ evaluateAllModels=function(all_models_y,phens,flags,
                 ypred$updateYP(d, full_model, nonNA, inv_transform_y = inv_transform_y, flip=FALSE, liab=liab)
                 res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)
                # print(res1);
-                res1 = res1 |> tibble::add_column(isfull=T, model=full_model_nme)
+                beta = unlist(lapply(1:nrow(res1), function(ii){
+                  
+                  b1 = full_model$betas[[res1$family[ii]]]
+                  
+                  b1[nrow(b1),which(colnames(b1)==res1$pheno[[ii]])]
+                }))
+                res1 = res1 |> tibble::add_column(isfull=T, model=full_model_nme, beta, sign = sign(beta))
                 #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
               }
               if(length(nmesm)>0){
@@ -1706,7 +1717,8 @@ evaluateAllModels=function(all_models_y,phens,flags,
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
                 nonNA=self$getNonNAInds(inds)
-                res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=F,model="cv")
+              
+                res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=F,model="cv", beta=NA, sign = NA)
               }
               if(length(nmesm_full)>0){
                 #transf=c()
@@ -1718,7 +1730,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
                 nonNA=self$getNonNAInds(inds_full)
-                res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=T,model=full_model_nme)
+                res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=T,model=full_model_nme, beta=NA, sign = NA)
               }
               rbind(res1,res2,res3)
 #        }),addName="model")
@@ -2211,12 +2223,15 @@ df1 = data.frame(li1[unlist(lapply(li1, length))>0])
       c(ind1,ind2)
     })
   },
-
-## gets ready for training - updates train, prev looc
-updateTrain=function(phens,flags, transform_y, verbose=F, force=F){ ## this updates the reps and train  ## called after updateLOOC
+updateTransform=function(transform_y){
   transforms =  .convertToTransform(transform_y)
   update_trans = toJSON(self$transforms)!= toJSON(transforms)
-    self$transforms = transforms
+  self$transforms = transforms
+  update_trans
+},
+## gets ready for training - updates train, prev looc
+updateTrain=function(phens,flags, transform_y, verbose=F, force=F){ ## this updates the reps and train  ## called after updateLOOC
+ update_trans = self$updateTransform(transform_y);
   nrep = ncol(self$looc$incl)
   if(verbose) print("update train")
   incls = jsonlite::fromJSON(.readFlag(flags,'data_types',"{}")) 

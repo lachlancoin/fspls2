@@ -328,7 +328,7 @@ return(list(ggp1, ggp2, ggp3))
    
      sv = sparse_variance(m1$matrix)
      na_cnt = colSums(m1$matrixNA)/nrow(m1$matrixNA)
-     m2 = lapply(m1, function(m11) m11[,sv>min_variance & na_cnt<=max_na_proportion])
+     m2 = lapply(m1, function(m11) m11[,!is.na(sv) & sv>min_variance & na_cnt<=max_na_proportion])
   m2
   })
   
@@ -517,6 +517,7 @@ dataH<-R6::R6Class("dataH",
   na_probs_ordered="list",
   original_inds ="list",  ## what is the indices in new matrix of the na_inds original values
   original_rows = "list", ## what is indices of original rows
+  transform_y ="list",
   #returns the weights of the uncertain samples ordered
   sample_na_weights=function(){
     mult = private$mult
@@ -654,10 +655,10 @@ dataH<-R6::R6Class("dataH",
      }
      return(prev_i2);
    },
-   res_inner=function(comb_,prev_i2, flags,k, expt_id, phens){
-     prev_i = prev_i2
+   res_inner=function(comb_,prev_i, flags,k, expt_id, phens){
+     
      nme_comb = names(comb_); names(nme_comb) = nme_comb
-     #nme_c1 = nme_comb[[2]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
+     #nme_c1 = nme_comb[[1]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
      res_inner=lapply(nme_comb, function(nme_c1){
        nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
        lapply(nmesp1, function(nme_p1){
@@ -787,7 +788,9 @@ dataH<-R6::R6Class("dataH",
    getPvsAll=function(subphens, prev_i, b_i_name,k, #   prev_i = vars_l1[[nmed]]
                       Wall, # =lapply(subphens, function(f) matrix(nrow=0,ncol=0)),
                       flags, angle=0){
-  
+     #useglm=FALSE,,inv_transform=getOption("x_transform",T),
+     #project=T, useoffset=T){
+     #inv_transform=T
      project=.readFlag(flags,"project",T)
      useoffset=.readFlag(flags,"useoffset",T)
      useglm = .readFlag(flags,'useglmnet',T)
@@ -818,10 +821,10 @@ dataH<-R6::R6Class("dataH",
      initialize=function(
     data,
     y,
-    nme,
-    flags ,
     certainty = rep(1, nrow(y)),
     weights = rep(1, nrow(y)),
+    nme,
+    flags ,
     transform_y=getYTransform(pow = 1,  n_random=1, perm=F),
     family= getFamily(y),
          dbDir=tempdir()
@@ -833,6 +836,7 @@ dataH<-R6::R6Class("dataH",
         colnames(data[[k]]) = gsub("\\.","_",colnames(data[[k]]))  ## no . allowed
         
       }
+       private$transform_y = transform_y;
     private$levs = lapply(y,function(yc) levels(yc) )       
     private$mult= .readFlag(flags,"mult",100)
     private$original_rows = 1:nrow(y)
@@ -1052,13 +1056,63 @@ dataH<-R6::R6Class("dataH",
 # },
  
 #' @description provides access to internal storage of phenotype data
+#' @param phens list of phenotypes
 #' @returns list of matrices
-y=function(){
-  private$data$y
+y=function(phens = self$pheno()){
+  y1 = private$data$y
+  out1=.lapply_nme(y1, function(nme) {
+   
+    y2 = y1[[nme]]
+    y2[,colnames(y2) %in% phens[[nme]],drop=F]
+  })
+  out1
 },
 
 
-
+#' @description ggplot to visualise predictions
+#' @param all_modelsh fitted models from makeAllModels
+#' @param phens list of phenotyps
+#' @param flags list of options
+#' @param liab return liability score, or probability (for binomial, ordinal multinomial)
+#' @returns  a ggplot
+plotPredictions=function(all_modelsh,phens=all_modelsh$phens,flags=all_modelsh$flags, 
+                         transform_y = jsonlite::fromJSON(flags$transform_y),
+                         liab=TRUE){
+ y = self$y(phens)
+  preds= self$extractPredictions(all_modelsh, phens, flags, liab, transform_y = transform_y)
+  
+  #familys=names(preds[[beam]][[nv]][[cv]]);
+  #family = familys[[1]];td=1
+  ##beams = names(preds); names()  .merge_lapply_nme
+toplot=.merge_lapply_nme(preds, "beam",function(beam){
+ .merge_lapply_nme(preds[[beam]], "numvar",function(nv){
+    cvs = preds[[beam]][[nv]]
+   
+    .merge_lapply_nme(cvs, "cv",function(cv){
+      familys = preds[[beam]][[nv]][[cv]]
+      .merge_lapply_nme(familys, "family",function(family){
+        pred = preds[[beam]][[nv]][[cv]][[family]];
+        y1 = y[[family]];
+        todo =1:ncol(y1) ; names(todo) = colnames(y1);
+        .merge1_new(lapply(todo, function(td){
+          df = data.frame(pred[,td],y1[,td])
+          names(df) = c("prediction","value")
+          df;
+        }),addName="subpheno")
+        
+      })
+    })
+  })
+})
+  
+ 
+  
+  toplot$numvar = factor(toplot$numvar, levels = sort(unique(as.numeric(toplot$numvar))))
+  toplot1 <- toplot |> 
+    tidyr::unite("cv_family", cv,family, remove = FALSE)
+  ggplot(toplot1, aes(x=value, y=prediction, color=subpheno, shape=beam))+geom_point()+facet_grid("numvar~cv_family")
+  
+},
 
 
 
@@ -1066,19 +1120,20 @@ y=function(){
 #' @param all_modelsh fitted models from makeAllModels
 #' @param phens list of phenotyps
 #' @param flags list of options
-#' @param CV cross validation predictions
+#' @param transform_y transformation object
 #' @param liab return liability score, or probability (for binomial, ordinal multinomial)
 #' @returns  a table with results
-extractPredictions=function(all_modelsh,phens=all_modelsh$phens, flags=all_modelsh$flags, liab=TRUE){
+extractPredictions=function(all_modelsh,phens=all_modelsh$phens, flags=all_modelsh$flags, 
+                            transform_y = jsonlite::fromJSON(flags$transform_y),
+                            liab=TRUE){
   private$updateLOOC(phens, flags)
-  
-  all_models_y0 = all_modelsh$models#[[mod_nme]]
+    all_models_y0 = all_modelsh$models#[[mod_nme]]
   # eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
   #print(nme1)
   d = private$data
   #all_models_y = all_models_y0[[1]]
   predictions0 = lapply(all_models_y0, function(all_models_y){
-    d$extractPredictions(all_models_y, phens, flags, liab= liab)
+    d$extractPredictions(all_models_y, phens, flags, transform_y = transform_y, liab= liab)
   ##  d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
   })
  
@@ -1211,7 +1266,7 @@ getYNew=function(){
   
   y2[na_inds] = y_new[,1]
    
-  certainty = rep(1, length(private$original_rows))
+  certainty = rep(1, length(y_old))
   certainty[na_inds] = y_new[,2]
   error_rate = sum(abs(y2[na_inds] - y_orig))/ length(na_inds)
     levs = private$levs
@@ -1364,7 +1419,7 @@ makeAllModels=function(vars_all,
 #' @param flags flags
 #' @param useDB whether to save results to DB
 #' @returns evaluation of models
-evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_modelsh$flags,useDB=F){ ## different folds with same variables
+evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_modelsh$flags,transform_y =  fromJSON(flags$transform_y),useDB=F){ ## different folds with same variables
   sigDB = if(useDB) private$sigs else NULL
   if(!is.null(sigDB) ){
     eval1 = sigDB$loadEval(flags,phens,)
@@ -1372,6 +1427,14 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
       return(eval1)
     }
   }
+  
+    private$data$updateTransform(private$transform_y)
+    
+  
+  #self$updateTransform(transform_y)
+    
+#  self$update(phens, flags,transform_y);
+  
   verbose=.readFlag(flags,"verbose",T)
   inv_transform_y=F
   private$updateLOOC(phens, flags)
@@ -1382,7 +1445,7 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
  # eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
     #print(nme1)
     d = private$data
-  #  all_models_y = all_models_y0[[1]]
+    #all_models_y = all_models_y0[[1]]
     eval1 =   .merge1_new(lapply(all_models_y0, function(all_models_y){
    d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
   }), addName="beam")  #if(inherits(resd,"try-error")) {
@@ -1396,6 +1459,7 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
   #}),addName="transform_y")
   if(is.null(eval1)) return(NULL)
   #  eval1 = subset(eval1, model!="avg")
+
   eval2 = eval1|> pivot_wider(names_from="submeasure") #|> tibble::add_column(transform_y=strsplit(transform_y[[1]]," ")[[1]][2])
   
   #  isfull=eval2$model %in% full_model_nmes

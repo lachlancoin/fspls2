@@ -679,7 +679,9 @@ updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, li
    lapply(ypreds, function(yp){
      yp1 = yp;
      if(l1>0){
-      yp1[ind_1,,drop=F]=NA
+       for(kk in 1:ncol(yp1)){
+         yp1[i1,kk]=NA
+       }
      }
      yp1
    })

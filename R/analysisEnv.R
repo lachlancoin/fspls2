@@ -74,6 +74,18 @@ print(y_new$y)
 #  plot(roc1)
   
 }
+#' extracts the full model variables from a cross validation run
+#' @param vars_all and object returned by fspls.select
+#' @export
+extractFullVars<-function(vars_all){
+  lapply(vars_all, function(vars_all1){
+    subinds = which(unlist(lapply(vars_all1$inds, function(x) length(grep('full',names(x)))))>0)
+    list(variables = vars_all1$variables[subinds], inds = vars_all1$inds[subinds], cumpv = vars_all1$cumpv[subinds],
+         transf = vars_all1$transf[subinds],
+         flags = vars_all1$flags,
+         phens=vars_all1$phens, transform_y = vars_all1$transform_y)
+  })
+}
 
 #' main function for variable selection
 #' @param datasH a list of dataH objects
@@ -118,15 +130,7 @@ fspls.select<-function(datasH, flags,
 }
 
 
-.extractFullVars<-function(vars_all0){
-  lapply(vars_all0, function(vars_all){
-  subinds = which(unlist(lapply(vars_all$inds, function(x) length(grep('full',names(x)))))>0)
-  list(variables = vars_all$variables[subinds], inds = vars_all$inds[subinds], cumpv = vars_all$cumpv[subinds],
-       transf = vars_all$transf[subinds],
-       flags = vars_all$flags,
-       phens=vars_all$phens, transform_y = vars_all$transform_y)
-  })
-}
+
 .mergeComb<-function(comb_all1, flags){
    topn = .readFlag(flags,'topn', 20);num_pvals = min(topn, 20)
   if(length(comb_all1)>1) stop("need to write a merge function for comb across data.  This needs to restrict to num_pvals")
@@ -321,8 +325,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
         }
         dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
         ang1 = ang1[!duplicated(dupls)]
-        ang1 = ang1[grep("rand", names(ang1), inv=T)]
-        ang1 = ang1[1:min(length(ang1),beam)]
+        last_non_rand = grep("rand", names(ang1))[1]-1
+        if(is.na(last_non_rand)) last_non_rand = beam;      
+        ang1 = ang1[1:min(length(ang1),beam, last_non_rand)]
         vars_l_todo = list(stop=F, vars_l = ang1, todo1 = vars_l_todo$todo1)
         if(length(grep("rand", names(vars_l_todo$vars_l)))>0) stop("!!");
         
