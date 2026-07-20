@@ -1058,7 +1058,7 @@ dataH<-R6::R6Class("dataH",
 #' @description provides access to internal storage of phenotype data
 #' @param phens list of phenotypes
 #' @returns list of matrices
-y=function(phens = self$pheno()){
+y=function(phens = self$pheno()[[1]]){
   y1 = private$data$y
   out1=.lapply_nme(y1, function(nme) {
    
@@ -1266,7 +1266,7 @@ getYNew=function(){
   
   y2[na_inds] = y_new[,1]
    
-  certainty = rep(1, length(y_old))
+  certainty = rep(1, length(private$original_rows))
   certainty[na_inds] = y_new[,2]
   error_rate = sum(abs(y2[na_inds] - y_orig))/ length(na_inds)
     levs = private$levs

@@ -58,6 +58,7 @@ testIterative<-function(){
     
     dataset = readRDS(fi); 
     
+  
     if(FALSE){
      load("~/github/fspls2_old/data/w.tbod.binomial.11.dat.rdat")
      rownames(data$data) = 1:nrow((data$data)); data$y = as.matrix(data$y); rownames(data$y) = 1:nrow(data$y); colnames(data$y) = "y"
@@ -92,10 +93,12 @@ testIterative<-function(){
     ## set up the objects
     dh = dataH$new(dataset$dataset, y = dataset$y, 
                    nme=example, flags=flags, transform_y = transform_y, dbDir=NULL)
-#    analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
   
     ##Step 1. run variable selection 
-    #vars_all = analysis$select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
+   
+        datas = list(dh)
+         #    analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
+   # vars_all = analysis$select(datas,  flags, transform_y, phens = dh$pheno()$all)
     vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
     all_models =dh$makeAllModels(vars_all,useDB=F)

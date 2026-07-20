@@ -2238,7 +2238,7 @@ updateTrain=function(phens,flags, transform_y, verbose=F, force=F){ ## this upda
   if(length(incls) == 0 )incls = list("all"=names(self$data))
   incls_all = unique(unlist(incls))
   if(force || length(self$train)!=nrep  ||  is.null(self$train[[1]]) || update_trans){ # || toJSON(self$train[[1]]$func_str)!=toJSON(transform_y)){
-    self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$looc , incls_all, transforms,family=self$family)) #lapply(1:ncol,function(k)
+    self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$looc , incls_all, self$transforms,family=self$family)) #lapply(1:ncol,function(k)
   }
   if(!is.null(self$subset)){
     ## apply subset via the looc object to avoid subsetting big matrix
