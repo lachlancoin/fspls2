@@ -291,13 +291,14 @@ analysisEnv<-R6::R6Class("analysisEnv",
         
         # print("HERE")
         stop_random =  min(logpvs[gp1]) < min(logpvs[gp]) 
-        stop_random1= min(angles_[gp1]) < min(angles_[gp])
+       # stop_random1= min(angles_[gp1]) < min(angles_[gp])
         stop_random2= min(logpvs_all[gp1]) < min(logpvs_all[gp])
         
         #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
         # stop_random= min(gp1)<=min(gp)
         #print(head(sort(ord[stop_ind])))
-        if(verbose && FALSE){
+        if(verbose){
+          print(paste(stop_random, stop_random2))
               print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles))
               print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
               print("cumulative ")
@@ -312,15 +313,15 @@ analysisEnv<-R6::R6Class("analysisEnv",
       logpv =min(logpvs)
       
       
-      if(stop_random || stop_random1 || stop_random2){
+      if(stop_random || stop_random2){
         if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
       }
       
       ##ADD MORE RESTRICTIONS .. eg maxsize
       #     while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! vars_l_todo$stop_random){
-      if((!stop_random &&  ! stop_random1 && !stop_random2 && logpv<=logpvthresh  ) ){
+      if((!stop_random && !stop_random2 && logpv<=logpvthresh  ) ){
         if(verbose){
-          print(head(sort(logpvs_all[gp])))
+          print(head(sort(logpvs_all[gp]),beam))
           print(names(vars_l))
         }
         dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))

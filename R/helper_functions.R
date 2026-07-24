@@ -207,8 +207,14 @@ length(unique(eval1$`data:family`))
 
 .modify<-function(eval3, shape_color,
                   shape_color_nme ){
+  mi3=match(shape_color,names(eval3))
+  na_ind = which(is.na(mi3));
+  if(length(na_ind)>0) {
+     warning(paste(shape_color[na_ind],"is missing"))  
+    mi3 = mi3[-na_ind]
+  }
   if(!(shape_color_nme %in% names(eval3))){
-    eval3_sub=eval3[,names(eval3) %in% shape_color,drop=F]
+    eval3_sub=eval3[,mi3,drop=F]
     for(jk in 1:length(eval3_sub)) eval3_sub[[jk]]=factor(eval3_sub[[jk]])
     levs1 = lapply(eval3_sub, function(vv) levels(vv))
     levs_all = levs1[[1]]
@@ -274,6 +280,11 @@ plotEval<-function(eval3,
        labelsize=2,
            grid0 = c("cohort","measure"),grid1 = "cv_full",title="", title1=""
           ){
+  eval1$beam = factor(eval1$beam, levels =  sort(unique(as.numeric(eval1$beam))))
+  
+  eval3$sign = as.character(eval3$sign)
+  eval3$sign = factor(eval3$sign, levels = c(-1,0,1), labels=c("-","","+"))
+  
   eval3 = eval3[,names(eval3) %in% c(shape_color,sep_by, linetype, text, dotsize, color, title1, grid0, grid1, "numvars","mid","low","high"),drop=F]
   l1 = apply(eval3,1,paste, collapse="::");
   #print(which(duplicated(l1)))
@@ -626,11 +637,15 @@ expandSparseMatrix<-function(counts, n,  vec, by="row"){
 #' Convert matrix into sparse submatrices
 #'
 #' @param counts a matrix
-#' @param inds indices for subsetting
+#' @param inds indices for subsetting, or can be colnames for subsetting
 #' @param by can be col or row
 #' @return sparse sub matrix
 #' @noRd
 getSparseSubMatrix<-function(counts, inds,by='col'){
+  if(!is.numeric(inds)) {
+    tomatch = if(by=="col")colnames(counts) else rownames(counts);
+    inds = match(inds, tomatch)
+  }
   colInds = inds
   rowInds = inds
   if(by=='col' && ncol(counts)==length(inds)){

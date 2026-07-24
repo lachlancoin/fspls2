@@ -1665,7 +1665,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
   if(length(all_models_y)==0) return(NULL)
   #
   #
-  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[1]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)print(paste("numvar",numvar))
     #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
@@ -1699,11 +1699,13 @@ evaluateAllModels=function(all_models_y,phens,flags,
                 res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)
                # print(res1);
                 beta = unlist(lapply(1:nrow(res1), function(ii){
-                  
+               
                   b1 = full_model$betas[[res1$family[ii]]]
-                  
-                  b1[nrow(b1),which(colnames(b1)==res1$pheno[[ii]])]
+                  ik2 = which(colnames(b1)==res1$pheno[[ii]])
+                  if(length(ik2)==0)ik2 = 1
+                  b1[nrow(b1),ik2]
                 }))
+                
                 res1 = res1 |> tibble::add_column(isfull=T, model=full_model_nme, beta, sign = sign(beta))
                 #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
               }

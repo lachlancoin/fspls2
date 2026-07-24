@@ -1109,8 +1109,8 @@ toplot=.merge_lapply_nme(preds, "beam",function(beam){
   
   toplot$numvar = factor(toplot$numvar, levels = sort(unique(as.numeric(toplot$numvar))))
   toplot1 <- toplot |> 
-    tidyr::unite("cv_family", cv,family, remove = FALSE)
-  ggplot(toplot1, aes(x=value, y=prediction, color=subpheno, shape=beam))+geom_point()+facet_grid("numvar~cv_family")
+    tidyr::unite("cv_family_beam", cv,family,beam, remove = FALSE)
+  ggplot(toplot1, aes(x=value, y=prediction, color=subpheno, shape=beam))+geom_point()+facet_grid("numvar~cv_family_beam")
   
 },
 
