@@ -38,17 +38,17 @@ rbind_sparse <- function(mats) {
       skip <- 1  # header
     max = 3e9
       repeat {
-        print(paste("skip", skip, i))
+      
         dt <- data.table::fread(filename, drop = drop,
                     skip = skip, nrows = chunk_size, header = FALSE)
       
         if (nrow(dt) == 0) break
-        m1 = as(as.matrix(dt[,-1,drop=F]), "sparseMatrix")
+        m1 = as(as.matrix(dt[,-1,drop=FALSE]), "sparseMatrix")
         rs = rowSums(m1)/ncol(m1)
-        print(length(which(rs>=row_mean_thresh))/length(rs))
+    
         subind = rs>=row_mean_thresh
-        print(paste("keep",length(which(subind))/nrow(m1)))
-        m1 = m1[subind,,drop=F]
+    
+        m1 = m1[subind,,drop=FALSE]
         rownames(m1) = dt[[1]][subind]
         mats[[i]] <- m1
         skip <- skip + chunk_size
@@ -144,8 +144,8 @@ countsMatrix
 }
 .print_verbose<-function(txt,str,lev){
   if(lev<=getOption("fspls.verbose",0)) {
-    print(paste(txt,"::"))
-    print(str)
+    cat(paste(txt,"::"))
+    cat(str)
   }
 }
 
@@ -174,12 +174,12 @@ check_flags<-function(flags){
 eval1 = eval0[,mi] 
 ##not working
 
-eval2 = tidyr::unite(head(eval1),"data:subpheno", remove=F)
+eval2 = tidyr::unite(head(eval1),"data:subpheno", remove=FALSE)
 length(unique(eval1$`data:family`))
 }
 
 .calcEval1<-function(eval0, rename=TRUE, len = 3){ #c("trainedOn","measure","subpheno")
-  eval0_1 = unite(eval0, "cohort_measure_pheno_trained", "data","subpheno","measure","pheno","trainedOn",remove=F)
+  eval0_1 = unite(eval0, "cohort_measure_pheno_trained", "data","subpheno","measure","pheno","trainedOn",remove=FALSE)
   eval0_avg = subset(eval0_1, model=="avg") |>  tibble::add_column("fullmodel"="avg")
   eval =  subset(eval0_1, model!="avg")
   if(rename)eval=.renameModels(eval, len=len)
@@ -200,21 +200,15 @@ length(unique(eval1$`data:family`))
   eval2$cv = paste("CV=",eval2$cv)
   eval21 = rbind(eval2,eval0_avg)
   eval21$isfull = paste("FULL=",eval21$isfull);
-  eval3 = unite(eval21,"cv_full", "cv","isfull",remove=F,sep=" ")
+  eval3 = unite(eval21,"cv_full", "cv","isfull",remove=FALSE,sep=" ")
   eval3$cv_full[eval3$cv=="CV=avg"]=eval3$cv[eval3$cv=="CV=avg"]
   eval3
 }
 
 .modify<-function(eval3, shape_color,
                   shape_color_nme ){
-  mi3=match(shape_color,names(eval3))
-  na_ind = which(is.na(mi3));
-  if(length(na_ind)>0) {
-     warning(paste(shape_color[na_ind],"is missing"))  
-    mi3 = mi3[-na_ind]
-  }
   if(!(shape_color_nme %in% names(eval3))){
-    eval3_sub=eval3[,mi3,drop=F]
+    eval3_sub=eval3[,names(eval3) %in% shape_color,drop=FALSE]
     for(jk in 1:length(eval3_sub)) eval3_sub[[jk]]=factor(eval3_sub[[jk]])
     levs1 = lapply(eval3_sub, function(vv) levels(vv))
     levs_all = levs1[[1]]
@@ -276,19 +270,14 @@ plotEval<-function(eval3,
            color=shape_color,
           linetype=shape,
           showranges=TRUE, ## linetype="fullmodel"
-           txtsize=1,logy=F,legend=F,sep_by="",scales="free",point=TRUE,line=TRUE,
+           txtsize=1,logy=FALSE,legend=FALSE,sep_by="",scales="free",point=TRUE,line=TRUE,
        labelsize=2,
            grid0 = c("cohort","measure"),grid1 = "cv_full",title="", title1=""
           ){
-  eval1$beam = factor(eval1$beam, levels =  sort(unique(as.numeric(eval1$beam))))
-  
-  eval3$sign = as.character(eval3$sign)
-  eval3$sign = factor(eval3$sign, levels = c(-1,0,1), labels=c("-","","+"))
-  
-  eval3 = eval3[,names(eval3) %in% c(shape_color,sep_by, linetype, text, dotsize, color, title1, grid0, grid1, "numvars","mid","low","high"),drop=F]
+  eval3 = eval3[,names(eval3) %in% c(shape_color,sep_by, linetype, text, dotsize, color, title1, grid0, grid1, "numvars","mid","low","high"),drop=FALSE]
   l1 = apply(eval3,1,paste, collapse="::");
   #print(which(duplicated(l1)))
-  eval3 = eval3[!duplicated(l1),,drop=F]
+  eval3 = eval3[!duplicated(l1),,drop=FALSE]
   showtext = length(text)>0
   linetype_nme = paste(linetype, collapse="_");
   grid0_nme = paste(grid0, collapse="_")
@@ -324,7 +313,7 @@ plotEval<-function(eval3,
 # eval2$isfull = (eval2$isfull+1)/2.0
   ggps=lapply(phenos, function(ph){ 
     eval5 = subset(eval2, sep_by==ph & !is.na(mid))
-    ph3 = paste(sort(unique(apply(eval5[,names(eval5) %in% title1, drop=F],1,paste,collapse=","))), collapse=" ")
+    ph3 = paste(sort(unique(apply(eval5[,names(eval5) %in% title1, drop=FALSE],1,paste,collapse=","))), collapse=" ")
   ggp<-ggplot(eval5);
   if(point) {
     if(dotsize %in% names(eval5)){
@@ -413,7 +402,7 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
     ##NOTE THE WEIGHTED VERSION SEEMS NOT TO WORK WELL
     #  print(y)
     #  print(ypred)
-    roc1=try(roc(y,ypred, quiet=T))
+    roc1=try(roc(y,ypred, quiet=TRUE))
     if(inherits(roc1,"try-error")){
       return(rep(NA,3))
     }
@@ -437,13 +426,13 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
   }))
   medians = medians |>  separate(comb,c("experiment_id","cv_full","measure"), sep="__")
   medians=medians[order(medians$cv_full),]
-  print(medians)
+  
   subset(medians, cv_full=="CV=avg")
 }
 
-.getPermFuncs<-function(n,norm=1, offset=0, CHECK=F){ ## although these are same, every invocation will give different results
+.getPermFuncs<-function(n,norm=1, offset=0, CHECK=FALSE){ ## although these are same, every invocation will give different results
   if(n==0) return(list())
-  inds = sample.int(4*n,2*n, replace=F)
+  inds = sample.int(4*n,2*n, replace=FALSE)
  # inds = inds[which(inds %%size !=0)][1:n]
   names(inds) = inds
   transf=list(invfunc=paste0("function(y,seed) invpermute(y,seed, ",norm,", ",offset,")"),
@@ -452,10 +441,10 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
 }
 
 
-.getRandomFuncs<-function(n,norm=1, offset=0, CHECK=F){ ## although these are same, every invocation will give different results
+.getRandomFuncs<-function(n,norm=1, offset=0, CHECK=FALSE){ ## although these are same, every invocation will give different results
   if(n==0) return(list())
   n1 = max(n, 1000)
- inds = sample.int(2*n,n, replace=F)
+ inds = sample.int(2*n,n, replace=FALSE)
  names(inds) = inds
  which(duplicated(inds))
  transf=list(invfunc=paste0("function(y,seed) invrandomize(y,seed, ",norm,", ",offset,")"),
@@ -488,8 +477,8 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
   
   diffs = apply(m1[,c(1,3)],1,diff)
   if(max(abs(diffs), na.rm=TRUE)>1e-7){
-    print(t_y1)
-    print(m1)
+  #  print(t_y1)
+  #  print(m1)
  stop("not inverse")
   }
   invisible(m1)
@@ -508,7 +497,7 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
 #' @param CHECK check whether inverse function works
 #' @return transformation object
 #' @export
-getYTransform<-function(pows = c(1),offset=0,  n_random=1,perm=F, norm=1,CHECK=F){
+getYTransform<-function(pows = c(1),offset=0,  n_random=1,perm=FALSE, norm=1,CHECK=FALSE){
   if(n_random <1) warning(" recommended to have at least one random permutation");
   if(!( 1 %in% pows)) warning("recommended to have a pow of 1, which is the untransformed y ")
   funcs = list()
@@ -531,7 +520,7 @@ getXTransform<-function(pows= c(1),offset=1e-10){
 
 ##exp is problematic because of neg numbers, particularly after centralisation
 ##could work with adding back in mean values?? may not generalise to unseen datasets
-getExpFunc<-function(pows, rev=F,offset=0.1, CHECK=F){  
+getExpFunc<-function(pows, rev=FALSE,offset=0.1, CHECK=FALSE){  
   if(length(which(pows<=0))>0) stop("not possible")
   if(length(pows)==0) return (list())
   names(pows)=pows
@@ -540,7 +529,7 @@ getExpFunc<-function(pows, rev=F,offset=0.1, CHECK=F){
                  
   if(rev){
     warning("probably not going to work because x gets centralised before transform")
-    print("this assumes that x+offset is strictly positive")
+    warning("this assumes that x+offset is strictly positive")
     
     transf=list(invfunc =  paste0("function(y,pow,norm=",norm,",offset=",offset,") expfunc(y,pow,norm,offset)"),
                 func=paste0("function(x,pow,norm=",norm,",offset=",offset,") logfunc(x,pow,norm,offset)"), params = as.list(pows))
@@ -585,7 +574,7 @@ invpowfunc<-function(y,pow, norm=1, offset=0.0001){
 ##this gets transformations for x variable
 ##invfunc applied to y; func applied to x
 .getTransformFuncs<-function(pows,
-                             offset=0.1, norm=1,CHECK=F){
+                             offset=0.1, norm=1,CHECK=FALSE){
   names(pows)=pows
   transf=list(invfunc=paste0("function(y,seed) invpowfunc(y,seed, ",norm,", ",offset,")"),
               func=paste0("function(x,seed) powfunc(x,seed, ",norm,", ",offset,")"),params=as.list(pows))
@@ -624,7 +613,7 @@ mergeSparseMatrices<-function(m1,m2, by="row"){
 }
 
 expandSparseMatrix<-function(counts, n,  vec, by="row"){
-  mat1=replicate(n,vec,simplify = F)
+  mat1=replicate(n,vec,simplify =FALSE)
   if(by=="row"){
      mat =do.call(rbind,mat1 )
   }else{
@@ -637,15 +626,11 @@ expandSparseMatrix<-function(counts, n,  vec, by="row"){
 #' Convert matrix into sparse submatrices
 #'
 #' @param counts a matrix
-#' @param inds indices for subsetting, or can be colnames for subsetting
+#' @param inds indices for subsetting
 #' @param by can be col or row
 #' @return sparse sub matrix
 #' @noRd
 getSparseSubMatrix<-function(counts, inds,by='col'){
-  if(!is.numeric(inds)) {
-    tomatch = if(by=="col")colnames(counts) else rownames(counts);
-    inds = match(inds, tomatch)
-  }
   colInds = inds
   rowInds = inds
   if(by=='col' && ncol(counts)==length(inds)){
@@ -780,7 +765,7 @@ sparse_levs<-function(X){
 .sumChisq<-function(pvi){
   if(length(pvi)==0) return(0)
   pvi1=unlist(pvi)
-  pchisq(sum(qchisq(pvi1,df=1, lower.tail=F, log.p=TRUE)), df=length(pvi1), lower.tail=F, log.p=TRUE)
+  pchisq(sum(qchisq(pvi1,df=1, lower.tail=FALSE, log.p=TRUE)), df=length(pvi1), lower.tail=FALSE, log.p=TRUE)
 }
 
 .readFlag<-function(flags,key, default){
@@ -809,13 +794,13 @@ isbigmatrix<-function(x){
       mi1=match(nmes_all,names(t1))
     }
   
-    t1[,mi1,drop=F]
+    t1[,mi1,drop=FALSE]
   })
 }
 
 .split<-function(vn1,nme){
   mod_nme=unique(vn1[[nme]]);names(mod_nme)=mod_nme
-  lapply(mod_nme, function(mn) vn1[vn1[[nme]]==mn,,drop=F])
+  lapply(mod_nme, function(mn) vn1[vn1[[nme]]==mn,,drop=FALSE])
 }
 .splitAll<-function(vn1, nmes, func=identity){
   aa1=.split(vn1, nmes[1])
@@ -854,7 +839,7 @@ isbigmatrix<-function(x){
   if(checkNames && length(t)>0){
     nme_aa = names(t[[1]])
     t1 = lapply(t, function(aa1){
-      aa1[,match(nme_aa,names(aa1)),drop=F]
+      aa1[,match(nme_aa,names(aa1)),drop=FALSE]
     })
     t = t1
   }
@@ -895,7 +880,7 @@ isbigmatrix<-function(x){
 
 
 
-.merge1<-function(t,num_cols = c(),uniq_cols=c(), addName=NULL, rowNames=F){
+.merge1<-function(t,num_cols = c(),uniq_cols=c(), addName=NULL, rowNames=FALSE){
   t=t[unlist(lapply(t, nrow))>0]
   t=t[unlist(lapply(t, length))>0]
   if(length(t)==0) return(NULL)
@@ -927,8 +912,8 @@ isbigmatrix<-function(x){
   }
   
   if(length(uniq_cols)>0){
-    facts = factor(apply(t2[,which(names(t2) %in% uniq_cols),drop=F],1,paste, collapse="."))
-    t2 = t2[!duplicated(facts),,drop=F]
+    facts = factor(apply(t2[,which(names(t2) %in% uniq_cols),drop=FALSE],1,paste, collapse="."))
+    t2 = t2[!duplicated(facts),,drop=FALSE]
   }
   num_cols = num_cols[which(num_cols %in% names(t2))]
  # lev_cols =names(t2)[!( names(t2)%in% num_cols)]
@@ -945,7 +930,7 @@ isbigmatrix<-function(x){
 
 
 
-whichpart1<-function(angle, n=10, one_for_each=F, return_scores=F){
+whichpart1<-function(angle, n=10, one_for_each=FALSE, return_scores=FALSE){
   nulli=unlist(lapply(angle, is.null))
   # names(angle) = 1:length(angle)
   wp1=lapply(angle[!nulli], function(x1){
@@ -1020,7 +1005,7 @@ whichpart <- function(x, n=10) {
     rmsv_allp = lapply(beams, function(p1){
       rmsv_sub=subset(rmsv_, beam==p1)
       rmsv_sub1  =pivot_wider(rmsv_sub,id_cols="phens", values_from="value", names_from="data")
-      rmsv=as.matrix(rmsv_sub1[,-1,drop=F])
+      rmsv=as.matrix(rmsv_sub1[,-1,drop=FALSE])
       dimnames(rmsv) [[1]] = rmsv_sub1$phens
       rmsv[is.na(rmsv)]=0 ## set NA to zero for multiplication
       #rmsv1 =   (rmsv %*% mult)[,1]
@@ -1038,7 +1023,7 @@ whichpart <- function(x, n=10) {
     rmsv_allp = lapply(phens1, function(p1){
       rmsv_sub=subset(rmsv_, phens==p1)
       rmsv_sub1  =pivot_wider(rmsv_sub,id_cols="beam", values_from="value", names_from="data")
-      rmsv=as.matrix(rmsv_sub1[,-1,drop=F])
+      rmsv=as.matrix(rmsv_sub1[,-1,drop=FALSE])
       dimnames(rmsv) [[1]] = rmsv_sub1$beam
       rmsv1 =   (rmsv %*% mult)[,1]
       attr(rmsv1,"phen")=p1
@@ -1061,11 +1046,11 @@ whichpart <- function(x, n=10) {
     .merge1(lapply(ar$datas[[typed]], function(d){
       y1=d$y[,1]
       yp =d$ypreds_all$ypreds[[1]][[1]][,1]
-      roc1 =roc(y1,yp,plot=F)
+      roc1 =roc(y1,yp,plot=FALSE)
       df2=data.frame(cbind(roc1$sensitivities, roc1$specificities))
       names(df2) = c("sens","spec")
       nme = names(ar$datas[[1]]$train[[1]]$prev)[1]
-      print(paste(nme, roc1$auc))
+      #print(paste(nme, roc1$auc))
       nme=gsub(",","\n",nme)
       title=paste(nme, collapse="\n")
       title=nme
@@ -1077,7 +1062,7 @@ whichpart <- function(x, n=10) {
   
   
   df = .merge1(lapply(fi, function(fi1){
-    print(fi1)
+    #print(fi1)
     ar = readRDS(fi1)
     .merge1(lapply(ar[[typed]], function(d){
       y1=d$y[,1]
@@ -1092,13 +1077,13 @@ whichpart <- function(x, n=10) {
       df4 = pivot_longer(df3,names(df3[-1]))
       
       names(df4) = c("knots", "pheno", "counts")
-      df4=df4[df4$counts>0,,drop=F]
+      df4=df4[df4$counts>0,,drop=FALSE]
       #ggplot(df4, aes(x=knots, y=value))+geom_point()
       #ggplot(df4, aes(x=knots, y=name, size=value))+geom_point()
       #ggplot(df2, aes(x=factor(pheno), y=value))+geom_jitter(alpha = 0.9, width=0.1, size=.2)
-      roc1 =roc(y1,yp,plot=F)
+      roc1 =roc(y1,yp,plot=FALSE)
       nme = names(ar$datas[[1]]$train[[1]]$prev)[1]
-      print(paste(nme, roc1$auc))
+    #  print(paste(nme, roc1$auc))
       nme=gsub(",","\n",nme)
       title=paste(nme, collapse="\n")
       title=nme
@@ -1122,7 +1107,7 @@ whichpart <- function(x, n=10) {
 #                       aes(x=knots,y=value,label=label,color=pheno),size=2)
   ggp1<-ggp1+facet_grid(lineage~title)+ggtitle(rdsfile)+scale_x_continuous(limits = c(-0.1,1.1))+scale_y_continuous(limits = c(-0.1,1.1))
   ggp1
-if(!is.null(outpdf1))  try(ggsave(outpdf1, plot=ggp1, width =45, height =45, units = "cm",limitsize=F))
+if(!is.null(outpdf1))  try(ggsave(outpdf1, plot=ggp1, width =45, height =45, units = "cm",limitsize=FALSE))
   #attr(ggp1,"text_df")=txt_df
   invisible(ggp1)
 }
@@ -1144,7 +1129,7 @@ if(!is.null(outpdf1))  try(ggsave(outpdf1, plot=ggp1, width =45, height =45, uni
                        aes(x=knots,y=value,label=label,color=pheno),size=2)
   ggp1<-ggp1+facet_grid(lineage~drug)
   attr(ggp1,"text_df")=txt_df
-  if(!is.null(outpdf1))  try(ggsave(outpdf1, plot=ggp1, width =45, height =45, units = "cm",limitsize=F))
+  if(!is.null(outpdf1))  try(ggsave(outpdf1, plot=ggp1, width =45, height =45, units = "cm",limitsize=FALSE))
   
   ggp2=ggplot(txt_df, aes(x=drug, y=value, color=lineage))+geom_point()+facet_grid(label1~.)
   
@@ -1216,8 +1201,8 @@ summariseAreaPlot<-function(df){
 }
 .combinePv<-function(pvs){
   return(min(pvs))
-  chisq = qchisq(pvs, df=1, lower.tail=F)
-  pchisq(sum(chisq), df = length(pvs), lower.tail=F)
+  chisq = qchisq(pvs, df=1, lower.tail=FALSE)
+  pchisq(sum(chisq), df = length(pvs), lower.tail=FALSE)
 }
 
 .plotArea1<-function(predictions,family="binomial",rename=TRUE, 
@@ -1275,7 +1260,7 @@ summariseAreaPlot<-function(df){
   phens=unique(area_p[[sep]]);names(phens)=phens
  lapply(phens, function(p){
    p = phens[[1]]
-  area_p1=area_p[area_p[[sep]]==p,,drop=F]
+  area_p1=area_p[area_p[[sep]]==p,,drop=FALSE]
   .plotArea(area_p1, ...)
  })  
 }
@@ -1290,11 +1275,11 @@ summariseAreaPlot<-function(df){
   data.frame(ev2[,1:length(nme_cols)]|>  tibble::add_column(mid=meanv, pheno="avg", nsamps=10))
 }
 .takeMax1<-function(a1, max_vars=100){
-  ab=unite(subset(a1, lens<=max_vars),"comb","sample","CV","pheno",remove=F)
+  ab=unite(subset(a1, lens<=max_vars),"comb","sample","CV","pheno",remove=FALSE)
   levs = unique(ab$comb); names(levs)=levs
   ab2=.merge1_new(lapply(levs, function(l1){
     sub1 = subset(ab, comb==l1 & !is.na(knots))
-    sub1[which.max(sub1$lens),,drop=F]
+    sub1[which.max(sub1$lens),,drop=FALSE]
   }))
   #ab2$pheno = factor(ab2$pheno, labels=levels(ab$pheno))
   ab2
@@ -1302,18 +1287,18 @@ summariseAreaPlot<-function(df){
 
 
 .takeMax<-function(area_p1){
-  ab=unite(area_p1,"comb","sample","pheno","CV",remove=F)
+  ab=unite(area_p1,"comb","sample","pheno","CV",remove=FALSE)
   ab$pheno = factor(ab$pheno)
   levs = unique(ab$comb); names(levs)=levs
   ab2=.merge1_new(lapply(levs, function(l1){
     sub1 = subset(ab, comb==l1 & !is.na(knots))
-    sub1[which.max(sub1$lens),,drop=F]
+    sub1[which.max(sub1$lens),,drop=FALSE]
   }))
   ab2$pheno = factor(ab2$pheno, labels=levels(ab$pheno))
   ab2
 }
-.getTextLayer<-function(area_p1,p = c(0.1,0.9),r2=F, arrange_by_sample=F, reorder=F){
-  ab = if(arrange_by_sample) unite(area_p1,"comb","sample","CV",remove=F) else unite(area_p1,"comb","lens","pheno","CV",remove=F)
+.getTextLayer<-function(area_p1,p = c(0.1,0.9),r2=FALSE, arrange_by_sample=FALSE, reorder=FALSE){
+  ab = if(arrange_by_sample) unite(area_p1,"comb","sample","CV",remove=FALSE) else unite(area_p1,"comb","lens","pheno","CV",remove=FALSE)
   ab$pheno = factor(ab$pheno)
   ab$CV = factor(ab$CV)
   ab$sample=factor(ab$sample)
@@ -1368,7 +1353,7 @@ summariseAreaPlot<-function(df){
   mvars = sort(unique(area_p1$lens)); names(mvars)=mvars
   mvars = mvars[mvars>0 & mvars<maxv]
   res_all=.merge1_new(lapply(mvars, function(max_vars){
-    print(max_vars)
+  #  print(max_vars)
   area_p_max = data.frame(.takeMax1(area_p1, max_vars=max_vars))
   data.frame(lapply(cvs, function(cv){
     r2 = unlist(lapply(samps, function(samp){
@@ -1385,12 +1370,12 @@ summariseAreaPlot<-function(df){
   }),addName="maxvars")
   res_all
 }
-.plotArea<-function(area_p0, CV=F,alpha =0.8, maxphens = 50,p=c(0.1,0.9),
-                    arrange_by_sample=F,takeMax=F,
-                    rename=TRUE, len = 1,shapes=F,code_len=3,showText=F,
-                    max_samps=100,reorder=F,
-                    grid=if(!CV) "model~pheno" else "lens ~pheno",  max_vars = 10,scales="free",title="", addText=F,r2=F){
-  print("now plotting")
+.plotArea<-function(area_p0, CV=FALSE,alpha =0.8, maxphens = 50,p=c(0.1,0.9),
+                    arrange_by_sample=FALSE,takeMax=FALSE,
+                    rename=TRUE, len = 1,shapes=FALSE,code_len=3,showText=FALSE,
+                    max_samps=100,reorder=FALSE,
+                    grid=if(!CV) "model~pheno" else "lens ~pheno",  max_vars = 10,scales="free",title="", addText=FALSE,r2=FALSE){
+  #print("now plotting")
   if(!is.null(area_p0$sample) && !arrange_by_sample){
     area_p0$sample = as.character(as.numeric(factor(area_p0$sample)))
   }
@@ -1592,7 +1577,7 @@ summariseAreaPlot<-function(df){
     factor(apply(ypred_all1,1,function(xx) names(ypred_all1)[which.max(xx)]), levels = names(ypred_all1))
   disease_class_predicted [apply(ypred_all1,1, max)<thresh] = NA
   
- print( table(cbind(disease_class_predicted),data$y[,1]))
+# print( table(cbind(disease_class_predicted),data$y[,1]))
   phenotypes[['disease_class_predicted']] = disease_class_predicted
 #  return(cbind(phenotypes, disease_class_predicted))
   phenotypes   
@@ -1642,7 +1627,7 @@ summariseAreaPlot<-function(df){
       })
       data1_inds = 1:length(datas1); names(data1_inds) = names(datas1)## because we kept the full model here
       rmsval =.merge1(lapply( numv, function(kk){
-        print(kk)
+       # print(kk)
         #kk=-1 means evaluate the full models
         .merge1(
 
@@ -1687,15 +1672,15 @@ summariseAreaPlot<-function(df){
     lapply(datas, function(d) d$reorder(o,k))
   }
 }
-.summarise<-function(rms_cv, dim1="beam",avg=F){
+.summarise<-function(rms_cv, dim1="beam",avg=FALSE){
   #dim1 = 'pheno'
-  select1 =   apply(rms_cv[,which(names(rms_cv) %in% dim1),drop=F],1,paste, collapse=".")
+  select1 =   apply(rms_cv[,which(names(rms_cv) %in% dim1),drop=FALSE],1,paste, collapse=".")
   select=factor(select1, levels= select1[!duplicated(select1)])
   
   levs = levels(select)
   .merge1(lapply(levs, function(l1){
-    rms_cv1 =rms_cv[select==l1,,drop=F]
-  rms_cv2 = rms_cv1[1,,drop=F]
+    rms_cv1 =rms_cv[select==l1,,drop=FALSE]
+  rms_cv2 = rms_cv1[1,,drop=FALSE]
   rms_cv2$value = if(avg) mean(rms_cv1$value,na.rm=TRUE) else sum(rms_cv1$value,na.rm=TRUE)
   rms_cv2$subpheno="comb"
   rms_cv2
@@ -1711,12 +1696,12 @@ summariseAreaPlot<-function(df){
   }
   
 }
-.lrt<-function(ll1,ll2,  df1 =  attr(ll1,"df")[1] ,  df2 = attr(ll2,"df")[1],totweight=1,log.p=F){
+.lrt<-function(ll1,ll2,  df1 =  attr(ll1,"df")[1] ,  df2 = attr(ll2,"df")[1],totweight=1,log.p=FALSE){
   if(df2>df1) stop(paste("df2 should be bigger than df1 ",df2,df1))
   pchisq((2*(ll1 - ll2))/(totweight),df1-df2,lower.tail=FALSE,log.p=log.p)
 }
 .norm1<-function(g){
-  sqrt(sum((g - mean(g, na.rm = T))^2, na.rm = T))
+  sqrt(sum((g - mean(g, na.rm =TRUE))^2, na.rm =TRUE))
 }
 #.plotAUC<-function(rdsf){
 #  
@@ -1728,7 +1713,7 @@ summariseAreaPlot<-function(df){
 
 
 
-.convert<-function(data,mode="rna", nme="none",expand=F, max=100, factor=F){
+.convert<-function(data,mode="rna", nme="none",expand=FALSE, max=100, factor=FALSE){
   names(data) =gsub("x_data","data",tolower(names(data)))
   if(is.list(data$y)){
     data$y = as.matrix(data$y)
@@ -1753,8 +1738,8 @@ summariseAreaPlot<-function(df){
   }
   if(max < nrow(data$y)){
     inds = sample.int(nrow(data$y),max)
-    data$y = data$y[inds,,drop=F]
-    data$data = data$data[inds,,drop=F]
+    data$y = data$y[inds,,drop=FALSE]
+    data$data = data$data[inds,,drop=FALSE]
   }
   
   dataset = list(data$data);
@@ -1771,7 +1756,7 @@ summariseAreaPlot<-function(df){
   #files = grep(".Rds",dir(path,f=TRUE,recursive=TRUERUE),value=TRUE)
   datas=lapply(filenames, function(file){
     data_in = readRDS(paste(path,file,sep="/"))
-    .convert(data=data_in, mode="rna", expand=F)
+    .convert(data=data_in, mode="rna", expand=FALSE)
   })
   datasets = lapply(datas, function(d) list(dataset=d$dataset, y = d$y))
   datasets

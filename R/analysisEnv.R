@@ -7,7 +7,7 @@ expandData<-function(dataset, mult = 100
     non_na_inds = 1:nrow(dataset$y)
   non_na_inds = non_na_inds[-na_inds]
       
-  y_alt = 1- dataset$y[na_inds,,drop=F]
+  y_alt = 1- dataset$y[na_inds,,drop=FALSE]
   if(max(abs(apply(cbind(sort(unique(y_alt[,1])),c(0,1)),1,diff)))>0) stop("need to have 0 1 values for y")
   if(max(dataset$certainty)>1.0) stop("!!")
   if(min(dataset$certainty<0.0)) stop("!!")
@@ -17,7 +17,7 @@ expandData<-function(dataset, mult = 100
   weights = c(dataset$certainty, 1-dataset$certainty[na_inds])* mult
   names(weights) = c(rownames(dataset$y), paste0(rownames(dataset$y)[na_inds],".alt"))
   d_new =  lapply(dataset$dataset, function(d){
-    d1 = d[na_inds,,drop=F];
+    d1 = d[na_inds,,drop=FALSE];
     rownames(d1) = paste0(rownames(d)[na_inds],".alt")
     d_out = rbind(d,d1)
     d_out
@@ -51,9 +51,9 @@ fspls.iterative<-function(dataset,flags, transform_y  ){
   repeat  {
     if(k==0 || select_each_iteration) vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
     k = k+1
-   all_models =dh$makeAllModels(vars_all,useDB=F)
+   all_models =dh$makeAllModels(vars_all,useDB=FALSE)
    updated =  dh$updateWeights(all_models)
-   print(updated)
+  
    updates[[k]] = updated
   if(abs(updated$sumdiff)<=1e-5 && k>2) {
         message("breaking since probs ordered not improving")
@@ -62,13 +62,9 @@ fspls.iterative<-function(dataset,flags, transform_y  ){
       }
   }
   y_new =     dh$getYNew();
- # equals= apply(cbind(dataset$y, y_new$y)[na_inds,],1, function(v) v[1]==v[2])
-#  print(which(!(equals)))
-print(paste("error",y_new$error_rate))
-print(y_new$y)
-#y_new$certainty
+
    list(dh = dh, vars_all = vars_all, all_models = all_models,updates = updates, 
-        y_new = y_new$y, certainty_new = y_new$certainty,error_rate = y_new$error_rate, na_inds = na_inds
+        y_new = y_new$y, certainty_new = y_new$certainty,error_rate = y_new$error_rate
         
          )
 #  plot(roc1)
@@ -104,7 +100,7 @@ fspls.select<-function(datasH, flags,
   #phens1 = phens
   mc.cores = .readFlag(flags, "mc.cores",1)
   flags$transform_y = toJSON(transform_y);
-  verbose=.readFlag(flags,'verbose',F);
+  verbose=.readFlag(flags,'verbose',FALSE);
   if(flags$topn<flags$beam) stop("beam should be less than topn")
   if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(datasH[[1]]$data_types())
   
@@ -177,7 +173,7 @@ fspls.select<-function(datasH, flags,
     })
   })
 }
-.extractFullModels<-function(all_models, full_model_only=F){
+.extractFullModels<-function(all_models, full_model_only=FALSE){
   subinds = which(unlist(lapply(all_models$models, function(x) length(grep('full', names(x)))))>0)
   models1 = all_models$models[subinds]
   res1 =list(flags = all_models$flags, phens=all_models$phens, transform_y = all_models$transform_y)
@@ -240,10 +236,10 @@ analysisEnv<-R6::R6Class("analysisEnv",
                                                    transform_y = private$transform_y)
     },
     nextVars=function(flags, phens, vars_l_todo,  k1,
-                                          logpvthresh,beam,  comb2_news = NULL,stop_y="rand", verbose=F){
+                                          logpvthresh,beam,  comb2_news = NULL,stop_y="rand", verbose=FALSE){
       vars_l = vars_l_todo$vars_l
       todo1 = vars_l_todo$todo1
-     # expt_id=super$getExpt(flags, phens, add_new=T)
+     # expt_id=super$getExpt(flags, phens, add_new=TRUE)
 
       useAngles = !is.null(flags$angles_only) && flags$angles_only
       nme_l = names(vars_l); names(nme_l) = nme_l
@@ -287,16 +283,16 @@ analysisEnv<-R6::R6Class("analysisEnv",
       angles_ = angles_[ord_all]
       if(!is.null(stop_y)){
         gp1=grep(stop_y, names(logpvs))
-        gp=grep(stop_y, names(logpvs), inv=T)
+        gp=grep(stop_y, names(logpvs), inv=TRUE)
         
-        # print("HERE")
+      
         stop_random =  min(logpvs[gp1]) < min(logpvs[gp]) 
        # stop_random1= min(angles_[gp1]) < min(angles_[gp])
         stop_random2= min(logpvs_all[gp1]) < min(logpvs_all[gp])
         
-        #print(unlist(list(rand= min(logpvs[gp1]),nonrand=min(logpvs[gp]))))
+
         # stop_random= min(gp1)<=min(gp)
-        #print(head(sort(ord[stop_ind])))
+
         if(verbose){
           print(paste(stop_random, stop_random2))
               print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles))
@@ -329,15 +325,12 @@ analysisEnv<-R6::R6Class("analysisEnv",
         last_non_rand = grep("rand", names(ang1))[1]-1
         if(is.na(last_non_rand)) last_non_rand = beam;      
         ang1 = ang1[1:min(length(ang1),beam, last_non_rand)]
-        vars_l_todo = list(stop=F, vars_l = ang1, todo1 = vars_l_todo$todo1)
+        vars_l_todo = list(stop=FALSE, vars_l = ang1, todo1 = vars_l_todo$todo1)
         if(length(grep("rand", names(vars_l_todo$vars_l)))>0) stop("!!");
         
         return(vars_l_todo)
       }
-     # if(length(todo1)==1){
-    #    print("could consider saving the vars at this point to the DB.  Maybe also need to record dataset included")
-    #  }
-     # print("shortening _todo")
+
       vars_l_todo = list( stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
       return(vars_l_todo)
     },
@@ -345,7 +338,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
       for(varn1 in names(vars_l)){ 
         ri=comb2[[varn1]]
         varnames=vars_l[[varn1]]$var_names
-        super$savePvals(flags, phens, ri, varnames, k1, data_nme=data_nme, useCurrVarnames=F)
+        super$savePvals(flags, phens, ri, varnames, k1, data_nme=data_nme, useCurrVarnames=FALSE)
 
       }
     },
@@ -382,14 +375,14 @@ analysisEnv<-R6::R6Class("analysisEnv",
   select_k=function(datasH,phens,flags, k1,
                     vars_l_todo 
                   ){
-    verbose = .readFlag(flags,"verbose",F);
-    print(paste("fold",k1))
+    verbose = .readFlag(flags,"verbose",FALSE);
+    if(verbose)print(paste("fold",k1))
     expt_id = private$expt_id();
-    # get_plots=.readFlag(flags, "get_plots",F) 
+    # get_plots=.readFlag(flags, "get_plots",FALSE) 
     stop_y = .readFlag(flags, 'stop_y',"rand")
     logpvthresh = log(.readFlag(flags,"pthresh",0.1))
     beam= .readFlag(flags,"beam",1)
-    saveAngles=F
+    saveAngles=FALSE
     #plot_results = list()
     # vars_l = analysis$nextVars(expt_id, flags)
     nvar=0;
@@ -436,7 +429,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     logpv = -100
     incls = fromJSON(.readFlag(flags,'data_types','{}'))
     genes_incls=fromJSON(.readFlag(flags,"genes_incls",'{"all":["all"]}')) #,getOption("genes_incls",NULL)
-    quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=T)
+    quantiles = sort(fromJSON(.readFlag(flags, "quantiles","[0]")),decreasing=TRUE)
     # names(incls) = incls;
     todo1 = unlist(unlist(lapply(incls, function(incl){
       lapply(genes_incls, function(g_incl){
@@ -453,8 +446,8 @@ analysisEnv<-R6::R6Class("analysisEnv",
         jj=0,
         logpv=logpv,
         vars_l = list(empty=stateObj$new(phens, NULL,NULL,NULL,NULL, var=c(), varnames=c(), Wall =Wall0)),
-        stop=F
-      )
+        stop=FALSE)
+      
     
     vars_l_todo
   },
@@ -465,14 +458,14 @@ analysisEnv<-R6::R6Class("analysisEnv",
   #' @param drop completely drop tables and start from scratch
   #' @param exclude tables to exclue from clearing
   #' @param datasH  list of dataH objects to clear
-   clear_db=function(drop=F,exclude="vars", datasH = NULL){
+   clear_db=function(drop=FALSE,exclude="vars", datasH = NULL){
     if(drop){
       if(!is.null(private$sigs))private$sigs$drop_all(exclude=exclude)
       if(!is.null(datasH)){
         lapply(datasH, function(dh) dh$clear_db(drop=drop, exclude=exclude))
       }
     }else{
-      warning("need to set drop=T if you are sure, this will delete all saved signatures")
+      warning("need to set drop=TRUE if you are sure, this will delete all saved signatures")
     }
     
   },  
@@ -491,7 +484,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
  savePvalsAndNextVars=function(flags,phens, vars_l_todo,comb2,data_nme, k1){
    beam=.readFlag(flags,'beam',1);
    stop_y=.readFlag(flags,"stop_y","rand")
-   verbose=.readFlag(flags,"verbose",F);
+   verbose=.readFlag(flags,"verbose",FALSE);
    logpvthresh = log(.readFlag(flags,'pthresh',0.05));
    angles_only = .readFlag(flags,'angles_only',FALSE);
    if(angles_only) logpvthresh =0;
@@ -515,7 +508,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
    #mc.cores = .readFlag(flags, "mc.cores",1)
    ##if(mc.cores>1 && )
    flags$transform_y = toJSON(transform_y);
-   verbose=.readFlag(flags,'verbose',F);
+   verbose=.readFlag(flags,'verbose',FALSE);
    if(flags$topn<flags$beam) stop("beam should be less than topn")
    if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(datasH[[1]]$data_types())
    

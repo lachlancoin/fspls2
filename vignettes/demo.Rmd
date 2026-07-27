@@ -26,12 +26,12 @@ library(fspls2)
 
   ## set the y_transforms to explore  
   transform_y=getYTransform(pow = 1,    ## transformations raise to the powers indicated here.  Default is 1 but can add others
-                            n_random=1  ## number of random transformations, also used in stopping critera
+                            n_random=10  ## number of random transformations, also used in stopping critera
                             )
   ## set the flags
   flags = list(min=0,  #minimum number of variables
                max=200, # maximum number of variables,  
-               nfold=10,## number of folds.  10 fold implies a 10 non-overlapping 10% splits
+               nfold=1,## number of folds.  10 fold implies a 10 non-overlapping 10% splits
                batchsize=0, ##batchsize can be specified alternatively to nfold, but only one can be nonzero
                angles_only=FALSE, ## whether to use purely angles to find best variables (RECOMMENDED FALSE)
                topn=20,  ## if using model fit to rank variables, how many top angles to take  (larger takes more time)
@@ -48,22 +48,14 @@ library(fspls2)
 
 ```{r example}
   examples = c("binomial", "gaussian", "ordinal", "multinomial");
- example="binomial"
+ example="gaussian"
   
-testIterative<-function(){
-  prop_na=0.2;  seed=42
-  example="binomial"
+testIterative<-function(example, prop_na=0.2, seed=42){
+
      fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
     # if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
     
     dataset = readRDS(fi); 
-    
-  
-    if(FALSE){
-     load("~/github/fspls2_old/data/w.tbod.binomial.11.dat.rdat")
-     rownames(data$data) = 1:nrow((data$data)); data$y = as.matrix(data$y); rownames(data$y) = 1:nrow(data$y); colnames(data$y) = "y"
-    dataset = list(y = data$y, dataset = list('expr' = data$data))
-    }
     if(example=="binomial") dataset$y$y = factor(dataset$y$y, labels=c("A","B"))
     dataset$certainty = rep(1, nrow(dataset$y));
     set.seed(seed)
@@ -96,8 +88,8 @@ testIterative<-function(){
   
     ##Step 1. run variable selection 
    
-        datas = list(dh)
-         #    analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
+   #     datasH = list(dh)
+   #         analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
    # vars_all = analysis$select(datas,  flags, transform_y, phens = dh$pheno()$all)
     vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
@@ -109,13 +101,13 @@ testIterative<-function(){
     eval1= dh$evaluateAllModels(all_models, useDB=F)
     ## Now visuaise the results
     ggps1=plotEval(eval1,legend=T, grid1=c("subpheno","pheno"), grid0=c("measure","cv_full"),linetype="data", ##"full_model"
-                   shape_color=c("data","transf"),sep_by=c("beam"), showranges=T,text="variable",
+                   shape_color=c("data","transf"),sep_by=c("beam"), showranges=T,text="variable",logy=F,
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   
     ##optionally get all predictions
     #predictions =     dh$extractPredictions(all_models)
    
-    return(ggps1[[1]])
+    ggps1[[1]]
   }
 ```
 Example 1
@@ -134,4 +126,8 @@ Example 3
 Example 4
 ```{r, eval = FALSE}
   runExample(examples[4])
+```
+```{r, eval = FALSE}
+## test Iterative works on binomial and multinomial
+testIterative("binomial", prop_na=0.2, seed=42)
 ```

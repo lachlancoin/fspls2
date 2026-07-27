@@ -36,14 +36,14 @@ calcVar<-function(yp,y,family="gaussian"){
 
 .prob<-function(vec)vec/sum(vec)
 .samp<-function(pr, levs){
-  ind = which(pr==max(pr,na.rm=T))
+  ind = which(pr==max(pr,na.rm=TRUE))
   return(levs[ind[1]])
   #sample(levs,1,pr=pr)
   ##levs[which(pr==max(pr))[1]]
 }
 #head(.logistic(-1*m1$coeff*x + m1$zeta[1]))
 ## this currently returns probablity less than or equal to
-liability1<-function(yp,const, liab=T){
+liability1<-function(yp,const, liab=TRUE){
   ab = as.matrix(data.frame(lapply(const,function(v){
     if(liab) .logistic(yp-v) else yp-v  ## according to description of polr in R help
    # if(liab) .logistic(v-yp) else v-yp  ## according to description of polr in R help
@@ -56,7 +56,7 @@ liability1<-function(yp,const, liab=T){
 liability_old<-function(xM){
   levs = attr(xM,"levs")
   alias = apply(xM,1,.cntNA)==0
-  M = xM[alias,,drop=F]
+  M = xM[alias,,drop=FALSE]
   len =dim(M)[1]
   M1 = cbind(rep(1,len),exp(M))
   dimnames(M1)[[2]] = levs
@@ -67,9 +67,9 @@ liability_old<-function(xM){
 liability<-function(xM){ ## use with glmnet output
   levs =dimnames(xM)[[2]]
   alias = apply(xM,1,.cntNA)==0
-  M = xM[alias,,drop=F]
+  M = xM[alias,,drop=FALSE]
   len =dim(M)[1]
-  M = M/max(M,na.rm=T)
+  M = M/max(M,na.rm=TRUE)
   M1 = exp(M)
   dimnames(M1)[[2]] = levs
   su = apply(M1,1,sum)
@@ -80,7 +80,7 @@ liability<-function(xM){ ## use with glmnet output
 
 .calcYpred_multinom<-function(prev_kj, data, ind_1,levs,
                               kk=1,
-                              liab=T,
+                              liab=TRUE,
                               vars1 = prev_kj$var,
                               betas =  prev_kj$betas,
                               transforms = NULL,
@@ -99,7 +99,7 @@ liability<-function(xM){ ## use with glmnet output
   beta1 = betas[[kk]]
   incl1 = unlist(lapply(vars1, length))>1
   df1 = as.matrix(data.frame(vars1[incl1]))
-  beta1 = beta1[incl1,,drop=F]
+  beta1 = beta1[incl1,,drop=FALSE]
   
   
   if(nrow(df1)>0){
@@ -107,10 +107,10 @@ liability<-function(xM){ ## use with glmnet output
       inds_11 = which(df1[1,]==ki)
       if(length(inds_11)>0){
         ##CHECK IF CORRECT
-#        d2 =data[[ki]][ind_1,df1[2,inds_11], drop=F]
+#        d2 =data[[ki]][ind_1,df1[2,inds_11], drop=FALSE]
         d2 = .extract1(data[[ki]],ind_1, df1, inds_11 ,transforms)
         #print(beta1)
-        extra=d2%*%  beta1[inds_11,,drop=F]
+        extra=d2%*%  beta1[inds_11,,drop=FALSE]
         yp = yp + extra
       }
     }
@@ -128,7 +128,7 @@ liability<-function(xM){ ## use with glmnet output
 
 .calcYpred_ord<-function(prev_kj, data, ind_1,levs,
                          kk=1,
-                         liab=T,
+                         liab=TRUE,
                          transforms = NULL,
                          betas1=prev_kj$betas[[kk]],
                          const =prev_kj$constants_proj[[kk]][[1]]){
@@ -153,7 +153,7 @@ liability<-function(xM){ ## use with glmnet output
   #  const = prev_kj$const[[i]][[ycol]]
   incl1 = unlist(lapply(vars1, length))>1
   df1 = as.matrix(data.frame(vars1[incl1]))
-  betas1 = betas1[incl1,,drop=F]
+  betas1 = betas1[incl1,,drop=FALSE]
   
   if(nrow(df1)>0){
     for(ki in 1:length(data)){
@@ -161,7 +161,7 @@ liability<-function(xM){ ## use with glmnet output
       if(length(inds_11)>0){
         ##CHECK IF CORRECT
         d2 = .extract1(data[[ki]],ind_1, df1, inds_11 ,transforms)
-        yp = yp + d2%*% betas1[inds_11,,drop=F] # d2 = .extract1(data1[[kj]],ind_1, df1, inds_11 ,transforms)
+        yp = yp + d2%*% betas1[inds_11,,drop=FALSE] # d2 = .extract1(data1[[kj]],ind_1, df1, inds_11 ,transforms)
       }
     }
     #  yp = yp+ unlist(prev_kj$constants_proj)
@@ -178,7 +178,7 @@ liability<-function(xM){ ## use with glmnet output
 
 .calcYpred_binomial<-function(prev_kj, data, ind_1,
                                kk=1,kk1="",
-                              liab=T,
+                              liab=TRUE,
                               transforms = NULL,
                               betas1 = prev_kj$betas[[kk1]],
                               constants= prev_kj$constants_proj[[kk1]]){
@@ -210,7 +210,7 @@ liability<-function(xM){ ## use with glmnet output
   
   incl1 = unlist(lapply(vars1, length))>1
   df1 = as.matrix(data.frame(vars1[incl1]))
-  betas1 = betas1[incl1,,drop=F]
+  betas1 = betas1[incl1,,drop=FALSE]
   
   #print(names(prev_))
   # print(prev_kj$constants_proj)
@@ -223,10 +223,10 @@ liability<-function(xM){ ## use with glmnet output
       inds_11 = which(df1[1,]==ki)
       if(length(inds_11)>0){
         ##CHECK IF CORRECT
-        #d2 =data[[ki]][ind_1,df1[2,inds_11], drop=F]
+        #d2 =data[[ki]][ind_1,df1[2,inds_11], drop=FALSE]
         d2 = .extract1(data[[ki]],ind_1, df1, inds_11 ,transforms)
-        #d2 =t( t(data[[ki]][ind_1,df1[2,inds_11], drop=F]) - prev_kj$mean_x[inds_11])
-        yp = yp + d2%*% betas1[inds_11,,drop=F]
+        #d2 =t( t(data[[ki]][ind_1,df1[2,inds_11], drop=FALSE]) - prev_kj$mean_x[inds_11])
+        yp = yp + d2%*% betas1[inds_11,,drop=FALSE]
       }
     }
     yp=as.matrix(yp)
@@ -238,7 +238,7 @@ liability<-function(xM){ ## use with glmnet output
 }
 
 .extract1<-function(data2,ind_1, df1, inds_11, transforms){
-  d2 = data2[ind_1,df1[2,inds_11], drop=F]
+  d2 = data2[ind_1,df1[2,inds_11], drop=FALSE]
   if(!is.null(transforms)){
     tr = transforms[df1[3,inds_11]]
     for(jkk in 1:ncol(d2)){
@@ -256,7 +256,7 @@ rmse_interval <- function(rmse, deg_free, p_lower = 0.025, p_upper = 0.975){
          high = sqrt(deg_free / qchisq(p_lower, df = deg_free)) * rmse))
 }
 
-calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
+calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
   if(length(yTs)==0) return(c(NA,NA,NA))
   rms = NA
   alias = which(!(is.na(predy) | is.na(yTs)))
@@ -332,7 +332,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
 }
 
 
-.misclass<-function(y_,y1_, weights_, auc=T){
+.misclass<-function(y_,y1_, weights_, auc=TRUE){
   y = as.numeric(y_)
   y1 = as.numeric(y1_)
   if(length(weights_)!=length(y)) stop("problem")
@@ -388,7 +388,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
   }else if(type_i=="misclass"){
     if(fam=="gaussian") y1=as.numeric(factor(y1, sort(unique(y1))))-1
     yp=if(fam=="binomial") plogis(yp[,1]) else yp[,1]
-    rms = -1*.misclass(yp,y1, w1,auc=T)
+    rms = -1*.misclass(yp,y1, w1,auc=TRUE)
     names(rms) =c("low","mid","high")
  
  } else if(type_i=="AUC"){
@@ -399,7 +399,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
     names(rms)=c("low","mid","high")
   }else if(type_i=="AUC_all"){
     if(fam=="ordinal"){
-      levs = min(y1, na.rm=T):(max(y1,na.rm=T)-1) 
+      levs = min(y1, na.rm=TRUE):(max(y1,na.rm=TRUE)-1) 
       lev_inds = 1:length(levs)
       names(lev_inds)=unlist(lapply(levs, function(l)paste(l,l+1,sep="|")))
       rms_l = .merge1_new(lapply(lev_inds, function(kj){
@@ -410,7 +410,7 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
       }),addName="subpheno")
       #names(rms_l )=paste(names(y)[[ycol]],levs,sep=".")
       rms = rms_l #+0.5
-      #            rms = c(rms_l, sum(rms_l, na.rm=T))
+      #            rms = c(rms_l, sum(rms_l, na.rm=TRUE))
       #            names(rms) = c(levs,"sum")
     }else{
       #.calcAUCW(ypred, y, w)[2] for weighted AUC
@@ -485,18 +485,18 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
          names(levs1) = levs1
          rr1 = unlist(lapply(levs1, function(l1){
            vv = ifelse(yi ==l1, 1, 0)
-           mean(vv,na.rm=T)
-#           rep(mean(vv, na.rm=T), length(vv))
+           mean(vv,na.rm=TRUE)
+#           rep(mean(vv, na.rm=TRUE), length(vv))
          }))
          rr = do.call(rbind, replicate(length(yi),rr1, simplify=FALSE))
          dimnames(rr) = list(dimnames(y[[1]])[[1]],levs1)
        }else if(family[[i]]=="ordinal"){
-           levs1 = min(yi,na.rm=T):max(yi,na.rm=T)
+           levs1 = min(yi,na.rm=TRUE):max(yi,na.rm=TRUE)
            names(levs1) = levs1
           rr0= unlist(lapply(levs1[-length(levs1)], function(l1){
              vv = ifelse(yi ==l1, 1, 0)
-             mean(vv,na.rm=T)
-#             rep(mean(vv, na.rm=T), length(vv))
+             mean(vv,na.rm=TRUE)
+#             rep(mean(vv, na.rm=TRUE), length(vv))
            }))
           rr1 = cumsum(rr0)
           rr = do.call(rbind, replicate(length(yi),rr1, simplify=FALSE))
@@ -504,8 +504,8 @@ calcRMS<-function( predy,yTs, family , CI = F, rmsea=T, rel=F){
     }else{
       subinds = phensi[[i]]
       dimn = list(rownames(y[[i]]), colnames(y[[i]])[subinds])
-      rr = Matrix(0,nrow = length(dimn[[1]]), ncol = length(dimn[[2]]),dimnames = dimn ,sparse=T)
-        #as.matrix(data.frame(rep(mean(yi,na.rm=T),length(yi))))
+      rr = Matrix(0,nrow = length(dimn[[1]]), ncol = length(dimn[[2]]),dimnames = dimn ,sparse=TRUE)
+        #as.matrix(data.frame(rep(mean(yi,na.rm=TRUE),length(yi))))
     }
     rr
     })
@@ -554,13 +554,13 @@ ypredObj<-R6::R6Class("ypredObj", public = list(
 #  ypred$updateYP(data, prev, nonNA, !within)  
 #},
 ## use inv_transform on y  
-updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, liab=T){
+updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_y=TRUE,ignore.na=FALSE, liab=TRUE){
   prev_i1=full_model
   ypred = self
   prev_kj = prev_i1 
   phensi=self$phensi
   prev_kj$var = lapply(prev_kj$var_names, d$convert)  ## this would not be threadsafe
-  na_x = if(ignore.na) rep(F, self$nrow) else d$getNA(prev_kj$var)
+  na_x = if(ignore.na) rep(FALSE, self$nrow) else d$getNA(prev_kj$var)
   #kk1 = names(phensi)[[1]]
   inv_func = NULL
   len = length(prev_kj$var)
@@ -573,14 +573,14 @@ updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, li
    # print(kk1)
     kk = phensi[[kk1]]
     if(is.null(nonNA)){
-      ind_1 = if(flip) rep(T, self$nrow) else rep(F,self$nrow)
+      ind_1 = if(flip) rep(TRUE, self$nrow) else rep(FALSE,self$nrow)
     }else{
       ind_1 = if(flip) !nonNA else nonNA
     }
     levs1 = NULL
     family =getOption("fspls.family",strsplit(kk1,"\\.")[[1]][1])
     # if(family=="multinomial") levs1=dimnames(self$y[[kk1]])[[2]]
-    #  if(family=="ordinal")levs1 = min(self$y[[kk1]][,kk], na.rm=T):max(self$y[[kk1]][,kk],na.rm=T) 
+    #  if(family=="ordinal")levs1 = min(self$y[[kk1]][,kk], na.rm=TRUE):max(self$y[[kk1]][,kk],na.rm=TRUE) 
     if(!is.null(inv_func)) stop("this should be null")
     self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, inv_func,family=family, liab=liab, x_transform = !inv_transform_y)
    
@@ -593,12 +593,12 @@ updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, li
 #calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, kk)
 # if inv_func is NULL we should forward transform the x otherwise we transform y
   calcYpred=function(prev_kj, d, ind_1,  kk1, kk,na_x,  inv_func,
-                     family = self$family[[kk]],liab=T,x_transform = F){  ## kk1 in model space 
+                     family = self$family[[kk]],liab=TRUE,x_transform =FALSE){  ## kk1 in model space 
     transforms = d$getTransforms(prev_kj$var,inv_transform = x_transform )
-    x_ = d$extractData(prev_kj$var, adjust=F)
+    x_ = d$extractData(prev_kj$var, adjust=FALSE)
   #  print(paste("WALL", kk1))
   #  print( prev_kj$Wall)
-    ab=.eval1_(x_[ind_1,,drop=F], prev_kj$betas_proj[[kk1]], prev_kj$Wall[[kk1]], transforms, family)## mean_x = prev_kj$mean_x)
+    ab=.eval1_(x_[ind_1,,drop=FALSE], prev_kj$betas_proj[[kk1]], prev_kj$Wall[[kk1]], transforms, family)## mean_x = prev_kj$mean_x)
     ab = as.matrix(ab)
     constants = prev_kj$constants_proj[[kk1]]
    # transforms = if(is.null(inv_func)) d$transforms else NULL
@@ -670,7 +670,7 @@ updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, li
     
   },
 
- predictions=function(nonNA, flip=F){
+ predictions=function(nonNA, flip=FALSE){
    ypreds = self$ypreds
    ind_1 = if(flip) nonNA else !nonNA  ## because we setting to NA
    i1 = which(ind_1);
@@ -686,7 +686,7 @@ updateYP=function(d,full_model,  nonNA,flip=T, inv_transform_y=T,ignore.na=F, li
      yp1
    })
  },
-calcRMSV=function(y, nonNA,      flip=F){
+calcRMSV=function(y, nonNA,      flip=FALSE){
   phensi = self$phensi
   ypreds = self$ypreds
   types_ =self$types_
@@ -710,13 +710,13 @@ calcRMSV=function(y, nonNA,      flip=F){
     phens = dimnames(ypreds1)[[2]]
     ycol_inds = 1:length(ycols)
 
-    y2 = if(is.null(ind_1)) y[[nme_p1]] else  y[[nme_p1]][ind_1,,drop=F]
-    yp2 = if(is.null(ind_1))ypreds1 else  ypreds1[ind_1,,drop=F] 
+    y2 = if(is.null(ind_1)) y[[nme_p1]] else  y[[nme_p1]][ind_1,,drop=FALSE]
+    yp2 = if(is.null(ind_1))ypreds1 else  ypreds1[ind_1,,drop=FALSE] 
     names(ycol_inds) = dimnames(y2)[[2]][ycols]
     rms_1=lapply(ycol_inds, function(ycol_ind){
       ycol = ycols[ycol_ind]
       y1 =  y2[,ycol]
-      yp =if(fam=="ordinal") yp2 else yp2[,ycol_ind,drop=F] 
+      yp =if(fam=="ordinal") yp2 else yp2[,ycol_ind,drop=FALSE] 
     #  yp = inverse_func(yp)
       nonNA = !is.na(y1)
       nonNA = nonNA & !is.na(yp[,1]) 
@@ -725,7 +725,7 @@ calcRMSV=function(y, nonNA,      flip=F){
           type_i1s = strsplit(type_i1,"\\.")[[1]]
           type_i= type_i1s[[1]]
           thresh = if(length(type_i1s)>1) type_i1s[2] else NA
-          rms =.scoreInternal(yp[nonNA,,drop=F], y1[nonNA],w1[nonNA], type_i, fam,thresh)
+          rms =.scoreInternal(yp[nonNA,,drop=FALSE], y1[nonNA],w1[nonNA], type_i, fam,thresh)
           if(is.null(rms)) stop(paste(type_i,"rms NULL"))
           if(is.null(names(rms))) names(rms) = 1:length(rms)
           if(typeof(rms)=="list"){
@@ -796,8 +796,8 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
 }
 .calcMissing<-function(yp, lower, upper){
   M = length(which(yp>=lower & yp<=upper))
-  T = length(yp)
-  a=binom.confint(M,T, methods="probit",conf.level=getOption("conf.level",0.95))
+  TR = length(yp)
+  a=binom.confint(M,TR, methods="probit",conf.level=getOption("conf.level",0.95))
   res = c(a$lower, a$mean, a$upper) 
   names(res)=c("low","mid","high")
   res
@@ -808,7 +808,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   TP = length(which(y1[yp>=thresh]==1))
   
   #  TN = spec*N
-  #  o = order(yp, decreasing=F)
+  #  o = order(yp, decreasing=FALSE)
   #  cum=cumsum(1-y1[o])
   #  pos=which(cum>=TN)[1]
   
@@ -834,8 +834,8 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
 }
 .better<-function(rmsv2, rmsv){
   subinds = which(rmsv2$submeasure=="mid" & !is.na(rmsv2$value) & !is.na(rmsv$value))
-  rmsv2 = rmsv2[subinds,,drop=F]
-  rmsv =  rmsv[subinds,,drop=F]
+  rmsv2 = rmsv2[subinds,,drop=FALSE]
+  rmsv =  rmsv[subinds,,drop=FALSE]
   if(nrow(rmsv2)!=nrow(rmsv)) stop("need same dims")
   mult = rep(1, nrow(rmsv2)) 
   mult[tolower(rmsv$measure) %in% c("correlation","auc","sens","spec","f1","youden")] =  -1  ## things where bigger is better, mult by -1   
@@ -886,7 +886,7 @@ names(res1)  = paste(names(res1),signif(threshv[i], digits =2),sep=':')
   TN = length(which(y1[yp<thresh]==0))
   #TP = sens*P
   
-  #o = order(yp, decreasing=T)
+  #o = order(yp, decreasing=TRUE)
   #cum=cumsum(y1[o])
   #pos=which(cum>=TP)[1]
   

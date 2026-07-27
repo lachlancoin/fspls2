@@ -52,10 +52,10 @@ trainObj<-R6::R6Class("trainObj",
                     diffTransforms=function(transforms){
                       toJSON(names(transforms))!= toJSON(names(self$transforms))
                     },
-                    product=function(ik,ii, phensi1){ #  self$train$products[[ik]][[ii]][phensi1,,drop=F]  #[,self$cols_incl[[ik]],drop=F]
+                    product=function(ik,ii, phensi1){ #  self$train$products[[ik]][[ii]][phensi1,,drop=FALSE]  #[,self$cols_incl[[ik]],drop=FALSE]
                      produ=lapply(self$products[[ik]][[ii]], function(p0){
                        lapply(p0, function(p1){
-                          p1[match( names(phensi1),dimnames(p1)[[1]]),,drop=F]
+                          p1[match( names(phensi1),dimnames(p1)[[1]]),,drop=FALSE]
                      })
                      })
                      produ
@@ -91,7 +91,7 @@ trainObj<-R6::R6Class("trainObj",
                                  d_w = weights[nonNA1][nonNA2]
                                  meansy[[j]] = (v[nonNA2]%*% d_w)/sum(d_w) 
                                  v2 =  weights[nonNA1]*(v  - meansy[j])
-                                 v2 = v2/sd(v2,na.rm=T)  ### new line to avoid giving advantage to transformations
+                                 v2 = v2/sd(v2,na.rm=TRUE)  ### new line to avoid giving advantage to transformations
                                  self$yTr[[colk]][[f_k]][[g_k]][j,nonNA1] =v2 #y[,j]  - mean_y[j]
                                     if(length(which(!nonNA1))>0){
                                       self$yTr[[colk]][[f_k]][[g_k]][j,!nonNA1] =0   ## will not contribute to dot product
@@ -100,7 +100,7 @@ trainObj<-R6::R6Class("trainObj",
                                  if(length(which(!nonNA2))>0){
                                    self$yTr[[colk]][[f_k]][[g_k]][j,which(nonNA1)[!nonNA2]] =0
                                  }
-                                 vars1 = apply(self$yTr[[colk]][[f_k]][[g_k]][j,,drop=F],1,var, na.rm=T)
+                                 vars1 = apply(self$yTr[[colk]][[f_k]][[g_k]][j,,drop=FALSE],1,var, na.rm=TRUE)
                                  if(min(vars1)==0) stop(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs)))
                                  }
                             
@@ -120,7 +120,7 @@ trainObj<-R6::R6Class("trainObj",
                   #    })
                   #    nonNA
                   #  },
-                    update=function(data,k,subphens, force=F){
+                    update=function(data,k,subphens, force=FALSE){
                       
                       if(!force && toJSON(subphens)==toJSON(self$subphens) && k == self$k){
                         if(length(which(unlist(lapply(self$products, is.null))))==0){
@@ -156,7 +156,7 @@ trainObj<-R6::R6Class("trainObj",
                             yTr1 = self$yTr[[nme_p1]][[nme_f1]][[p1]]
                             subinds = dimnames(yTr1)[[1]] %in% unlist(phens1) #[[nmes_phens1]]
                             if(length(which(subinds))==0) subinds = dimnames(yTr1)[[1]] %in% phens1[nmes_phens1]
-                            apply(yTr1[subinds,,drop=F],1,mean,na.rm=T)
+                            apply(yTr1[subinds,,drop=FALSE],1,mean,na.rm=TRUE)
                           })
                         })
                       })
@@ -172,7 +172,7 @@ trainObj<-R6::R6Class("trainObj",
                           yTr1 = self$yTr[[nme_p1]][[nme_f1]][[p1]]
                           subinds = dimnames(yTr1)[[1]] %in% unlist(phens1)#[[nmes_phens1]]
                           if(length(which(subinds))==0) subinds = dimnames(yTr1)[[1]] %in% phens1[[nmes_phens1]]
-                          yTr1 = yTr1[subinds,,drop=F]
+                          yTr1 = yTr1[subinds,,drop=FALSE]
                           resu1=if(isbigmatrix(x) && typeof(yTr1)!="S4") dgemm(A=yTr1,B=x) else yTr1 %*% x
                             dimnames(resu1) = list(dimnames(yTr1)[[1]],dimnames(x)[[2]])
                             resu1
@@ -198,8 +198,8 @@ trainObj<-R6::R6Class("trainObj",
                     },          
                     
 getPvs=function(prev){
-  # lapply(self$prevs, .getWeights11_1, pvs=T)
-  .getWeights11_1(prev,pvs=T)
+  # lapply(self$prevs, .getWeights11_1, pvs=TRUE)
+  .getWeights11_1(prev,pvs=TRUE)
 },
 reorder=function(o,k){
   #o1=match(names(o), names(self$prev))

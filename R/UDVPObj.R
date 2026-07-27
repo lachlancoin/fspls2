@@ -20,18 +20,18 @@ UDVPObj<-R6::R6Class("UVDPObj", public = list(
   P2="matrix",
   var="vector",
   initialize=function(data,var1,
-                      P= data$extractData(var1, adjust=T),
-                      check=F,centralise=F
+                      P= data$extractData(var1, adjust=TRUE),
+                      check=FALSE,centralise=FALSE
                       ){  ## d = train[[i]] ## already centralised
     #d = data$train
-    nonNA = rep(T, data$nrow) # use all  data$train$nonNA
+    nonNA = rep(TRUE, data$nrow) # use all  data$train$nonNA
    # var_df = data.frame(var1)
     self$var = var1
     #var=var1
   #  x_all = lapply( 1:length(data$data), function(k){
   #    var1_inds = which(var_df[1,]==k)
   ##    var1_ = as.numeric(var_df[2,var1_inds])
-  #    x = if(length(var1_)==0) data$data[[k]][, 1,drop=F][,c()] else as.matrix(data$data[[k]][, var1_,drop=F])
+  #    x = if(length(var1_)==0) data$data[[k]][, 1,drop=FALSE][,c()] else as.matrix(data$data[[k]][, var1_,drop=FALSE])
   #    if(length(var1_)>0){
   #      for(j in 1:ncol(x)){
   #        x[,j] = x[,j]- data$mean_x[[k]][var1_[j]]  ## changed this so that projection is based on full matrix
@@ -45,7 +45,7 @@ UDVPObj<-R6::R6Class("UVDPObj", public = list(
     inds = which(nonNA)
     
     if(length(inds)==0) stop(" should not be zero")
-    #  P = data[,colinds,drop=F]
+    #  P = data[,colinds,drop=FALSE]
     #P = x11
     lengthvars =ncol(P) #ncol(P)
     if(centralise) P= apply(P, 2, .centralise, inds)  ##NEED TO REVISIT CENTRALISATION ON FLY
@@ -63,13 +63,13 @@ UDVPObj<-R6::R6Class("UVDPObj", public = list(
       self$P2 = NULL
 #      return(list(P=P, inds = inds, alias = alias, centralise = centralise))
     }else{
-      P1 = P[inds,,drop=F] 
+      P1 = P[inds,,drop=FALSE] 
     
       ##double check column means are zero
       if(check){
-        me = apply(P1,2,mean, na.rm=T);
+        me = apply(P1,2,mean, na.rm=TRUE);
         if(max(abs(me))>1e-5){
-          print(me)
+         # print(me)
           stop('err')
         }
       }
@@ -77,8 +77,8 @@ UDVPObj<-R6::R6Class("UVDPObj", public = list(
     #  if(!is.null(inds) & length(which(inds))>0)  else P
       alias = which(apply(P1,1,.cntNA)==0)
     
-    #  svd = dgesdd(A=P1[alias,,drop=F])
-      svd = svd( P1[alias,,drop=F])
+    #  svd = dgesdd(A=P1[alias,,drop=FALSE])
+      svd = svd( P1[alias,,drop=FALSE])
      U = svd$u
      V = t(svd$v)
     
@@ -91,7 +91,7 @@ UDVPObj<-R6::R6Class("UVDPObj", public = list(
     #Dinv = solve(D)
     U_exp =  .expandR(U, nonNA)
     inv1= which(svd$d>0)  #to avoid infinite values
-    VDU = Vinv %*% Dinv[,inv1] %*% t(U_exp[,inv1,drop=F])
+    VDU = Vinv %*% Dinv[,inv1] %*% t(U_exp[,inv1,drop=FALSE])
     
     
     P2 =NULL #diag(nrow(P)) - P%*%VDU  somewhat expensive to calcualte, so we avoid
@@ -126,7 +126,7 @@ getWall=function(x, Wall1){
     Wall=matrix(1)
   }else{
     
-    W_h_best_i= UDV$VDU %*%  x    ##UDV$VDU[,nonNA,drop=F] %*%  x  #d$x[,b_i]
+    W_h_best_i= UDV$VDU %*%  x    ##UDV$VDU[,nonNA,drop=FALSE] %*%  x  #d$x[,b_i]
     Wall3 = cbind(W,-W_h_best_i[,1])
     Wall=rbind(Wall3,c(rep(0,ncol(Wall3)-1),1))
   }

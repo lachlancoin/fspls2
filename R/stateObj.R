@@ -67,7 +67,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                                           Wall = matrix(nrow=0, ncol=0),
                                          mean_x = NULL, pvs = c(),
                                       
-                                         useoffset=T
+                                         useoffset=TRUE
                                          ){
                       self$angle=NULL;
                       self$sumAngle=0;
@@ -103,7 +103,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                         var_st = unlist(lapply(var, paste, collapse="."))
                        
                         if(paste(b_i,collapse=".") %in% var_st) {
-                          print(paste("selected same variable twice"))#,names(todoInds[[b_i[1]]])[b_i[2]]))
+                          #print(paste("selected same variable twice"))#,names(todoInds[[b_i[1]]])[b_i[2]]))
                           warning(paste(" duplicated variable")) #,names(todoInds[[b_i[1]]])[b_i[2]]))
                           return(NULL)
                         }
@@ -137,7 +137,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                             return( rbind(prev_i$betas_proj[[b_n]], b_n1))
                           }
                           rescale =   b_n1[1,]
-                          b_n1 = b_n1[-1,,drop=F]
+                          b_n1 = b_n1[-1,,drop=FALSE]
                           bet_n = prev_i$betas_proj[[b_n]]
                           for(jj in 1:nrow(bet_n)){
                             bet_n[jj,] = bet_n[jj,]*rescale
@@ -168,11 +168,13 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                    #    Wall_new %*% bp
                    #  })
 ##simplifies and translates into original space
-                  simplify=function(){
+                  simplify=function(useoffset){
                     nmebp= names(self$betas_proj); names(nmebp)=nmebp
-                    self$betas=lapply(nmebp, function(bp){
-                      self$Wall[[bp]] %*% self$betas_proj[[bp]]
-                    })
+                  
+                      self$betas=lapply(nmebp, function(bp){
+                        self$Wall[[bp]] %*% self$betas_proj[[bp]]
+                      })
+                    
                    # self$setOffset() 
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj,
@@ -183,7 +185,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                      #    Wall = self$Wall,
                          var_names = self$var_names) #, pvs = self$pvs_proj)
                   },
-                  updateConst=function(phensi,ypred, data,  k,useglm=F, verbose=F,update=F
+                  updateConst=function(phensi,ypred, data,  k,useglm=FALSE, verbose=FALSE,update=FALSE
                                        ){
                     #if(length(phensi)>1) stop("!!")
                     family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
@@ -197,30 +199,30 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                     #kk1 = 1;  
                     kk = names(phensi)[[kk1]]
                     phensi1 = phensi[[kk1]]
-                    y=  if(family[[kk]]=="multinomial")   attr(data$y[[kk]],"factor")[na_k] else data$y[[kk]][na_k,,drop=F]
-                    yp1 =ypred$ypreds[[kk1]][na_k,,drop=F]
+                    y=  if(family[[kk]]=="multinomial")   attr(data$y[[kk]],"factor")[na_k] else data$y[[kk]][na_k,,drop=FALSE]
+                    yp1 =ypred$ypreds[[kk1]][na_k,,drop=FALSE]
                     if(family[[kk]]=="multinomial"){
                         levs = levels(y)# c(0,1:length(self$betas[[k]]))
-                        m1 = try(multinom(y~as.matrix(yp1[,-1]),trace=F))
+                        m1 = try(multinom(y~as.matrix(yp1[,-1]),trace=FALSE))
                         sm  = summary(m1, digits=3)
-                        if(verbose){
-                          print(sm$coefficients)
-                        }
+                        if(verbose)   print(sm$coefficients)
+                        
+                        
                         const_term = sm$coefficients[,1]
                         constants_proj[[kk1]] = const_term
                     }else if(family[[kk]]=="ordinal"){
                         for(kk_1 in 1:length(phensi1)){
                           kk_ = phensi1[kk_1]
                           y1c = y[,kk_]
-                          levs1 = min(y1c, na.rm=T):max(y1c,na.rm=T)
+                          levs1 = min(y1c, na.rm=TRUE):max(y1c,na.rm=TRUE)
                           consts = rep(0, length(levs1)-1)
                           names(consts) = levs1[-length(levs1)]
                           df = data.frame(list(y=factor(y1c,levels=sort(unique(y1c))),x= yp1[,1]))
-                          m1=try(polr(y~x,  data=df,Hess=T, method="logistic"))  
+                          m1=try(polr(y~x,  data=df,Hess=TRUE, method="logistic"))  
                  
                           if(abs(m1$coefficients[[1]]-1)>0.5){
-                            print(m1$coefficients)
-                            print(self$var)
+                           # print(m1$coefficients)
+                           # print(self$var)
                             warning(" something gone wrong")
                           }
                           if(inherits(m1,"try-error")){
@@ -229,10 +231,10 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                            # gl = glm(data$y[non_na_x & nonNA,kk]~ yp1[,1], family="gaussian")
                             #self$constants_proj[[kk]][[kk_1]] = consts_prev[[kk]] #rep(NA, length(levs1)-1) #gl$coefficients[1]
                           }else{
-                            if(verbose){
-                              print(m1$coefficients)
-                              print(m1$zeta) 
-                            }
+                            if(verbose) print(m1$coefficients)
+                             
+                            if(verbose)  print(m1$zeta) 
+                            
                             constants_proj[[kk]][[kk_1]]= m1$zeta
                           }
                         }
@@ -246,7 +248,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                          if(family[[kk]]=="binomial"){
                            ab=logit.spike(y1c~yp1[,kk_1], niter= spike_slab_iter, ping =-1)
                          }else{
-                           if(getOption("logprint",F)) print("gaussian spike slab")
+                          # if(getOption("logprint",FALSE)) print("gaussian spike slab")
                            ab=lm.spike(y1c~yp1[,kk_1], niter= spike_slab_iter, ping =-1)#,weights=w)
                          }
                          sm = summary(ab)
@@ -277,7 +279,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                          if(verbose) print(gl$coefficients)
                           gl$coefficients[1]
                         }, warning=function(w) {
-                          print("using glmnet to regularise ")
+                         warning("using glmnet to regularise ")
                           #ones = rep(1, length(yp1[,1]))
                           nonNAy = !is.na(y1c)
                           ridge=glmnet(cbind(ones[nonNAy],yp1[nonNAy,kk_1]),y1c[nonNAy],family=family[[kk]], alpha = 0)

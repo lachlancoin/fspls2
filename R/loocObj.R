@@ -10,7 +10,7 @@ loocObj<-R6::R6Class("loocObj", public = list(
   rowsToDo="vector",
   nrows = "numeric",
   initialize=function(data,   ## data can be null if nrows is not NULL
-                      incl_full = T,
+                      incl_full =TRUE,
                       nrows = nrow(data$data[[1]]),
                        ## randomisation
                       nrep=getOption("nfold",1), 
@@ -26,7 +26,7 @@ loocObj<-R6::R6Class("loocObj", public = list(
     len_y = nrows #length(data$y[,1])
 #    nonNA = apply(data$y,c(1,2),function(x) !is.na(x))
 #    non_na_inds = which(apply(nonNA, 1,function(x) length(which(x))>0))
-    useAll = rep(T, len_y)
+    useAll = rep(TRUE, len_y)
     len_y1 = len_y #length(non_na_inds)
     tbl2 = NULL
     
@@ -38,14 +38,14 @@ loocObj<-R6::R6Class("loocObj", public = list(
     
     if(!is.null(nrep) && nrep!=0){
 #      batch  = ceiling((len_y1)/nrep)
-     # incl = matrix(T, nrow = len_y1, ncol =nrep)
+     # incl = matrix(TRUE, nrow = len_y1, ncol =nrep)
       left_over=len_y1 %% nrep
       batch = (len_y1-left_over)/nrep
       reps_k = seq(1+left_over, len_y1+1, batch)
       reps_k[length(reps_k)] = len_y1+1
-      incl = matrix(T, nrow = len_y, ncol =length(reps_k)-1 )
+      incl = matrix(TRUE, nrow = len_y, ncol =length(reps_k)-1 )
       for(jj in 2:length(reps_k)){
-        incl[reps_k[jj-1]:(reps_k[jj]-1),jj-1] = F
+        incl[reps_k[jj-1]:(reps_k[jj]-1),jj-1] = FALSE
       }
       if(left_over>0){
         for(jk in 1:length(left_over)){
@@ -65,9 +65,9 @@ loocObj<-R6::R6Class("loocObj", public = list(
       tbl=table(y2)
       cnt=min(tbl)
       nmet = sort(unique(y2)); names(nmet) = nmet
-      v2 = rep(T, length(y2))
+      v2 = rep(TRUE, length(y2))
       incl2 = unlist(lapply(nmet, function(nmet1){
-        s1= as.list(sample(which(y2==nmet1),cnt,replace=T))
+        s1= as.list(sample(which(y2==nmet1),cnt,replace=TRUE))
       }))
         incl= data.frame(lapply(incl2, function(s2){
             v3 = v2
@@ -79,16 +79,16 @@ loocObj<-R6::R6Class("loocObj", public = list(
     }else{
       reps_k = seq(1, len_y1+1, batch)
       reps_k[length(reps_k)] = len_y1+1
-      incl = matrix(T, nrow = len_y, ncol =length(reps_k)-1 )
+      incl = matrix(TRUE, nrow = len_y, ncol =length(reps_k)-1 )
       for(jj in 2:length(reps_k)){
-        incl[reps_k[jj-1]:(reps_k[jj]-1),jj-1] = F
+        incl[reps_k[jj-1]:(reps_k[jj]-1),jj-1] = FALSE
       }
       if(incl_full) incl = cbind( incl, useAll)
       self$incl = incl[rand,]
     }
   # if(nrep==1 && batch==0){
   #    print("keeping useAll only")
-  #    self$incl = self$incl[,2,drop=F]
+  #    self$incl = self$incl[,2,drop=FALSE]
   #  }
     #print(paste("loocObj", dim(self$incl)))
   }

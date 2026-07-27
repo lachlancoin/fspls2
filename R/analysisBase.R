@@ -13,7 +13,7 @@ post_process<-function(variables, flags, phens, useDB=FALSE){
     for(repn in names(variables)){
       full = repn==full_index
       if(beam>length(variables[[repn]])) {
-        print("skipping")
+        message("skipping")
         next;
       }
       var1 = variables[[repn]][[beam]]   ### only taking the top1
@@ -75,10 +75,10 @@ analysisBase<-R6::R6Class("analysisBase",
                      nme="character",
                      dbDir="character",
                      exptid="character",
-                     savePvals=function(flags, phens1, ri , varnames, k1, data_nme=private$nme, useCurrVarnames=T){
+                     savePvals=function(flags, phens1, ri , varnames, k1, data_nme=private$nme, useCurrVarnames=TRUE){
                        if(!is.null(private$sigs)) {
-                         #                         private$sigs$savePvals(flags, phens, data_nme, ri, varnames,k1, useCurrVarnames = F)
-                         #super$savePvals(flags,phens1, ri, varnames,k1,useCurrVarnames=T)
+                         #                         private$sigs$savePvals(flags, phens, data_nme, ri, varnames,k1, useCurrVarnames =FALSE)
+                         #super$savePvals(flags,phens1, ri, varnames,k1,useCurrVarnames=TRUE)
                          
                          private$sigs$savePvals(flags,phens1, data_nme, ri, varnames,k1,useCurrVarnames=useCurrVarnames)
                        }
@@ -115,8 +115,8 @@ analysisBase<-R6::R6Class("analysisBase",
                       private$sigsdir=paste(dbDir,paste0("fspls_signatures__",private$nme),sep="/")
                    #   private$dims = dimsl
                       # private$sigsdir=paste(dbDir,"fspls_signatures",sep="/")
-                      # private$sigs=    sigEnv$new(private$sigsdir,nme1,flags, NULL, clear=F)
-                       private$sigs=   if(useDB) sigEnv$new(private$sigsdir,private$nme,private$flags, dims, clear=F) else NULL;
+                      # private$sigs=    sigEnv$new(private$sigsdir,nme1,flags, NULL, clear=FALSE)
+                       private$sigs=   if(useDB) sigEnv$new(private$sigsdir,private$nme,private$flags, dims, clear=FALSE) else NULL;
                        
                      },
                    #' @description get dataset name;
@@ -129,7 +129,7 @@ analysisBase<-R6::R6Class("analysisBase",
                    #' @param vars_combined object from select function
                    saveVars = function(vars_combined){
                      if(!is.null(private$sigs)){
-                       private$sigs$saveVars(vars_combined,replace=T)   #saving local
+                       private$sigs$saveVars(vars_combined,replace=TRUE)   #saving local
                      }
                    },
                    #' @description load vars from database
@@ -147,7 +147,7 @@ analysisBase<-R6::R6Class("analysisBase",
                    updateExpt=function(phens, flags){
                      private$flags = flags;
                      if(!is.null(private$sigs)){
-                      private$exptid =  private$sigs$getExpt(flags, phens, add_new=T)
+                      private$exptid =  private$sigs$getExpt(flags, phens, add_new=TRUE)
                      }
                    }
                      
