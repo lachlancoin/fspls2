@@ -649,14 +649,7 @@ getSparseSubMatrix<-function(counts, inds,by='col'){
     inds = inds1[nonna]
     
   }
-  if(by=='col' && ncol(counts)==length(inds)){
-    #check if we even need submatrix
-     if(max(apply(cbind(colInds, 1:ncol(counts)),1,function(v) abs(v[2]-v[1])))==0) return(counts);
-  }
-  if(by=='row' && nrow(counts)==length(inds)){
-    #check if we even need submatrix
-    if(max(apply(cbind(rowInds, 1:nrow(counts)),1,function(v) abs(v[2]-v[1])))==0) return(counts);
-  }
+colInds = inds; rowInds = inds;
   if(by=='col'){
         colinds1 = colInds -1
         X2 <- as(counts, "TsparseMatrix")
