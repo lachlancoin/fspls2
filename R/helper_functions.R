@@ -274,7 +274,16 @@ plotEval<-function(eval3,
        labelsize=2,
            grid0 = c("cohort","measure"),grid1 = "cv_full",title="", title1=""
           ){
-  eval3 = eval3[,names(eval3) %in% c(shape_color,sep_by, linetype, text, dotsize, color, title1, grid0, grid1, "numvars","mid","low","high"),drop=FALSE]
+  
+  grid0= grid0[grid0 %in% names(eval3)];  grid1= grid1[grid1 %in% names(eval3)]
+  
+  eval3$beam = factor(eval3$beam, levels =  sort(unique(as.numeric(eval3$beam))))
+  
+  eval3$sign = as.character(eval3$sign)
+  eval3$sign = factor(eval3$sign, levels = c(-1,0,1), labels=c("-","","+"))
+      eval3 = eval3[,names(eval3) %in% c(shape_color,sep_by, linetype, text, dotsize, color, title1, grid0, grid1, "numvars","mid","low","high"),drop=FALSE]
+  
+  
   l1 = apply(eval3,1,paste, collapse="::");
   #print(which(duplicated(l1)))
   eval3 = eval3[!duplicated(l1),,drop=FALSE]
@@ -631,8 +640,15 @@ expandSparseMatrix<-function(counts, n,  vec, by="row"){
 #' @return sparse sub matrix
 #' @noRd
 getSparseSubMatrix<-function(counts, inds,by='col'){
-  colInds = inds
-  rowInds = inds
+  #newNames = if(by=='col')colnames((counts)) else rownames(counts)
+  if(!is.numeric(inds)) {
+    tomatch = if(by=="col")colnames(counts) else rownames(counts);
+    inds1 = match(inds, tomatch)
+    nonna = !is.na(inds1)
+    
+    inds = inds1[nonna]
+    
+  }
   if(by=='col' && ncol(counts)==length(inds)){
     #check if we even need submatrix
      if(max(apply(cbind(colInds, 1:ncol(counts)),1,function(v) abs(v[2]-v[1])))==0) return(counts);
