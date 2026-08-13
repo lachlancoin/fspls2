@@ -1935,11 +1935,7 @@ getNorm=function(W,var,ik,type){
   })
 
   var_st = paste(sort(unlist(var_list1)),collapse=":")
-  ##this is where we store norms to avoid calculating multiple times
-  ## another option could be in a sqldb
-#  print(paste(ik,"HH", var_st,length(self$norms_list)))
-  #print(length(self$norms_list))
-  #print(length(self$norms_list)[[ik]])
+ 
  
   if(ik>length(self$norms_list)) stop(paste("problem", ik, length(self$norms_list)))
   
@@ -1979,7 +1975,9 @@ getNorm=function(W,var,ik,type){
       #print(paste("norm ", length(steps)))
       norm2=lapply(steps, function(ii){
         ii1 = min(ii+stepsize-1, ncolw)
-        apply(x_[,ii:ii1]- P %*% W[,ii:ii1],2,function(g) sum((g-mean(g))^2))
+        res1 = apply(x_[,ii:ii1]- P %*% W[,ii:ii1],2,function(g) sum((g-mean(g))^2))
+        names(res1) = colnames(x_)[ii:ii1]
+        res1
       }) ##, mc.cores = getOption("mc.cores.calc_norm",1))
       norm = -1*sqrt(unlist(norm2))
      # print("done calc")
@@ -2034,6 +2032,7 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
           nmes_products = names(products); names(nmes_products) = nmes_products
           #nmes_prod = "rand"; nmes_prod1 = names(products[[nmes_prod]])[1]
           angle=lapply(nmes_products, function(nmes_prod){
+            #print(nmes_prod)
             product0 = products[[nmes_prod]]
             nmes_products1 = names(product0); names(nmes_products1) = nmes_products1
             lapply(nmes_products1, function(nmes_prod1){

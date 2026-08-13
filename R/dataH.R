@@ -257,7 +257,7 @@ ggp3+ggtitle(paste("fold=",k1))
    
      sv = sparse_variance(m1$matrix)
      na_cnt = colSums(m1$matrixNA)/nrow(m1$matrixNA)
-     m2 = lapply(m1, function(m11) m11[,!is.na(sv) & sv>min_variance & na_cnt<=max_na_proportion])
+     m2 = lapply(m1, function(m11) m11[,!is.na(sv) & sv>min_variance & na_cnt<=max_na_proportion, drop=F])
   m2
   })
   
@@ -728,17 +728,9 @@ dataH<-R6::R6Class("dataH",
     min_variance =.readFlag(flags,"max_na_proportion",0.001)
     
     mat = .getAllSparseMatrices(d$dataset,hasNA=hasNA, convertToBigMatrix=convertToBigMatrix,min_variance = min_variance, max_na_proportion=max_na_proportion)
-    #print("HHHHH")
-    #print(mat)
+    
     private$dbDir = dbDir
-    #nme=sub("/",".",nme)
-  #  private$flags = flags
-   # transform_x =.readFlag(flags, "transform_x",toJSON(list(x=list(unvfunc="function(y,param) y",func="function(y,param) y", param=1))))
-    ### MAKE SIGNATURE DIRECTORY
-   # private$nme=nme
-  #  private$sigsdir=paste(dbDir,paste0("fspls_signatures__",private$nme,sep="/"))
-    #private$sigs = list()
-    #####
+    
     private$data = 
       dataObj$new(mat, private$nme,dbDir,flags, 
                   incl_full=TRUE,seed = getOption("seed",42), memDir=if(is.null(memDir)) NULL else paste(memDir, private$nme,sep="/"))
@@ -951,8 +943,7 @@ dataH<-R6::R6Class("dataH",
   # expt_id=super$getExpt(flags, phens, add_new=TRUE)
    variables=lapply(nreps, function(k1){
      if(verbose) print(paste("cv",k1,"of",length(nreps)))
-   
-    private$select_k(analysis, phens,flags, k1, vars_l_todo,verbose=verbose)
+       private$select_k(analysis, phens,flags, k1, vars_l_todo,verbose=verbose)
                })
    variables1 = lapply(variables, function(vars_l_todo){
      vars_l_todo$vars_l 

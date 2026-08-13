@@ -290,7 +290,7 @@ plotEval<-function(eval3,
   showtext = length(text)>0
   linetype_nme = paste(linetype, collapse="_");
   grid0_nme = paste(grid0, collapse="_")
-  grid1_nme = if(length(grid1)==0) NULL else  paste(grid1,collapse="_");
+  grid1_nme = if(length(grid1)==0) "" else  paste(grid1,collapse="_");
   shape_nme = paste(shape,collapse="_")
   color_nme = paste(color,collapse="_")
   text_nme = paste(text,collapse="_")
@@ -299,7 +299,7 @@ plotEval<-function(eval3,
   subphens = table(eval3$subpheno)
   subphens = subphens[order(as.numeric(unlist(lapply(names(subphens), function(str)strsplit(str,"\\|")[[1]][1]))))]
   eval3$subpheno = factor(eval3$subpheno, levels = names(subphens))
-  eval3$measure = factor(eval3$measure)
+  if(!is.null(eval3$measure))eval3$measure = factor(eval3$measure)
   eval3 = .modify(eval3, color, color_nme)
   eval3 = .modify(eval3, shape, shape_nme)
   eval3 = .modify(eval3, text, text_nme)
@@ -307,7 +307,7 @@ plotEval<-function(eval3,
   eval3 = .modify(eval3, linetype, linetype_nme)
   eval3 = .modify(eval3, sep_by, sep_by_nme)
   eval3 = .modify(eval3,grid0, grid0_nme)
-  if(!is.null(grid1_nme)){
+  if(length(grid1)>0){
   eval3 = .modify(eval3,grid1, grid1_nme)
   }
   eval2 = eval3
@@ -340,7 +340,7 @@ plotEval<-function(eval3,
    ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype_nme,color=color_nme, fill = color_nme ), alpha = 0.1)
   }
   if(nchar(grid0_nme)>0){
-    if(!is.null(grid1_nme) && nchar(grid1_nme)>0){
+    if(nchar(grid1_nme)>0){
        ggp<-ggp+facet_grid(paste(grid0_nme, grid1_nme,sep="~"),scales=scales)
     }else{
       ggp<-ggp+facet_wrap(grid0_nme, scales=scales)
