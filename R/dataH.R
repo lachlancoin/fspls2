@@ -934,6 +934,8 @@ dataH<-R6::R6Class("dataH",
                  useDB=FALSE
                  ## expt_id specific to this database .. might be diff for global
                ){#c(y="function(y) y","function(y) y")
+   options(flags);
+   
    verbose=.readFlag(flags,'verbose',FALSE);
    super$updateExpt(phens, flags);
    flags$transform_x = toJSON(transform_x);

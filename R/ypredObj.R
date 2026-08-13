@@ -554,7 +554,7 @@ ypredObj<-R6::R6Class("ypredObj", public = list(
 #  ypred$updateYP(data, prev, nonNA, !within)  
 #},
 ## use inv_transform on y  
-updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_x=TRUE,ignore.na=FALSE, liab=TRUE){
+updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
   prev_i1=full_model
   ypred = self
   prev_kj = prev_i1 
@@ -562,12 +562,12 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_x=TRUE,ignore.na
   prev_kj$var = lapply(prev_kj$var_names, d$convert)  ## this would not be threadsafe
   na_x = if(ignore.na) rep(FALSE, self$nrow) else d$getNA(prev_kj$var)
   #kk1 = names(phensi)[[1]]
-  inv_func = NULL
+#  inv_func = NULL
   len = length(prev_kj$var)
-  if(inv_transform_x && len>0){
-    t_i=prev_kj$var[[len]][[3]]
-    inv_func =  d$transforms[[t_i]][[2]]
-  }
+ # if(inv_transform_x && len>0){
+#    t_i=prev_kj$var[[len]][[3]]
+#    inv_func =  d$transforms[[t_i]][[2]]
+#  }
  # transf = d$getTransforms(prev_kj$var, inv_transform = !inv_transform_x)
   for(kk1 in names(phensi)){ #} 1:length( ypred$ypreds)){
    # print(kk1)
@@ -581,8 +581,8 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_x=TRUE,ignore.na
     family =getOption("fspls.family",strsplit(kk1,"\\.")[[1]][1])
     # if(family=="multinomial") levs1=dimnames(self$y[[kk1]])[[2]]
     #  if(family=="ordinal")levs1 = min(self$y[[kk1]][,kk], na.rm=TRUE):max(self$y[[kk1]][,kk],na.rm=TRUE) 
-    if(!is.null(inv_func)) stop("this should be null")
-    self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, inv_func,family=family, liab=liab, x_transform = !inv_transform_x)
+  #  if(!is.null(inv_func)) stop("this should be null")
+    self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, family=family, liab=liab)
    
   }
   #   names(ypred$ypreds) = names(self$y)
@@ -592,9 +592,9 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_x=TRUE,ignore.na
 
 #calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, kk)
 # if inv_func is NULL we should forward transform the x otherwise we transform y
-  calcYpred=function(prev_kj, d, ind_1,  kk1, kk,na_x,  inv_func,
-                     family = self$family[[kk]],liab=TRUE,x_transform =FALSE){  ## kk1 in model space 
-    transforms = d$getTransforms(prev_kj$var,inv_transform = x_transform )
+  calcYpred=function(prev_kj, d, ind_1,  kk1, kk,na_x, 
+                     family = self$family[[kk]],liab=TRUE){  ## kk1 in model space 
+    transforms = d$getTransforms(prev_kj$var )
     x_ = d$extractData(prev_kj$var, adjust=FALSE)
     if(length(prev_kj$var)==0){
       ab =matrix(0, nrow = length(which(ind_1)) ,ncol = ncol( prev_kj$betas_proj[[kk1]]))
@@ -662,9 +662,9 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_x=TRUE,ignore.na
       #                    betas1 = prev_kj$betas[[kk1]],
       #                    transforms = transforms,
       #                    constants=constants) 
-        if(!is.null(inv_func)){
-          ab=apply(ab,2,inv_func)
-        }
+      #  if(!is.null(inv_func)){
+      #    ab=apply(ab,2,inv_func)
+      #  }
         self$ypreds[[kk1]][ind_1,] = ab
   #    }
     }

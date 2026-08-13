@@ -140,7 +140,7 @@ multinom_ridge<-function(x,y,w,lambda=getOption("lambda")){
   
   
   ridge<- tryCatch(
-    glmnet(x,y, family="multinomial", alpha=0, weights=w, lambda=lambda, lambda.min.ratio = 1e-10),
+    glmnet(x,y, family="multinomial", alpha=0, weights=w, lambda=lambda, standardize=FALSE), #, lambda.min.ratio = 1e-10),
     error = function(e) {
       if (grepl("zero variance", conditionMessage(e))) {
         NULL
@@ -586,7 +586,7 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,convert=TRUE, bet
   })
   res1
 },
-getTransforms=function(vars1, inv_transform=TRUE){
+getTransforms=function(vars1){
   default_transform = eval(str2lang("function(x,pow) x"))
   nme1 ="func"; ## always using func since we use invfunc in trainObj  if(inv_transform)"invfunc" else "func"
   deft = list(func=default_transform, param=1)
@@ -746,7 +746,9 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
           ones = rep(1, length(x))
           x_mod = cbind(ones,x)
        
-          ridge=glmnet(x_mod[nonNAy,,drop=FALSE],y[nonNAy],weights = w[nonNAy], family=family, alpha = 0,lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
+          ridge=glmnet(x_mod[nonNAy,,drop=FALSE],y[nonNAy],weights = w[nonNAy], family=family, alpha = 0,
+                       standardize=FALSE,
+                       lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
           
           rbeta <- coef(ridge,s=min(ridge$lambda))
           const_term = sum(rbeta[1:2,1])
@@ -821,7 +823,9 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
           ones = rep(1, length(x))
           x_mod = cbind(ones,x)
           nonNAy = !is.na(y)
-          ridge=glmnet(x_mod[nonNAy,,drop=FALSE],y[nonNAy],family=family,weights=w[nonNAy], alpha = 0, lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
+          ridge=glmnet(x_mod[nonNAy,,drop=FALSE],y[nonNAy],family=family,weights=w[nonNAy], alpha = 0, 
+                       standardize=FALSE,
+                       lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
           #ridge=glmnet(x_mod,y,family=family, alpha = 0)
           rbeta <- coef(ridge,s=min(ridge$lambda))
           const_term = sum(rbeta[1:2,1])
@@ -938,7 +942,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
   x_ =self$extractData(vars1, adjust=FALSE)
   meanx = t(replicate(nrow(x_), apply(x_,2,mean,na.rm=TRUE)))
   
-  transf = self$getTransforms(vars1,inv_transform = inv_transform) #lapply(vars1, function(v1) self$transforms[[v1[[3]]]][[2]])
+  transf = self$getTransforms(vars1) #lapply(vars1, function(v1) self$transforms[[v1[[3]]]][[2]])
   UDV = data$UDVP ## should check it corresponds to prev_i
   Wall2 = UDV$getWall(x_[,ncol(x_)]-meanx[,ncol(x_)], Wall1) ## updated projection  may not need to subtract meanx  .. leaving it for now
   if(!project) Wall2 = diag(ncol(Wall2))
@@ -1019,6 +1023,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
       x1_ = x_[,ncol(x_), drop=FALSE]  
       transf1 = transf[[ncol(x_)]]
       x =cbind(yp1,transf1$func( x1_[nonNAk,,drop=FALSE], transf1$param))
+     
      # for(kk3 in 1:ncol(x)){
     #    transf1$func(x[,], transf1$param)
     #  }
@@ -1027,7 +1032,9 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
     if(family=="multinomial"){
        ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
-      
+      #mean_x = apply(x,2, mean,na.rm=T)
+      #x = t(t(x) - mean_x)
+      #print(apply(x,2,mean)) 
       rdf=multinom_ridge(x,y,w)
       const_term = rdf$const
       beta_new1 =  rdf$beta
@@ -1085,7 +1092,9 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
             #}else{
             #  x_mod = x
             #}
-                ridge=glmnet(x[nonNAy,,drop=FALSE],y[nonNAy],family=family,weights=w[nonNAy], alpha = 0,lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
+                ridge=glmnet(x[nonNAy,,drop=FALSE],y[nonNAy],family=family,weights=w[nonNAy], alpha = 0,
+                             standardize=FALSE,
+                             lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
                 rbeta <- coef(ridge,s=min(ridge$lambda))
                 const_term = rbeta[1,1]
                  beta_new1 =  rbeta[-1,1]
@@ -1093,7 +1102,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
             list(const_term = const_term, beta_new1 = beta_new1)
           }, error=function(errw) {
             warning("reverting to glmnet")
-                m1=glm(y~as.matrix(x), family=family, weights=w) ## including weights lead to non-convergence
+                m1=glm(y~as.matrix(x), family=family, weights=w, standardize=FALSE) ## including weights lead to non-convergence
             sm  = summary(m1)
         
             if(nrow(sm$coeff)<1+ncol(x)){
@@ -1150,7 +1159,9 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
             #x_mod = cbind(ones,x)
             nonNAy = !is.na(y)
            
-              ridge=glmnet(x[nonNAy,,drop=FALSE],y[nonNAy],family=family, alpha = 0, weights=w[nonNAy],lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
+              ridge=glmnet(x[nonNAy,,drop=FALSE],y[nonNAy],family=family, alpha = 0, weights=w[nonNAy],lambda = getOption("lambda"), 
+                           standardize=FALSE,
+                           lambda.min.ratio = 1e-10)
               #ridge=glmnet(x_mod,y,family=family, alpha = 0)
               rbeta <- coef(ridge,s=min(ridge$lambda))
               #const_term = rbeta[1,1]
@@ -1287,7 +1298,7 @@ makeModels=function(phens1, vars2,k,
 
  #Wall = prev_i$Wall
  #rmsv=NULL
- rmsv=if(checkRMSV) self$checkRMSV(subphens,prev_i, ypred, nonNA,verbose=verbose,inv_transform_x=!inv_transform) else NULL
+ rmsv=if(checkRMSV) self$checkRMSV(subphens,prev_i, ypred, nonNA,verbose=verbose) else NULL
   #print(rmsv1)
   while(jk<=len){
     b_i_name = vars2[[jk]]
@@ -1301,15 +1312,16 @@ makeModels=function(phens1, vars2,k,
     nmes[[jk+1]] = nme1
     models[[jk+1]] =prev_i1$simplify(useoffset)
     if(checkRMSV){
-      rmsv2=self$checkRMSV(subphens,prev_i1, ypred, nonNA, inv_transform_x=!inv_transform,verbose=verbose)
+      rmsv2=self$checkRMSV(subphens,prev_i1, ypred, nonNA,verbose=verbose)
      # print(subset(rmsv2, submeasure=="mid"))
       if(!is.null(rmsv)){
       better = .better1(rmsv, rmsv2)
        improvement = apply(better[,-1,drop=FALSE],2, function(x)x[2]-x[1])
        #print(better)
-       
-       if(min(improvement)<(-1e-3)){
-         warning(paste("not improving!", paste0(improvement)))
+       worse = improvement[which(improvement < -1e-3)]
+       if(length(worse)>0){
+        
+         warning(paste("not improving!", toJSON(as.list(sort(worse)))))
        }
        
        
@@ -1357,19 +1369,11 @@ updateWeights=function(subphens=self$pheno()[[1]][1]){
     self$weights[naInds] = min(w1)
   }
 },
-checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_x=FALSE,verbose=FALSE, useglm=TRUE){
-  #transform_x1 = self$transforms[[nme_c1]]
-  #inv_funcst = transform_x1[[2]]
-  data=self
- # inv_func = eval(str2lang(inv_funcst))
-    ypred$updateYP(data, prev_i1, nonNA, inv_transform_x=inv_transform_x,flip=FALSE, liab=FALSE)
-    if(verbose){
-      ##no longer works, rethink because of transform_func
-      new_const = prev_i1$updateConst(subphens,ypred, data,k, transform_func, useglm=useglm,verbose=verbose, update=FALSE)
-      ypred$updateYP(data, prev_i1, nonNA,  inv_transform_x = inv_transform_x,flip=FALSE, liab=TRUE)
-    }
-    rmsv=(ypred$calcRMSV(self$y, nonNA,     flip=FALSE))
-    rmsv
+checkRMSV=function(subphens, prev_i1, ypred, nonNA,verbose=FALSE, useglm=TRUE){
+   data=self
+  ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=FALSE)
+  rmsv=(ypred$calcRMSV(self$y, nonNA,     flip=FALSE))
+   subset( rmsv, submeasure=="mid")
 },
  makeNextModel=function(prev_i2, b_i_name, phens, k, family, ypred=NULL, project=TRUE, useglm=TRUE,    logpthresh = -5,
                         useoffset=TRUE,
@@ -1455,10 +1459,14 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,inv_transform_x=FALSE,verbose
           self$updateWeights(phens)
           nonNAy = !is.na(y11[,1])
           ab=glm(y11[,1] ~as.matrix(extractd0))
-        ridge=glmnet(cbind(1,extractd0[nonNAy,]),y11[nonNAy,,drop=FALSE] ,family=family, alpha = 0, weights =self$weights[nonNAy],lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
+        ridge=glmnet(cbind(1,extractd0[nonNAy,]),y11[nonNAy,,drop=FALSE] ,family=family, alpha = 0,
+                     standardize=FALSE,
+                     weights =self$weights[nonNAy],lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
         rbeta <- coef(ridge,s=min(ridge$lambda))
         aa = predict(ridge,cbind(1,extractd0[nonNAy,]),s=min(ridge$lambda), family=family)
-        ridge1 = glmnet(cbind(1, extractd0[nonNAy,] %*%  rbeta[-(1:2),,drop=FALSE]), y11[nonNAy,,drop=FALSE], family = family, alpha=0,lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
+        ridge1 = glmnet(cbind(1, extractd0[nonNAy,] %*%  rbeta[-(1:2),,drop=FALSE]), y11[nonNAy,,drop=FALSE], family = family, alpha=0,lambda = getOption("lambda"), 
+                        standardize=FALSE,
+                        lambda.min.ratio = 1e-10)
         rbeta1 <- coef(ridge1,s=min(ridge1$lambda))
       
         return(cbind(rbeta[-(1:2),],prev_i1$betas[[1]],ab$coefficients))
@@ -1575,7 +1583,7 @@ extractPredictions=function(all_models_y,phens, flags,
                             transform_x = jsonlite::fromJSON(flags$transform_x),
                             ypred = self$ypred(phens), liab=TRUE
                                    ){
-  inv_transform_x=FALSE
+  
   self$updateTransforms(transform_x   )      
   d = self
   self$updateLOOC(phens,flags)
@@ -1624,7 +1632,7 @@ extractPredictions=function(all_models_y,phens, flags,
     if(!is.null(full_model)){
       #ypredObj$updateYP(self, phens, )#= self$looc$incl[,k2]
       nonNA =self$looc$incl[,self$nreps()]
-      ypred$updateYP(d, full_model, nonNA, inv_transform_x = inv_transform_x, flip=FALSE, liab=liab)
+      ypred$updateYP(d, full_model, nonNA, flip=FALSE, liab=liab)
       #res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)
       # print(res1);
       res1 [["full"]] =  ypred$predictions(nonNA, flip=FALSE)
@@ -1639,7 +1647,7 @@ extractPredictions=function(all_models_y,phens, flags,
         nonNA =self$looc$incl[,inds[[j]]]
         prev_i1 = all_models3[[j]]
         #   transf = c(transf,prev_i1$transf)
-        ypred$updateYP(d, prev_i1, nonNA,inv_transform_x=inv_transform_x, flip=TRUE)
+        ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
         #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
       }
       nonNA=self$getNonNAInds(inds)
@@ -1652,7 +1660,7 @@ extractPredictions=function(all_models_y,phens, flags,
         nonNA =self$looc$incl[,inds_full[[j]]]
         prev_i1 = all_models3_full[[j]]
         #   transf = c(transf,prev_i1$transf)
-        ypred$updateYP(d, prev_i1, nonNA,inv_transform_x=inv_transform_x, flip=TRUE)
+        ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
         #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
       }
       nonNA=self$getNonNAInds(inds_full)
@@ -1675,7 +1683,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
                            ypred = self$ypred(phens), #lapply(phens, function(phens1) self$ypred(phens1)),
                            verbose=FALSE
                          ){
-  inv_transform_x=FALSE
+
   d = self
   self$updateLOOC(phens,flags)
   liab = .readFlag(flags,"liab",TRUE)  ## whether to evaluate with liability , default is true
@@ -1712,7 +1720,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
               if(!is.null(full_model)){
                 #ypredObj$updateYP(self, phens, )#= self$looc$incl[,k2]
                 nonNA =self$looc$incl[,self$nreps()]
-                ypred$updateYP(d, full_model, nonNA, inv_transform_x = inv_transform_x, flip=FALSE, liab=liab)
+                ypred$updateYP(d, full_model, nonNA,  flip=FALSE, liab=liab)
                 res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)
                
                 beta = unlist(lapply(1:nrow(res1), function(ii){
@@ -1732,7 +1740,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
                   nonNA =self$looc$incl[,inds[[j]]]
                   prev_i1 = all_models3[[j]]
                #   transf = c(transf,prev_i1$transf)
-                  ypred$updateYP(d, prev_i1, nonNA,inv_transform_x=inv_transform_x, flip=TRUE)
+                  ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
                 nonNA=self$getNonNAInds(inds)
@@ -1745,7 +1753,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
                   nonNA =self$looc$incl[,inds_full[[j]]]
                   prev_i1 = all_models3_full[[j]]
                   #   transf = c(transf,prev_i1$transf)
-                  ypred$updateYP(d, prev_i1, nonNA,inv_transform_x=inv_transform_x, flip=TRUE)
+                  ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
                 nonNA=self$getNonNAInds(inds_full)
@@ -2199,21 +2207,7 @@ translate=function(prev1){
 
 
 
-updateYpredsAll=function( phensi, inverse_func_str,
-                          ypred = self$ypreds_all,
-                           prevsk = lapply(1:self$nreps(), function(k) self$train[[k]]$prev),
-                           nme = names(prevsk[[length(prevsk)]])
-                           ){ ##   means predict on samples trained on
-  stop("doesnt work")
-  transform_func = lapply(inverse_func_str, function(str1) eval(str2lang(str1)))  ## should be inverse
-  
-  for(k in 1:(self$nreps()-1)){
-     ind_1=     self$train[[k]]$nonNA
-     #d = self$train[[k]]
-     inv_func = transform_funct[[prevsk[[k]]$transf]]
-     self$updateYP(phensi,prevsk[[k]], ypred, ind_1, inv_func=inv_func, TRUE)  
-  }
-},
+
 
 reorder=function(o,k){
   self$train[[k]]$reorder(o)
