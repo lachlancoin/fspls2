@@ -67,6 +67,7 @@ trainObj<-R6::R6Class("trainObj",
                       looc_incl_k_ij = self$looc_incl[,k]
                       means_y = lapply(y1, function(y1_) lapply(funcst, function(fst) lapply(fst$params,function(f3) rep(0, ncol(y1_)))))
                       inds_to_do = which(names(self$y1) %in% names(phens1))
+                      if(length(inds_to_do)==0) stop("inds_to_do is empty")
                       #colk1=1; f_k = 1; g_k = 1; colk = inds_to_do[colk1]; j= which(dimnames(y1[[colk]])[[2]] %in% phens1[[colk1]])[1]
                       
                       for(colk1 in 1:length(inds_to_do)){
@@ -101,7 +102,12 @@ trainObj<-R6::R6Class("trainObj",
                                    self$yTr[[colk]][[f_k]][[g_k]][j,which(nonNA1)[!nonNA2]] =0
                                  }
                                  vars1 = apply(self$yTr[[colk]][[f_k]][[g_k]][j,,drop=FALSE],1,var, na.rm=TRUE)
-                                 if(min(vars1)==0) stop(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs)))
+                                 if(min(vars1)==0) {
+                                   if(min(apply(self$y1[[colk]][,j,drop=F],2,var,na.rm=T))>0){
+                                     warning(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs)))
+                                   }
+                                  # stop(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs)))
+                                 }
                                  }
                             
                         #    print(meansy)

@@ -1,7 +1,7 @@
 ##used to filter 
 data_keys = jsonlite::fromJSON(getOption("data_keys",'["bigmatrix", "all_v_all","merge","duplicate_ordinal","genes_incls"]'))
 
-expt_keys = jsonlite::fromJSON(getOption("expt_keys",'["project", "useoffset","useglmnet","pthresh","genes_incls","transform_y","batchsize","beam","nfold","stop_y","max","min","topn"]'))
+expt_keys = jsonlite::fromJSON(getOption("expt_keys",'["project", "useoffset","useglmnet","pthresh","genes_incls","transform_x","batchsize","beam","nfold","stop_y","max","min","topn"]'))
 
 
 .orderFlags<-function(flags, keys =c()){
@@ -215,8 +215,8 @@ sigEnv<-R6::R6Class("sigEnv", public = list(
       }
     }
   },
- #updateTransforms(transform_y){
-#   stop(" this not implemented until we split out the transform_y")
+ #updateTransforms(transform_x){
+#   stop(" this not implemented until we split out the transform_x")
 # },
  saveEval=function(eval2,flags,phens, user=self$user,replace=TRUE){
    expt_id = self$getExpt(flags, phens,user,add_new=TRUE)
@@ -354,14 +354,14 @@ aa
    if(replace && hasModel){
      dbExecute(self$mydb, 'DELETE FROM models where experiment_id =:expt_id',list(expt_id=expt_id))
    }
-   #transform_y=""
+   #transform_x=""
      all_models1 = all_models_$models
      combined=.merge_all(all_models1,c("beam","model_name","rep") , .modelToRow)|> tibble::add_column(experiment_id = expt_id)
       try(dbWriteTable(self$mydb, "models", combined,overwrite=!hasModel,append=hasModel))
    return(list(msg="success"))
  },
 #      vn =  dbGetQuery(self$mydb, 'SELECT * from data where user=:user AND flags=:flags AND names=:names AND types=:types AND dims=:dims',expt1)
-# expt= data.frame(list(user=user,  flags=toJSON1(data_flags), transform_y = toJSON1(transform_y),
+# expt= data.frame(list(user=user,  flags=toJSON1(data_flags), transform_x = toJSON1(transform_x),
 # names =toJSON1(data_names), types=toJSON1(data_types), dims = toJSON1(dims)))
 getDataID=function(flags,dims,  add_new=FALSE, select="data_id", user=self$user){
   flags = .orderFlags(flags, data_keys)
@@ -396,7 +396,7 @@ getDataID=function(flags,dims,  add_new=FALSE, select="data_id", user=self$user)
 },
  getExpt=function(flags=NULL,phens=NULL, user=self$user, select="experiment_id",
                   add_new =FALSE){  #check c
-   #transform_y = ""
+   #transform_x = ""
    if(!is.null(flags)){
      flags = .orderFlags(flags, expt_keys)
    }
@@ -456,8 +456,8 @@ getDataID=function(flags,dims,  add_new=FALSE, select="data_id", user=self$user)
     })
   },
  phens=function( user=self$user, flags =NULL){
-   transform_y1  = self$getExpt(flags=NULL, phens=phens,  user=user,add_new=FALSE, select="phens")
-   lapply(transform_y1, fromJSON)
+   transform_x1  = self$getExpt(flags=NULL, phens=phens,  user=user,add_new=FALSE, select="phens")
+   lapply(transform_x1, fromJSON)
  },
  
  flags=function( user=self$user, flags1 =NULL, phens = NULL){

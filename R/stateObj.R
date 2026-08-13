@@ -260,7 +260,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                          if(useglm){
                            constants_proj[[kk1]][kk_1] = tryCatch({
                              nonNAy = !is.na(y1c)
-                           ridge=glmnet(cbind(ones[nonNAy],yp1[nonNAy,kk_1]),y1c[nonNAy],family=family[[kk]], alpha = 0)
+                           ridge=glmnet(cbind(ones[nonNAy],yp1[nonNAy,kk_1]),y1c[nonNAy],family=family[[kk]], alpha = 0,lambda = getOption("lambda"))
                            rbeta <- coef(ridge,s=min(ridge$lambda))
                          if(verbose)  print(rbeta)
                        #    if(abs(rbeta[3,1]-1)>diff_thresh) stop("problem with weights")
@@ -282,7 +282,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                          warning("using glmnet to regularise ")
                           #ones = rep(1, length(yp1[,1]))
                           nonNAy = !is.na(y1c)
-                          ridge=glmnet(cbind(ones[nonNAy],yp1[nonNAy,kk_1]),y1c[nonNAy],family=family[[kk]], alpha = 0)
+                          ridge=glmnet(cbind(ones[nonNAy],yp1[nonNAy,kk_1]),y1c[nonNAy],family=family[[kk]], alpha = 0,lambda = getOption("lambda"))
                           rbeta <- coef(ridge,s=min(ridge$lambda))
                           if(verbose)   print(rbeta)
                           sum(rbeta[1:2,1])

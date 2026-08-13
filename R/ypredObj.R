@@ -554,7 +554,7 @@ ypredObj<-R6::R6Class("ypredObj", public = list(
 #  ypred$updateYP(data, prev, nonNA, !within)  
 #},
 ## use inv_transform on y  
-updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_y=TRUE,ignore.na=FALSE, liab=TRUE){
+updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_x=TRUE,ignore.na=FALSE, liab=TRUE){
   prev_i1=full_model
   ypred = self
   prev_kj = prev_i1 
@@ -564,11 +564,11 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_y=TRUE,ignore.na
   #kk1 = names(phensi)[[1]]
   inv_func = NULL
   len = length(prev_kj$var)
-  if(inv_transform_y && len>0){
+  if(inv_transform_x && len>0){
     t_i=prev_kj$var[[len]][[3]]
     inv_func =  d$transforms[[t_i]][[2]]
   }
- # transf = d$getTransforms(prev_kj$var, inv_transform = !inv_transform_y)
+ # transf = d$getTransforms(prev_kj$var, inv_transform = !inv_transform_x)
   for(kk1 in names(phensi)){ #} 1:length( ypred$ypreds)){
    # print(kk1)
     kk = phensi[[kk1]]
@@ -582,7 +582,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_y=TRUE,ignore.na
     # if(family=="multinomial") levs1=dimnames(self$y[[kk1]])[[2]]
     #  if(family=="ordinal")levs1 = min(self$y[[kk1]][,kk], na.rm=TRUE):max(self$y[[kk1]][,kk],na.rm=TRUE) 
     if(!is.null(inv_func)) stop("this should be null")
-    self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, inv_func,family=family, liab=liab, x_transform = !inv_transform_y)
+    self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, inv_func,family=family, liab=liab, x_transform = !inv_transform_x)
    
   }
   #   names(ypred$ypreds) = names(self$y)
@@ -596,16 +596,21 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, inv_transform_y=TRUE,ignore.na
                      family = self$family[[kk]],liab=TRUE,x_transform =FALSE){  ## kk1 in model space 
     transforms = d$getTransforms(prev_kj$var,inv_transform = x_transform )
     x_ = d$extractData(prev_kj$var, adjust=FALSE)
-  #  print(paste("WALL", kk1))
-  #  print( prev_kj$Wall)
-    ab=.eval1_(x_[ind_1,,drop=FALSE], prev_kj$betas_proj[[kk1]], prev_kj$Wall[[kk1]], transforms, family)## mean_x = prev_kj$mean_x)
-    ab = as.matrix(ab)
+    if(length(prev_kj$var)==0){
+      ab =matrix(0, nrow = length(which(ind_1)) ,ncol = ncol( prev_kj$betas_proj[[kk1]]))
+    }else{
+        x_trans=.eval1_(x_[ind_1,,drop=FALSE], prev_kj$Wall[[kk1]], transforms, family)
+          #print(x_trans)
+      #    print(dim(x_trans));
+      #    print(prev_kj$betas_proj[[kk1]])
+          ab = x_trans %*% prev_kj$betas_proj[[kk1]] ## mean_x = prev_kj$mean_x)
+          ab = as.matrix(ab)
+    }
     constants = prev_kj$constants_proj[[kk1]]
    # transforms = if(is.null(inv_func)) d$transforms else NULL
     #      ypred$ypreds[[kk]]$calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, self$family[[kk]])
     if(family=="multinomial"){
-      
-      levs = names(prev_kj$tbls[[kk1]][kk])
+        levs = names(prev_kj$tbls[[kk1]][kk])
       if(is.null(dim(ab)) ) ab = matrix(1, ncol=length(levs), nrow = length(which(ind_1)))
       dimnames(ab)[[2]] = levs
       if(max(abs(ab))==0) ab =ab+1

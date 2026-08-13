@@ -20,54 +20,59 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(fspls2)
+  #devtools::load_all("~/github/fspls2/R")
 
 ##set the types
   options("fspls.types"= jsonlite::fromJSON('{"gaussian":["correlation","rms"],"binomial":["AUC"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
 
   ## set the y_transforms to explore  
-  transform_y=getYTransform(pow = 1,    ## transformations raise to the powers indicated here.  Default is 1 but can add others
-                            n_random=10  ## number of random transformations, also used in stopping critera
+  transform_x=getTransform(pow = 1,    ## transformations raise to the powers indicated here.  Default is 1 but can add others
+                            n_random=5,perm=FALSE ## number of random transformations, also used in stopping critera
                             )
   ## set the flags
   flags = list(min=0,  #minimum number of variables
-               max=200, # maximum number of variables,  
-               nfold=1,## number of folds.  10 fold implies a 10 non-overlapping 10% splits
+               max=20, # maximum number of variables,  
+               nfold=10,## number of folds.  10 fold implies a 10 non-overlapping 10% splits
                batchsize=0, ##batchsize can be specified alternatively to nfold, but only one can be nonzero
                angles_only=FALSE, ## whether to use purely angles to find best variables (RECOMMENDED FALSE)
                topn=20,  ## if using model fit to rank variables, how many top angles to take  (larger takes more time)
                beam=1, ## how many best combinations to take through to next round of iteration. minimum value is 1, but higher explores more combinations
                all_v_all=FALSE,  ## for multi-class outcomes, this builds all vs all classifier, instead of a one vs all
                project=TRUE,   ## whether to use the projection approach in model building (TRUE recommended)
-            useglmnet=TRUE,  ##whether to useglmnet for model fitting (after variables selected) (TRUE recommoneded)
-                        verbose=FALSE,
+            useglmnet=FALSE,  ##whether to useglmnet for model fitting (after variables selected) doesnt work well for randomisation.  Note that useglmnet is TRUE by default for multinomial
+                        verbose=TRUE,
+            lambda = NULL, ## for using glmnet
+              show_warnings=FALSE,
+            get_plots=FALSE,  ## get plots of pvalues over iterations
             direction="none" ## can be + , - or none
     )
-  check_flags(flags)  ## runs som simple checks
 
+  check_flags(flags)  ## runs som simple checks
+   options(flags)  ## set the flags as options
+  
 ```
 
 ```{r example}
   examples = c("binomial", "gaussian", "ordinal", "multinomial");
- example="gaussian"
+# example="gaussian"
   
-testIterative<-function(example, prop_na=0.2, seed=42){
-
+##iterative function carries out imputation of uncertain y values at the same time as feature selection
+testIterative<-function(example){
+  prop_na=0.2; seed=42
      fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
-    # if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
-    
     dataset = readRDS(fi); 
     if(example=="binomial") dataset$y$y = factor(dataset$y$y, labels=c("A","B"))
     dataset$certainty = rep(1, nrow(dataset$y));
     set.seed(seed)
-    na_inds=sort(sample.int(nrow(dataset$y),nrow(dataset$y)*prop_na))
-  dataset$certainty[na_inds]=0.8;##1/length(levels(dataset$y[[1]]))
+    na_inds1=sort(sample.int(nrow(dataset$y),nrow(dataset$y)*prop_na))
+  dataset$certainty[na_inds1]=0.5;##1/length(levels(dataset$y[[1]]))
   #dataset$y[na_inds,] = NA
   
-  flags$mult = 500
+  flags$mult = 100
   flags$select_each_iteration = TRUE;
-  results = fspls.iterative(dataset, flags, transform_y)
+  results = fspls.iterative(dataset, flags, transform_x)
   print(results$updates)
-  na_remaining= length(which(results$certainty_new<0.8))
+  na_remaining= length(which(results$certainty_new<0.95))
   message(paste("na remaining", na_remaining))  
   message(paste("error rate",results$error_rate))
   print(results$vars_all[[1]]$variables)
@@ -76,22 +81,25 @@ testIterative<-function(example, prop_na=0.2, seed=42){
 
 
   #FUNCTION TO SHOW HOW TO RUN EACH EXAMPLE
-  runExample<-function(example){
+  runExample<-function(example,nfold=10){
+   flags$nfold = nfold
     fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
     if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
-
     dataset = readRDS(fi)
-   
-    ## set up the objects
+       ## set up the objects
     dh = dataH$new(dataset$dataset, y = dataset$y, 
-                   nme=example, flags=flags, transform_y = transform_y, dbDir=NULL)
+                   nme=example, flags=flags, transform_x = transform_x, dbDir=NULL)
   
     ##Step 1. run variable selection 
    
-   #     datasH = list(dh)
-   #         analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
-   # vars_all = analysis$select(datas,  flags, transform_y, phens = dh$pheno()$all)
-    vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
+    #    datasH = list(dh)
+    #      
+    #vars_all = analysis$select(datasH,  flags, transform_x, phens = dh$pheno()$all)
+  
+      analysis =analysisEnv$new(flags=flags, dbDir=NULL)
+    vars_all = dh$select(flags, transform_x, analysis=analysis)
+  
+    #vars_all1 = fspls.select(list(dh),  flags, transform_x, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
     all_models =dh$makeAllModels(vars_all,useDB=F)
     
@@ -99,9 +107,9 @@ testIterative<-function(example, prop_na=0.2, seed=42){
     
     #Step 3. evaluate the models
     eval1= dh$evaluateAllModels(all_models, useDB=F)
-    ## Now visuaise the results
+    ## Now visuaise the resultsy
     ggps1=plotEval(eval1,legend=T, grid1=c("subpheno","pheno"), grid0=c("measure","cv_full"),linetype="data", ##"full_model"
-                   shape_color=c("data","transf"),sep_by=c("beam"), showranges=T,text="variable",logy=F,
+                   shape_color=c("data","transf"),sep_by=c("beam"), showranges=T,text="variable",logy=example=="gaussian",
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   
     ##optionally get all predictions
@@ -112,22 +120,29 @@ testIterative<-function(example, prop_na=0.2, seed=42){
 ```
 Example 1
 ```{r, eval = FALSE}
-runExample("binomial")
+ggp=runExample("binomial", nfold=10);
+ggp
 ```
 Example 2
 ```{r, eval = FALSE}
 
-  runExample(examples[2])
+  ggps1 = runExample("gaussian", nfold=5)
+print(ggps1)
 ```
 Example 3
 ```{r, eval = FALSE }
-  runExample(examples[3])
+ggp =   runExample("ordinal", nfold=5)
 ```
 Example 4
 ```{r, eval = FALSE}
-  runExample(examples[4])
+  runExample("multinomial", nfold=5)
 ```
 ```{r, eval = FALSE}
 ## test Iterative works on binomial and multinomial
-testIterative("binomial", prop_na=0.2, seed=42)
+testIterative("binomial")
+```
+
+```{r, eval = FALSE}
+## test Iterative works on binomial and multinomial
+testIterative("multinomial")
 ```

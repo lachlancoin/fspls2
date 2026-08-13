@@ -91,11 +91,11 @@ is.big.matrix<-function(mat){
 }
 
 ###used strictly for debugging
-#.self<-function(dh){
-#  assign("self", dh, envir = .GlobalEnv) 
-#  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) 
-#  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
-#}
+.self<-function(dh){
+  assign("self", dh, envir = .GlobalEnv) 
+  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) 
+  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
+}
 
 ## this from sce single cell format
 .convertSCEToSparse<-function(sce){
@@ -467,8 +467,8 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
   ggplot(ab_all, aes(x=xx, y=y_1, color=func))+geom_line();# +scale_y_log10()
 }
 .checkInverse<-function(t_y1,pow = t_y1[[3]],  xx = -10:10 ){
-#  func0 = lapply(transform_y, function(t_y) eval(str2lang(t_y[[1]])))  ## should be inverse
-  #func1 = lapply(transform_y, function(t_y) eval(str2lang(t_y[[2]])))  ## should be inverse
+#  func0 = lapply(transform_x, function(t_y) eval(str2lang(t_y[[1]])))  ## should be inverse
+  #func1 = lapply(transform_x, function(t_y) eval(str2lang(t_y[[2]])))  ## should be inverse
   llm=lapply(pow,function(pow1){
          y_1 = t_y1[[1]](xx,pow1)
   y_2 = t_y1[[2]](y_1,pow1)
@@ -487,7 +487,7 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
  # print("ok")
 }
 
-#' Get object for transforming the y variables
+#' Get object for transforming the x variables
 #'
 #' @param pows power to raise to
 #' @param offset offset to subtract 
@@ -497,7 +497,7 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
 #' @param CHECK check whether inverse function works
 #' @return transformation object
 #' @export
-getYTransform<-function(pows = c(1),offset=0,  n_random=1,perm=FALSE, norm=1,CHECK=FALSE){
+getTransform<-function(pows = c(1),offset=0,  n_random=1,perm=FALSE, norm=1,CHECK=FALSE){
   if(n_random <1) warning(" recommended to have at least one random permutation");
   if(!( 1 %in% pows)) warning("recommended to have a pow of 1, which is the untransformed y ")
   funcs = list()
@@ -1713,54 +1713,6 @@ summariseAreaPlot<-function(df){
 
 
 
-.convert<-function(data,mode="rna", nme="none",expand=FALSE, max=100, factor=FALSE){
-  names(data) =gsub("x_data","data",tolower(names(data)))
-  if(is.list(data$y)){
-    data$y = as.matrix(data$y)
-    if(nrow(data$y)!=nrow(data$data)) stop("!!")
-    dimnames(data$y)[[1]] = dimnames(data$data)[[1]]
-  }
-  if(!is.matrix(data$y)) {
-    data$y =  data.frame(matrix(data$y, dimnames = list(dimnames(data$data)[[1]],"y")))
-    if(is.character(data$y[1,1])){
-      if(expand){
-        data$y = .makeMultiClass(data$y)
-        
-      }else{
-        data$y[[1]] = factor(data$y[[1]])
-      }
-    }
-  }
-  
-  if(is.null(dimnames(data$y))) dimnames(data$y) = list(dimnames(data$data)[[1]], "y")
-  if(factor){
-    data$y=data.frame(lapply(data.frame(data$y), function(z) factor(paste("X",z,sep=""))))
-  }
-  if(max < nrow(data$y)){
-    inds = sample.int(nrow(data$y),max)
-    data$y = data$y[inds,,drop=FALSE]
-    data$data = data$data[inds,,drop=FALSE]
-  }
-  
-  dataset = list(data$data);
-  names(dataset)=mode
-  y = data$y
-  list(dataset=dataset,y=y,nme=nme)
-}
-
-######from rawlinson paper
-## get data from this repo https://github.com/dn-ra/FSPLS-publication-repo via git clone
-.readRawlinsonData<-function(filenames,path){
-  if(is.null(names(filenames))) names(filenames)=lapply(filenames, function(f)rev(strsplit(f,"/")[[1]])[1])
-  
-  #files = grep(".Rds",dir(path,f=TRUE,recursive=TRUERUE),value=TRUE)
-  datas=lapply(filenames, function(file){
-    data_in = readRDS(paste(path,file,sep="/"))
-    .convert(data=data_in, mode="rna", expand=FALSE)
-  })
-  datasets = lapply(datas, function(d) list(dataset=d$dataset, y = d$y))
-  datasets
-}
 
 .getFinalModel<-function(all_models, pheno_groups=names(all_models[[1]]),target_size=NULL){
   names(pheno_groups) = pheno_groups

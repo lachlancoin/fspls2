@@ -1,5 +1,55 @@
 
 
+
+
+plot_traj<-function(comb_plot, y="value"  ,facet="data~maxsig", keep_best=10, txtsize=5, step=2){ #y="cumulative";
+  if(!is.null(comb_plot$nrep)){
+    if(length(unique(comb_plot$nrep))>1) stop(" need to subset on nrep first")
+  }
+  comb_plot$maxsig = gsub("\n",";", comb_plot$maxsig)
+  maxl = min(comb_plot[[y]])
+  
+  maxsigl1 = unlist(lapply(comb_plot$maxsig, function(x) paste(sort(strsplit(x,";")[[1]]), collapse=";")))
+  maxsigl1_u = sort(table(maxsigl1), decreasing=TRUE)
+  conv = lapply(names(maxsigl1_u), function(x){
+    names(sort(table(comb_plot$maxsig[which(maxsigl1==x)]),decreasing=TRUE))[1]
+  })
+  names(conv) = names(maxsigl1_u)
+  maxsig = unlist(lapply(maxsigl1, function(x) conv[x]))
+  comb_plot$maxsig = maxsig
+  maxsigl = sort(table(maxsig),decreasing=TRUE)
+  
+  if(length(maxsigl1_u)>keep_best){
+    
+    ms1   = factor(maxsig, names(maxsigl)[maxsigl>=maxsigl1_u[keep_best]])
+    comb_plot1 =comb_plot[!is.na(ms1),,drop=FALSE]
+  }else{
+    comb_plot1 = comb_plot
+  }
+  ms1 = unique(comb_plot$maxsig); names(ms1) = ms1
+  levs = sort(unlist(lapply(ms1, function(ms){
+    inds1 = comb_plot$maxsig==ms
+    min(comb_plot$cumulative[inds1])
+  })),decreasing=FALSE)
+  labels = unlist(lapply(names(levs), function(lev){
+    maxs = strsplit(lev,";")[[1]];
+    paste(unlist(lapply(seq.int(1, length(maxs), by=step), function(st){
+      
+      mi = min(length(maxs), st+step)
+      paste(maxs[st:mi], collapse=";")
+    })), collapse="\n")
+  }))
+  
+  comb_plot1$maxsig = factor(comb_plot1$maxsig, levels = names(levs), labels=labels)
+  comb_plot1[[y]] = -1*comb_plot1[[y]]
+  ggp=ggplot(comb_plot1, aes_string("nvar" ,y, color="maxsig"))+geom_point()+geom_line(alpha=.1)+facet_grid(facet)
+  ggp=ggp+guides(color = "none")+theme(
+    strip.text = element_text(size = txtsize, face = "bold", color = "black")
+  )+geom_hline(yintercept = -1*maxl)+scale_y_log10()
+  ggp
+}
+
+
 ## expands to replace proportion with NA
 expandData<-function(dataset, mult = 100 
 ){
@@ -33,28 +83,37 @@ expandData<-function(dataset, mult = 100
 #' main function for variable selection with unknown values
 #' @param dataset a list with y and data value
 #' @param flags list of options
-#' @param transform_y transformation object 
+#' @param transform_x transformation object 
 #' @param phens list of phenotypes
 #' @param dbDir y_orig the original y (for testing only)
-fspls.iterative<-function(dataset,flags, transform_y  ){
+fspls.iterative<-function(dataset,flags, transform_x ){
+  options(flags);
   if(is.null(dataset$y) || length(dataset$dataset)==0 || is.null(dataset$certainty)) stop(" dataset not well defined")
   if(!is.factor(dataset$y[[1]])) stop("y should be a factor")
   flags$nfold=1; flags$verbose=F;
   mult = .readFlag(flags, "mult",100)
   dh = dataH$new(dataset$dataset, y = dataset$y, 
                  certainty = dataset$certainty,
-                 nme="iterative", flags=flags, transform_y = transform_y, dbDir=NULL)
+                 nme="iterative", flags=flags, transform_x = transform_x, dbDir=NULL)
  vars_all = NULL; all_models = NULL; preds1 = NULL;
  updates = list();
  select_each_iteration = .readFlag(flags, "select_each_iteration",TRUE);
+ datasH = list(dh);
  k=0
+ phens = dh$pheno()$all
+ analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
   repeat  {
-    if(k==0 || select_each_iteration) vars_all = fspls.select(list(dh),  flags, transform_y, phens = dh$pheno()$all)
+    if(k==0 || select_each_iteration) {
+            
+          vars_all = analysis$select(datasH,  flags, transform_x, phens = phens)
+      
+              #vars_all = fspls.select(datasH,  flags, transform_x, phens = dh$pheno()$all)
+    }
     k = k+1
    all_models =dh$makeAllModels(vars_all,useDB=FALSE)
    updated =  dh$updateWeights(all_models)
-  
-   updates[[k]] = updated
+     updates[[k]] = updated
+   print(paste("sumdiff",k,abs(updated$sumdiff)))
   if(abs(updated$sumdiff)<=1e-5 && k>2) {
         message("breaking since probs ordered not improving")
         break;
@@ -79,33 +138,34 @@ extractFullVars<-function(vars_all){
     list(variables = vars_all1$variables[subinds], inds = vars_all1$inds[subinds], cumpv = vars_all1$cumpv[subinds],
          transf = vars_all1$transf[subinds],
          flags = vars_all1$flags,
-         phens=vars_all1$phens, transform_y = vars_all1$transform_y)
+         phens=vars_all1$phens, transform_x = vars_all1$transform_x)
   })
 }
 
 #' main function for variable selection
 #' @param datasH a list of dataH objects
 #' @param flags list of options
-#' @param transform_y transformation object 
+#' @param transform_x transformation object 
 #' @param phens list of phenotypes
 #' @param dbDir database dir, can be NULL
 #' @export
 fspls.select<-function(datasH, flags,
-                transform_y, 
+                transform_x, 
                 phens=datasH[[1]]$pheno()$all,
                 dbDir = NULL
                ){#c(y="function(y) y","function(y) y")
+  options(flags);
   analysis =analysisEnv$new(flags=flags, dbDir=dbDir) ;
   analysis$updateExpt(phens, flags)
   #phens1 = phens
   mc.cores = .readFlag(flags, "mc.cores",1)
-  flags$transform_y = toJSON(transform_y);
+  flags$transform_x = toJSON(transform_x);
   verbose=.readFlag(flags,'verbose',FALSE);
   if(flags$topn<flags$beam) stop("beam should be less than topn")
   if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(datasH[[1]]$data_types())
   
   nreps_all = lapply(datasH, function(dh){
-    dh$update(phens, flags, transform_y);
+    dh$update(phens, flags, transform_x);
   })
   nreps = nreps_all[[1]]
   
@@ -176,7 +236,7 @@ fspls.select<-function(datasH, flags,
 .extractFullModels<-function(all_models, full_model_only=FALSE){
   subinds = which(unlist(lapply(all_models$models, function(x) length(grep('full', names(x)))))>0)
   models1 = all_models$models[subinds]
-  res1 =list(flags = all_models$flags, phens=all_models$phens, transform_y = all_models$transform_y)
+  res1 =list(flags = all_models$flags, phens=all_models$phens, transform_x = all_models$transform_x)
   if(!full_model_only) {
     res1$models = models1
   }else{
@@ -229,11 +289,11 @@ analysisEnv<-R6::R6Class("analysisEnv",
                         data_types = names(datasH[[1]]$data$data),
                         dims   = lapply(datasH, function(data) data$dims())
     ){
-      private$transform_y= private$sigs$updateData(data_flags = private$flags, 
+      private$transform_x= private$sigs$updateData(data_flags = private$flags, 
                                                    data_names =data_names, 
                                                    data_types = data_types,
                                                    dims = dims,
-                                                   transform_y = private$transform_y)
+                                                   transform_x = private$transform_x)
     },
     nextVars=function(flags, phens, vars_l_todo,  k1,
                                           logpvthresh,beam,  comb2_news = NULL,stop_y="rand", verbose=FALSE){
@@ -286,9 +346,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
         gp=grep(stop_y, names(logpvs), inv=TRUE)
         
       
-        stop_random =  min(logpvs[gp1]) < min(logpvs[gp]) 
+        stop_random =  min(logpvs[gp1], na.rm=TRUE) < min(logpvs[gp], na.rm=TRUE) 
        # stop_random1= min(angles_[gp1]) < min(angles_[gp])
-        stop_random2= min(logpvs_all[gp1]) < min(logpvs_all[gp])
+        stop_random2= min(logpvs_all[gp1], na.rm=TRUE) < min(logpvs_all[gp], na.rm=TRUE)
         
 
         # stop_random= min(gp1)<=min(gp)
@@ -364,6 +424,19 @@ analysisEnv<-R6::R6Class("analysisEnv",
     super$initialize("combined",flags=flags, dbDir=dbDir);
        
   },
+  #' gets the trajectory
+  #' @param datasH a list of dataH objects after variable selection
+  plot_trajectory=function(datasH){
+    
+    traj = lapply(datasH, function(dh){
+      dh$get_trajectory();
+    })
+    names(traj)=    unlist(lapply(datasH, function(dh) dh$name()))
+    comb_plot=.merge1_new(traj, addName="data")
+    #plot_traj(comb_plot)
+    plot_traj(comb_plot, y="cumulative",keep_best = 5,txtsize=8,step=10,facet="data~maxsig")
+  
+    },
   
   #' selection for a single fold
   #' @param datasH a list of dataH objects
@@ -476,20 +549,25 @@ analysisEnv<-R6::R6Class("analysisEnv",
   #' @param flags list of options
   #' @param phens phenotypes
   #' @param vars_l_todo vars_l_todo
-  #' @param comb2 results
+  #' @param comb2_new results
   #' @param data_nme name of dataset
   #' @param k1 which repetition
   #' @return object outlining what is left to do
 
- savePvalsAndNextVars=function(flags,phens, vars_l_todo,comb2,data_nme, k1){
+ savePvalsAndNextVars=function(flags,phens, vars_l_todo,comb2_new,data_nme, k1){
    beam=.readFlag(flags,'beam',1);
    stop_y=.readFlag(flags,"stop_y","rand")
    verbose=.readFlag(flags,"verbose",FALSE);
    logpvthresh = log(.readFlag(flags,'pthresh',0.05));
    angles_only = .readFlag(flags,'angles_only',FALSE);
+   useDB = !is.null(private$sigs)
    if(angles_only) logpvthresh =0;
-      private$savePvals(flags,phens,k1, data_nme, vars_l_todo$vars_l,comb2)
-    private$nextVars(flags,phens, vars_l_todo,  k1,logpvthresh,beam, stop_y = stop_y, verbose=verbose)
+    if(useDB)  private$savePvals(flags,phens,k1, data_nme, vars_l_todo$vars_l,comb2_new)
+   vars_l_todo_new= private$nextVars(flags,phens, vars_l_todo,  k1,logpvthresh,beam, 
+                                     comb2_news=if(useDB) NULL else comb2_new, 
+                                     stop_y = stop_y, verbose=verbose)
+   vars_l_todo_new
+   # private$nextVars(flags,phens, vars_l_todo,  k1,logpvthresh,beam, stop_y = stop_y, verbose=verbose)
  },
  
  
@@ -497,23 +575,23 @@ analysisEnv<-R6::R6Class("analysisEnv",
  #' @param datasH a list of dataH objects
  #' @param phens list of phenotypes
  #' @param flags list of options
- #' @param transform_y transformation object 
+ #' @param transform_x transformation object 
  #' @param useDB boolean to indicate if results should be saved to database
  select=function(datasH, flags,
-                 transform_y, 
+                 transform_x, 
                  phens=datasH[[1]]$pheno()$all,
                  useDB=FALSE){#c(y="function(y) y","function(y) y")
    phens1 = phens
    super$updateExpt( phens1, flags)
    #mc.cores = .readFlag(flags, "mc.cores",1)
    ##if(mc.cores>1 && )
-   flags$transform_y = toJSON(transform_y);
+   flags$transform_x = toJSON(transform_x);
    verbose=.readFlag(flags,'verbose',FALSE);
    if(flags$topn<flags$beam) stop("beam should be less than topn")
    if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(datasH[[1]]$data_types())
    
    nreps_all = lapply(datasH, function(dh){
-     dh$update(phens1, flags, transform_y);
+     dh$update(phens1, flags, transform_x);
    })
    nreps = nreps_all[[1]]
    
@@ -522,8 +600,6 @@ analysisEnv<-R6::R6Class("analysisEnv",
      if(!is.null(vars_all)) return(vars_all)
   
    vars_l_todo = self$getTodo(flags, phens1)
-
-   
    variables1 <- lapply(nreps, function(k1) {  ## can use mclapply here
       vars_l_todo =   self$select_k(datasH, phens1, flags, k1,  vars_l_todo)
       vars_l_todo$vars_l 
