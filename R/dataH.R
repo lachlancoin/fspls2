@@ -1382,12 +1382,11 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
   eval4 = eval3 |> tibble::add_column(variable= unlist(lapply(eval3$model, function(x){
     if(x=="cv" || x=="") return("");
     x1 =rev(strsplit(x,";")[[1]])[1]
-    
-    x2 = strsplit(x1,"\\.")[[1]]
-    x2[min(length(x2), 2)]
+    x1
   })))
   eval4$variable[is.na(eval4$variable)]=""
-  eval4
+  eval5 = eval4 |> tidyr::separate("variable", sep="\\.", into=c("type","variable","func","param"),remove=TRUE)
+  eval5
 }
     
 )
