@@ -238,6 +238,8 @@ ggp3+ggtitle(paste("fold=",k1))
       t1 = .merge1_new(lapply(top_angles, function(ta){
         data.frame(list(names = names(ta), value=ta))
       }),addName="data_type")
+      if(is.null(t1)) return(t1)
+      
       t1 = t1[order(t1$value),]
       signature=if(prev_signature=="") t1$names else paste(prev_signature, t1$names, sep=";")
       
