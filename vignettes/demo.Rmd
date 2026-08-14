@@ -20,7 +20,7 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(fspls2)
-  #devtools::load_all("~/github/fspls2/R")
+
 
 ##set the types
   options("fspls.types"= jsonlite::fromJSON('{"gaussian":["correlation","rms"],"binomial":["AUC"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
@@ -40,7 +40,7 @@ library(fspls2)
                all_v_all=FALSE,  ## for multi-class outcomes, this builds all vs all classifier, instead of a one vs all
                project=TRUE,   ## whether to use the projection approach in model building (TRUE recommended)
             useglmnet=FALSE,  ##whether to useglmnet for model fitting (after variables selected) doesnt work well for randomisation.  Note that useglmnet is TRUE by default for multinomial
-                        verbose=TRUE,
+                        verbose=FALSE,
             lambda = NULL, ## for using glmnet
               show_warnings=FALSE,
             get_plots=FALSE,  ## get plots of pvalues over iterations
@@ -96,10 +96,10 @@ testIterative<-function(example){
     #      
     #vars_all = analysis$select(datasH,  flags, transform_x, phens = dh$pheno()$all)
   
-      analysis =analysisEnv$new(flags=flags, dbDir=NULL)
-    vars_all = dh$select(flags, transform_x, analysis=analysis)
+    #  analysis =analysisEnv$new(flags=flags, dbDir=NULL)
+    #vars_all = dh$select(flags, transform_x, analysis=analysis)
   
-    #vars_all1 = fspls.select(list(dh),  flags, transform_x, phens = dh$pheno()$all)
+    vars_all = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
     all_models =dh$makeAllModels(vars_all,useDB=F)
     
@@ -120,23 +120,26 @@ testIterative<-function(example){
 ```
 Example 1
 ```{r, eval = FALSE}
-ggp=runExample("binomial", nfold=10);
-ggp
+ggp1=runExample("binomial", nfold=5);
+ggp1
 ```
 Example 2
 ```{r, eval = FALSE}
 
-  ggps1 = runExample("gaussian", nfold=5)
-print(ggps1)
+  ggp2 = runExample("gaussian", nfold=5)
+ ggp2
 ```
 Example 3
 ```{r, eval = FALSE }
-ggp =   runExample("ordinal", nfold=5)
+ggp3 =   runExample("ordinal", nfold=5)
+ggp3
 ```
 Example 4
 ```{r, eval = FALSE}
-  runExample("multinomial", nfold=5)
+ ggp4= runExample("multinomial", nfold=5)
+ggp4
 ```
+Iteratively replacing uncertain values
 ```{r, eval = FALSE}
 ## test Iterative works on binomial and multinomial
 testIterative("binomial")

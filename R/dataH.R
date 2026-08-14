@@ -257,7 +257,7 @@ ggp3+ggtitle(paste("fold=",k1))
    
      sv = sparse_variance(m1$matrix)
      na_cnt = colSums(m1$matrixNA)/nrow(m1$matrixNA)
-     m2 = lapply(m1, function(m11) m11[,!is.na(sv) & sv>min_variance & na_cnt<=max_na_proportion, drop=F])
+     m2 = lapply(m1, function(m11) m11[,!is.na(sv) & sv>min_variance & na_cnt<=max_na_proportion, drop=FALSE])
   m2
   })
   
@@ -1075,7 +1075,7 @@ plotData=function(vars_all, phens = vars_all$phens, all_types=FALSE, transform_x
   gene_levs = unlist(lapply(unlist(vars_all1$variables,recursive=FALSE), function(x) x[[2]]))
   gene_levs = gene_levs[!duplicated(gene_levs)]
   df4$gene = factor(df4$gene, levels = gene_levs)
-  df5=df4|> separate(col="pheno",sep="\\.", into=c("family","pheno1"))
+  df5=df4|> separate(col="pheno",sep="\\.", into=c("family","pheno1"),fill="right",extra="drop")
   df6=subset(df5, family=="gaussian")
   df7=(subset(df5, family!="gaussian"))
   # color= if(length(unique(df4$dataset))>1) "dataset" else #"pheno"

@@ -103,7 +103,7 @@ trainObj<-R6::R6Class("trainObj",
                                  }
                                  vars1 = apply(self$yTr[[colk]][[f_k]][[g_k]][j,,drop=FALSE],1,var, na.rm=TRUE)
                                  if(min(vars1)==0) {
-                                   if(min(apply(self$y1[[colk]][,j,drop=F],2,var,na.rm=T))>0){
+                                   if(min(apply(self$y1[[colk]][,j,drop=FALSE],2,var,na.rm=TRUE))>0){
                                      warning(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs)))
                                    }
                                   # stop(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs)))

@@ -91,11 +91,11 @@ is.big.matrix<-function(mat){
 }
 
 ###used strictly for debugging
-.self<-function(dh){
-  assign("self", dh, envir = .GlobalEnv) 
-  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) 
-  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
-}
+#.self<-function(dh){
+#  assign("self", dh, envir = .GlobalEnv) 
+#  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) 
+#  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
+#}
 
 ## this from sce single cell format
 .convertSCEToSparse<-function(sce){

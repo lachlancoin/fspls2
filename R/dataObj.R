@@ -200,11 +200,16 @@ multinom_ridge<-function(x,y,w,lambda=getOption("lambda")){
   }))
   rownames(res) = rownames(y)
   m1 = Matrix(as.matrix(res),sparse=TRUE)
+
+  attr(m1,"factor")= data.frame( lapply(data.frame(y), function(y1){
+    if(!is.factor(y1)) y1 = factor(y1, levels = sort(unique(y1)))
+    y1
+  }));
+  m1;
 }
 
 .expandFactors<-function(y, max_cats=50){
   res = lapply(1:ncol(y), function(i){
-  #  print(i)
     y1 = y[,i]
     if(!is.factor(y1)) y1 = factor(y1, levels = sort(unique(y1)))
     levs1 = levels(y1)
@@ -993,7 +998,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
   #}
  # 
    x_trans  =  .eval1_(x_,  Wall2, transf, family)
-   x_trans_prev  =  .eval1_(x_[,-ncol(x_),drop=F],  Wall1, transf[-ncol(x_)], family)
+   x_trans_prev  =  .eval1_(x_[,-ncol(x_),drop=FALSE],  Wall1, transf[-ncol(x_)], family)
    
 #x_trans=  t(t(x_trans) -apply(x_trans,2,mean)  )
 #   sum(abs(transf1$func(x1_, transf1$param[1])-x_trans[,ncol(x_trans)] - ( mean(x1_[,1]) - mean(x_trans[,ncol(x_trans)]))))
@@ -1032,7 +1037,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
     if(family=="multinomial"){
        ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
-      #mean_x = apply(x,2, mean,na.rm=T)
+      #mean_x = apply(x,2, mean,na.rm=TRUE)
       #x = t(t(x) - mean_x)
       #print(apply(x,2,mean)) 
       rdf=multinom_ridge(x,y,w)

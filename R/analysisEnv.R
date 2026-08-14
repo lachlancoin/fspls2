@@ -84,13 +84,11 @@ expandData<-function(dataset, mult = 100
 #' @param dataset a list with y and data value
 #' @param flags list of options
 #' @param transform_x transformation object 
-#' @param phens list of phenotypes
-#' @param dbDir y_orig the original y (for testing only)
 fspls.iterative<-function(dataset,flags, transform_x ){
   options(flags);
   if(is.null(dataset$y) || length(dataset$dataset)==0 || is.null(dataset$certainty)) stop(" dataset not well defined")
   if(!is.factor(dataset$y[[1]])) stop("y should be a factor")
-  flags$nfold=1; flags$verbose=F;
+  flags$nfold=1; flags$verbose=FALSE;
   mult = .readFlag(flags, "mult",100)
   dh = dataH$new(dataset$dataset, y = dataset$y, 
                  certainty = dataset$certainty,
@@ -113,7 +111,7 @@ fspls.iterative<-function(dataset,flags, transform_x ){
    all_models =dh$makeAllModels(vars_all,useDB=FALSE)
    updated =  dh$updateWeights(all_models)
      updates[[k]] = updated
-   print(paste("sumdiff",k,abs(updated$sumdiff)))
+   message(paste("sumdiff",k,abs(updated$sumdiff)))
   if(abs(updated$sumdiff)<=1e-5 && k>2) {
         message("breaking since probs ordered not improving")
         break;

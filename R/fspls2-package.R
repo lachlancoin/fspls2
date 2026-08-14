@@ -14,6 +14,7 @@
 #' @importFrom confintr ci_cor ci_var
 #' @importFrom pROC ci roc
 #' @importFrom MASS polr
+#' @importFrom data.table fread
 #' @importFrom DBI dbConnect dbDisconnect dbWriteTable dbReadTable dbListTables dbGetQuery
 #' @importFrom RSQLite SQLite SQLITE_RWC
 #' @importFrom R6 R6Class
