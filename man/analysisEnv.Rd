@@ -4,7 +4,7 @@
 \alias{analysisEnv}
 \title{Analysis  Class}
 \description{
-A class that encapsulates analysis of one or more datasets
+A class that encapsulates analysis of one or more datasets. Only expert users wlil need access to this
 }
 \details{
 Available methods:
@@ -13,6 +13,7 @@ Available methods:
   \item \code{name()} - Get dataset name
   \item \code{clone()} - Clone the object
 }
+ @export
 }
 \section{Super class}{
 \code{\link[fspls2:analysisBase]{analysisBase}} -> \code{analysisEnv}
@@ -21,6 +22,8 @@ Available methods:
 \subsection{Public methods}{
   \itemize{
     \item \href{#method-analysisEnv-initialize}{\code{analysisEnv$new()}}
+    \item \href{#method-analysisEnv-plot_trajectory}{\code{analysisEnv$plot_trajectory()}}
+    \item \href{#method-analysisEnv-select_k}{\code{analysisEnv$select_k()}}
     \item \href{#method-analysisEnv-getTodo}{\code{analysisEnv$getTodo()}}
     \item \href{#method-analysisEnv-clear_db}{\code{analysisEnv$clear_db()}}
     \item \href{#method-analysisEnv-savePvalsAndNextVars}{\code{analysisEnv$savePvalsAndNextVars()}}
@@ -30,7 +33,10 @@ Available methods:
 }
 \if{html}{\out{<details open><summary>Inherited methods</summary>
 <ul>
+  <li><span class="pkg-link" data-pkg="fspls2" data-topic="analysisBase" data-id="loadVars"><a href='../../fspls2/html/analysisBase.html#method-analysisBase-loadVars'><code>analysisBase$loadVars()</code></a></span></li>
   <li><span class="pkg-link" data-pkg="fspls2" data-topic="analysisBase" data-id="name"><a href='../../fspls2/html/analysisBase.html#method-analysisBase-name'><code>analysisBase$name()</code></a></span></li>
+  <li><span class="pkg-link" data-pkg="fspls2" data-topic="analysisBase" data-id="saveVars"><a href='../../fspls2/html/analysisBase.html#method-analysisBase-saveVars'><code>analysisBase$saveVars()</code></a></span></li>
+  <li><span class="pkg-link" data-pkg="fspls2" data-topic="analysisBase" data-id="updateExpt"><a href='../../fspls2/html/analysisBase.html#method-analysisBase-updateExpt'><code>analysisBase$updateExpt()</code></a></span></li>
 </ul>
 </details>}}
 \if{html}{\out{<hr>}}
@@ -48,9 +54,54 @@ Available methods:
     \describe{
       \item{\code{flags}}{a list object specifying options}
       \item{\code{dbDir}}{location for database to be written. If NULL then no DB 
-Get todo}
+gets the trajectory}
     }
     \if{html}{\out{</div>}}
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-analysisEnv-plot_trajectory"></a>}}
+\if{latex}{\out{\hypertarget{method-analysisEnv-plot_trajectory}{}}}
+\subsection{\code{analysisEnv$plot_trajectory()}}{
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{analysisEnv$plot_trajectory(datasH)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{datasH}}{a list of dataH objects after variable selection
+selection for a single fold}
+    }
+    \if{html}{\out{</div>}}
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-analysisEnv-select_k"></a>}}
+\if{latex}{\out{\hypertarget{method-analysisEnv-select_k}{}}}
+\subsection{\code{analysisEnv$select_k()}}{
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{analysisEnv$select_k(datasH, phens, flags, k1, vars_l_todo)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{datasH}}{a list of dataH objects}
+      \item{\code{phens}}{list of phenotypes}
+      \item{\code{flags}}{list of options}
+      \item{\code{k1}}{the fold}
+      \item{\code{vars_l_todo}}{an object representing what is left to do}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    vars_l_todo object
+Get todo
   }
 }
 
@@ -83,7 +134,7 @@ Clear the databases.  Only necessary if using a database and re-running analyses
 \subsection{\code{analysisEnv$clear_db()}}{
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{analysisEnv$clear_db(drop = F, exclude = "vars", datasH = NULL)}
+    \preformatted{analysisEnv$clear_db(drop = FALSE, exclude = "vars", datasH = NULL)}
     \if{html}{\out{</div>}}
   }
   \subsection{Arguments}{
@@ -108,7 +159,7 @@ Get the next vars in iteration.  Internal function}
   flags,
   phens,
   vars_l_todo,
-  comb2,
+  comb2_new,
   data_nme,
   k1
 )}
@@ -120,7 +171,7 @@ Get the next vars in iteration.  Internal function}
       \item{\code{flags}}{list of options}
       \item{\code{phens}}{phenotypes}
       \item{\code{vars_l_todo}}{vars_l_todo}
-      \item{\code{comb2}}{results}
+      \item{\code{comb2_new}}{results}
       \item{\code{data_nme}}{name of dataset}
       \item{\code{k1}}{which repetition}
     }
@@ -141,9 +192,9 @@ main function for variable selection
     \preformatted{analysisEnv$select(
   datasH,
   flags,
-  transform_y,
+  transform_x,
   phens = datasH[[1]]$pheno()$all,
-  useDB = F
+  useDB = FALSE
 )}
     \if{html}{\out{</div>}}
   }
@@ -152,7 +203,7 @@ main function for variable selection
     \describe{
       \item{\code{datasH}}{a list of dataH objects}
       \item{\code{flags}}{list of options}
-      \item{\code{transform_y}}{transformation object}
+      \item{\code{transform_x}}{transformation object}
       \item{\code{phens}}{list of phenotypes}
       \item{\code{useDB}}{boolean to indicate if results should be saved to database}
     }

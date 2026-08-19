@@ -497,6 +497,8 @@ get_data_flags=function( user=self$user, nmes = self$data_names, types = self$da
  },
  saveVars = function(vars_all,
                        user=self$user, replace=TRUE){
+   
+   ###NEED TO UPDATE THIS AND ALSO LOAD VARS
    tbls = self$tbls()
    hasVars = "vars" %in% tbls
    flags=vars_all[[1]]$flags;

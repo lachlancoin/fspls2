@@ -9,11 +9,14 @@ Authors@R: c(person(given = "Lachlan",
                       role = c("aut", "cre"),
                       email = "l.coin@imb.uq.edu.au")
         )
-Imports: R6, jsonlite, Matrix, glmnet, tidyr, MASS, ggplot2, pROC, binom, confintr, DBI, RSQLite, methods,tibble, ggrepel, RColorBrewer, parallel
+Imports: R6, jsonlite, Matrix, glmnet, tidyr, MASS, ggplot2, pROC, binom, confintr, DBI, RSQLite, methods,tibble, ggrepel, RColorBrewer, data.table
 Depends:
     R (>= 4.1.0)
 Maintainer: Lachlan Coin <l.coin@imb.uq.edu.au>
-Description: Identifies minimal gene signatures from multiomic data.  Based on methods described in  Rawlinson et al. (2025) <doi:10.1371/journal.pdig.0000780>.
+Description: Identifies minimal biomarker signatures for predicting phenotypes from multiomic data. 
+              Integrates multiple omics layers, supports internal cross-validation. Supports missing values in predictors and outcomes. 
+              Enables model based imputation of uncertain values. 
+              Supports continuous, binary, multi-class and ordinal outcomes.
 License: GPL-2
 LazyLoad: yes
 NeedsCompilation: no

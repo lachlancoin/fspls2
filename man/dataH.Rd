@@ -23,6 +23,7 @@ Available methods:
     \item \href{#method-dataH-initialize}{\code{dataH$new()}}
     \item \href{#method-dataH-multiAnglesAndPv}{\code{dataH$multiAnglesAndPv()}}
     \item \href{#method-dataH-clear_db}{\code{dataH$clear_db()}}
+    \item \href{#method-dataH-get_trajectory}{\code{dataH$get_trajectory()}}
     \item \href{#method-dataH-data_types}{\code{dataH$data_types()}}
     \item \href{#method-dataH-split}{\code{dataH$split()}}
     \item \href{#method-dataH-pheno}{\code{dataH$pheno()}}
@@ -30,8 +31,12 @@ Available methods:
     \item \href{#method-dataH-nreps}{\code{dataH$nreps()}}
     \item \href{#method-dataH-update}{\code{dataH$update()}}
     \item \href{#method-dataH-select}{\code{dataH$select()}}
+    \item \href{#method-dataH-y}{\code{dataH$y()}}
+    \item \href{#method-dataH-plotPredictions}{\code{dataH$plotPredictions()}}
     \item \href{#method-dataH-extractPredictions}{\code{dataH$extractPredictions()}}
     \item \href{#method-dataH-plotData}{\code{dataH$plotData()}}
+    \item \href{#method-dataH-updateWeights}{\code{dataH$updateWeights()}}
+    \item \href{#method-dataH-getYNew}{\code{dataH$getYNew()}}
     \item \href{#method-dataH-getProjectedData}{\code{dataH$getProjectedData()}}
     \item \href{#method-dataH-getVariance}{\code{dataH$getVariance()}}
     \item \href{#method-dataH-makeAllModels}{\code{dataH$makeAllModels()}}
@@ -41,7 +46,10 @@ Available methods:
 }
 \if{html}{\out{<details open><summary>Inherited methods</summary>
 <ul>
+  <li><span class="pkg-link" data-pkg="fspls2" data-topic="analysisBase" data-id="loadVars"><a href='../../fspls2/html/analysisBase.html#method-analysisBase-loadVars'><code>analysisBase$loadVars()</code></a></span></li>
   <li><span class="pkg-link" data-pkg="fspls2" data-topic="analysisBase" data-id="name"><a href='../../fspls2/html/analysisBase.html#method-analysisBase-name'><code>analysisBase$name()</code></a></span></li>
+  <li><span class="pkg-link" data-pkg="fspls2" data-topic="analysisBase" data-id="saveVars"><a href='../../fspls2/html/analysisBase.html#method-analysisBase-saveVars'><code>analysisBase$saveVars()</code></a></span></li>
+  <li><span class="pkg-link" data-pkg="fspls2" data-topic="analysisBase" data-id="updateExpt"><a href='../../fspls2/html/analysisBase.html#method-analysisBase-updateExpt'><code>analysisBase$updateExpt()</code></a></span></li>
 </ul>
 </details>}}
 \if{html}{\out{<hr>}}
@@ -54,9 +62,10 @@ Available methods:
     \preformatted{dataH$new(
   data,
   y,
+  certainty = rep(1, nrow(y)),
   nme,
   flags,
-  transform_y = getYTransform(pow = 1, n_random = 1, perm = F),
+  transform_x = getTransform(pow = 1, n_random = 1, perm = FALSE),
   family = getFamily(y),
   dbDir = tempdir()
 )}
@@ -67,9 +76,10 @@ Available methods:
     \describe{
       \item{\code{data}}{a list of matrices (of different modalities), with columns as variables and rows as samples}
       \item{\code{y}}{phenotype matrix, with columns as outcomes and rows as samples}
+      \item{\code{certainty}}{the certainty of each observation, expressed as a probability of being correct. Default is to treat each observation as certain}
       \item{\code{nme}}{The name of the data objetct.}
       \item{\code{flags}}{list of options, described in the vignette}
-      \item{\code{transform_y}}{a transformation object from the function getYTransformation}
+      \item{\code{transform_x}}{a transformation object from the function getTransformation}
       \item{\code{family}}{the statistical family of phenotype y, can be calculated by getFamily}
       \item{\code{dbDir}}{dir for database to store results to speed up re-reruns.  Can be NULL, if not required}
     }
@@ -115,10 +125,25 @@ clear database. This is only used if you want to clear the database.  Internal f
     \if{html}{\out{<div class="arguments">}}
     \describe{
       \item{\code{drop}}{drop the tables instead of clear}
-      \item{\code{exclude}}{which tables not to clear
-get the data types}
+      \item{\code{exclude}}{which tables not to clear}
     }
     \if{html}{\out{</div>}}
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-dataH-get_trajectory"></a>}}
+\if{latex}{\out{\hypertarget{method-dataH-get_trajectory}{}}}
+\subsection{\code{dataH$get_trajectory()}}{
+  returns data on trajectory
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{dataH$get_trajectory()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    a dataframe with information to plot trajectory
+get the data types
   }
 }
 
@@ -210,7 +235,7 @@ get the nreps
   update the phenotypes without remaking the entire object. You can provide many phenotypes in the initialisation stage, but only consider a subset in model fitting stage in this way.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{dataH$update(phens, flags, transform_y = fromJSON(flags$transform_y))}
+    \preformatted{dataH$update(phens, flags, transform_x = fromJSON(flags$transform_x))}
     \if{html}{\out{</div>}}
   }
   \subsection{Arguments}{
@@ -218,7 +243,7 @@ get the nreps
     \describe{
       \item{\code{phens}}{phenotypes}
       \item{\code{flags}}{list of options}
-      \item{\code{transform_y}}{transformation object}
+      \item{\code{transform_x}}{transformation object}
     }
     \if{html}{\out{</div>}}
   }
@@ -231,19 +256,79 @@ get the nreps
   main function for variable selection
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{dataH$select(analysis, phens, flags, transform_y, useDB = F)}
+    \preformatted{dataH$select(
+  flags,
+  transform_x,
+  analysis = analysisEnv$new(flags = flags, dbDir = NULL),
+  phens = self$pheno()$all,
+  useDB = FALSE
+)}
     \if{html}{\out{</div>}}
   }
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
+      \item{\code{flags}}{list of options}
+      \item{\code{transform_x}}{transformation object}
       \item{\code{analysis}}{an analysisEnv object}
       \item{\code{phens}}{list of phenotyps}
-      \item{\code{flags}}{list of options}
-      \item{\code{transform_y}}{transformation object}
       \item{\code{useDB}}{boolean to indicate if results should be saved to database}
     }
     \if{html}{\out{</div>}}
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-dataH-y"></a>}}
+\if{latex}{\out{\hypertarget{method-dataH-y}{}}}
+\subsection{\code{dataH$y()}}{
+  provides access to internal storage of phenotype data
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{dataH$y(phens = self$pheno()[[1]])}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{phens}}{list of phenotypes}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    list of matrices
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-dataH-plotPredictions"></a>}}
+\if{latex}{\out{\hypertarget{method-dataH-plotPredictions}{}}}
+\subsection{\code{dataH$plotPredictions()}}{
+  ggplot to visualise predictions
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{dataH$plotPredictions(
+  all_modelsh,
+  phens = all_modelsh$phens,
+  flags = all_modelsh$flags,
+  transform_x = jsonlite::fromJSON(flags$transform_x),
+  liab = TRUE
+)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{all_modelsh}}{fitted models from makeAllModels}
+      \item{\code{phens}}{list of phenotyps}
+      \item{\code{flags}}{list of options}
+      \item{\code{transform_x}}{transformation object}
+      \item{\code{liab}}{return liability score, or probability (for binomial, ordinal multinomial)}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    a ggplot
   }
 }
 
@@ -258,8 +343,8 @@ get the nreps
   all_modelsh,
   phens = all_modelsh$phens,
   flags = all_modelsh$flags,
-  CV = FALSE,
-  liab = T
+  transform_x = jsonlite::fromJSON(flags$transform_x),
+  liab = TRUE
 )}
     \if{html}{\out{</div>}}
   }
@@ -269,7 +354,7 @@ get the nreps
       \item{\code{all_modelsh}}{fitted models from makeAllModels}
       \item{\code{phens}}{list of phenotyps}
       \item{\code{flags}}{list of options}
-      \item{\code{CV}}{cross validation predictions}
+      \item{\code{transform_x}}{transformation object}
       \item{\code{liab}}{return liability score, or probability (for binomial, ordinal multinomial)}
     }
     \if{html}{\out{</div>}}
@@ -292,7 +377,7 @@ get the nreps
   all_types = FALSE,
   transform_x = NULL,
   violin = FALSE,
-  assoc = F
+  assoc = FALSE
 )}
     \if{html}{\out{</div>}}
   }
@@ -310,6 +395,43 @@ get the nreps
   }
   \subsection{Returns}{
     a table with results
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-dataH-updateWeights"></a>}}
+\if{latex}{\out{\hypertarget{method-dataH-updateWeights}{}}}
+\subsection{\code{dataH$updateWeights()}}{
+  update the weights based on predictions from the model
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{dataH$updateWeights(all_models)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{all_models}}{the output of dataH function getAllModels}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    list of auc beta and updated sumdiff of weights used as stopping criteria
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-dataH-getYNew"></a>}}
+\if{latex}{\out{\hypertarget{method-dataH-getYNew}{}}}
+\subsection{\code{dataH$getYNew()}}{
+  return updated y after iterative imputation
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{dataH$getYNew()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    updated y, updated certainty and indices which were updated
   }
 }
 
@@ -368,8 +490,8 @@ get the nreps
   vars_all,
   phens = vars_all[[1]]$phens,
   flags = vars_all[[1]]$flags,
-  transform_y = fromJSON(flags$transform_y),
-  useDB = F
+  transform_x = fromJSON(flags$transform_x),
+  useDB = FALSE
 )}
     \if{html}{\out{</div>}}
   }
@@ -379,7 +501,7 @@ get the nreps
       \item{\code{vars_all}}{list of variables selected by select method}
       \item{\code{phens}}{list of phenotypes}
       \item{\code{flags}}{flags}
-      \item{\code{transform_y}}{an object to determine the y transformaton}
+      \item{\code{transform_x}}{an object to determine the y transformaton}
       \item{\code{useDB}}{whether to use the DB to save the reuslt}
     }
     \if{html}{\out{</div>}}
@@ -400,7 +522,8 @@ get the nreps
   all_modelsh,
   phens = all_modelsh$phens,
   flags = all_modelsh$flags,
-  useDB = F
+  transform_x = fromJSON(flags$transform_x),
+  useDB = FALSE
 )}
     \if{html}{\out{</div>}}
   }
@@ -410,6 +533,7 @@ get the nreps
       \item{\code{all_modelsh}}{models fitted from makeAllModels}
       \item{\code{phens}}{list of phenotypes}
       \item{\code{flags}}{flags}
+      \item{\code{transform_x}}{transformation object}
       \item{\code{useDB}}{whether to save results to DB}
     }
     \if{html}{\out{</div>}}

@@ -1,7 +1,7 @@
 Package: fspls2
 Type: Package
 Title: A Package to Find Minimal Transcriptional Signatures
-Version: 0.1
+Version: 0.1.0
 Date: 2026-06-25
 Author: Lachlan Coin [aut, cre]
 Authors@R: c(person(given = "Lachlan",
@@ -12,8 +12,9 @@ Authors@R: c(person(given = "Lachlan",
 Imports: R6, jsonlite, Matrix, glmnet, tidyr, MASS, ggplot2, pROC,
         binom, confintr, DBI, RSQLite, methods,tibble, ggrepel,
         RColorBrewer, parallel
+Depends: R (>= 4.1.0)
 Maintainer: Lachlan Coin <l.coin@imb.uq.edu.au>
-Description: Identifies minimal gene signatures from multiomic data.
+Description: Identifies minimal gene signatures from multiomic data.  Based on methods described in  Rawlinson et al. (2025) <doi:10.1371/journal.pdig.0000780>.
 License: GPL-2
 LazyLoad: yes
 NeedsCompilation: no
@@ -22,6 +23,6 @@ Packaged: 2026-06-25 12:36:27 UTC; lcoin
 Date/Publication: 2026-06-25 13:50:02 UTC
 Config/roxygen2/version: 8.0.0
 Encoding: UTF-8
-Suggests: knitr, rmarkdown
+Suggests: knitr, rmarkdown, testthat
 VignetteBuilder: knitr
-Built: R 4.6.1; ; 2026-07-02 21:29:08 UTC; unix
+Built: R 4.6.1; ; 2026-07-03 12:21:47 UTC; unix

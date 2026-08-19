@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.3.16)  2 JUL 2026 22:29
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.3.16)  3 JUL 2026 13:22
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -319,12 +319,12 @@ Package hyperref Info: Link coloring ON on input line 8.
 \@outlinefile=\write4
 \openout4 = `Rd2.out'.
 
-LaTeX Font Info:    Trying to load font information for T1+zi4 on input line 26.
+LaTeX Font Info:    Trying to load font information for T1+zi4 on input line 27.
  (/home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/tex/latex/inconsolata/t1zi4.fd
 File: t1zi4.fd 2018/01/14 T1/zi4 (Inconsolata)
 )
 LaTeX Font Info:    Font shape `T1/zi4/m/n' will be
-(Font)              scaled to size 10.0pt on input line 26.
+(Font)              scaled to size 10.0pt on input line 27.
  (./Rd2.toc
 LaTeX Font Info:    Trying to load font information for U+msa on input line 1.
  (/home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/tex/latex/amsfonts/umsa.fd
@@ -333,40 +333,40 @@ File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 LaTeX Font Info:    Trying to load font information for U+msb on input line 1.
  (/home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
-))
+) [1
+
+
+{/home/unimelb.edu.au/lcoin/.TinyTeX/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/fonts/enc/dvips/base/8r.enc}{/home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/fonts/enc/dvips/inconsolata/i4-t1-0.enc}])
 \tf@toc=\write5
 \openout5 = `Rd2.toc'.
 
- [1
-
-
-{/home/unimelb.edu.au/lcoin/.TinyTeX/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/fonts/enc/dvips/base/8r.enc}{/home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/fonts/enc/dvips/inconsolata/i4-t1-0.enc}]
 LaTeX Font Info:    Trying to load font information for TS1+ptm on input line 50.
  (/home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/tex/latex/psnfss/ts1ptm.fd
 File: ts1ptm.fd 2001/06/04 font definitions for TS1/ptm.
-) [2] [3] [4] [5] [6] [7] [8] [9] [10] [11]
-No file Rd2.ind.
-[12] (./Rd2.aux)
+) [2] [3] [4] [5] [6] [7] [8] [9] [10] [11] [12] (./Rd2.ind [13] [14
+
+
+]) (./Rd2.aux)
  ***********
 LaTeX2e <2025-11-01>
 L3 programming layer <2026-01-19>
  ***********
 Package rerunfilecheck Info: File `Rd2.out' has not changed.
-(rerunfilecheck)             Checksum: CD036F8EF98A76209F27B9BD905D1359;701.
+(rerunfilecheck)             Checksum: A03D75CDA8D4009B4AFE4CB10EB1EDB3;767.
  ) 
 Here is how much of TeX's memory you used:
- 10350 strings out of 469515
- 157269 string characters out of 5469773
- 565799 words of memory out of 5000000
- 38767 multiletter control sequences out of 15000+600000
- 658034 words of font info for 77 fonts, out of 8000000 for 9000
+ 10366 strings out of 469515
+ 157496 string characters out of 5469773
+ 565792 words of memory out of 5000000
+ 38773 multiletter control sequences out of 15000+600000
+ 659141 words of font info for 78 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 92i,5n,95p,253b,813s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 92i,5n,95p,271b,932s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/fonts/type1/public/inconsolata/Inconsolata-zi4r.pfb></home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></home/unimelb.edu.au/lcoin/.TinyTeX/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on Rd2.pdf (12 pages, 95608 bytes).
+Output written on Rd2.pdf (14 pages, 98564 bytes).
 PDF statistics:
- 228 PDF objects out of 1000 (max. 8388607)
- 201 compressed objects within 3 object streams
- 79 named destinations out of 1000 (max. 500000)
- 57 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 256 PDF objects out of 1000 (max. 8388607)
+ 227 compressed objects within 3 object streams
+ 85 named destinations out of 1000 (max. 500000)
+ 65 words of extra memory for PDF output out of 10000 (max. 10000000)
 

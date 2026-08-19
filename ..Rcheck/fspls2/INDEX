@@ -1,7 +1,7 @@
-analysisBase            analysisBase
-analysisEnv             analysisEnv
+analysisBase            Analysis Base Class
+analysisEnv             Analysis Class
 check_flags             Plot the results from evaluateAll
-dataH                   dataH
+dataH                   Data holder class
 getFamily               Infer the statistical families of the
                         phenotypes
 getYTransform           Get object for transforming the y variables

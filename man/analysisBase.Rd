@@ -19,6 +19,9 @@ Available methods:
   \itemize{
     \item \href{#method-analysisBase-initialize}{\code{analysisBase$new()}}
     \item \href{#method-analysisBase-name}{\code{analysisBase$name()}}
+    \item \href{#method-analysisBase-saveVars}{\code{analysisBase$saveVars()}}
+    \item \href{#method-analysisBase-loadVars}{\code{analysisBase$loadVars()}}
+    \item \href{#method-analysisBase-updateExpt}{\code{analysisBase$updateExpt()}}
     \item \href{#method-analysisBase-clone}{\code{analysisBase$clone()}}
   }
 }
@@ -56,6 +59,67 @@ Available methods:
   }
   \subsection{Returns}{
     assigned name of dataset
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-analysisBase-saveVars"></a>}}
+\if{latex}{\out{\hypertarget{method-analysisBase-saveVars}{}}}
+\subsection{\code{analysisBase$saveVars()}}{
+  save vars to database
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{analysisBase$saveVars(vars_combined)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{vars_combined}}{object from select function}
+    }
+    \if{html}{\out{</div>}}
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-analysisBase-loadVars"></a>}}
+\if{latex}{\out{\hypertarget{method-analysisBase-loadVars}{}}}
+\subsection{\code{analysisBase$loadVars()}}{
+  load vars from database
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{analysisBase$loadVars(phens)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{phens}}{a list of phenotypes}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    vars object
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-analysisBase-updateExpt"></a>}}
+\if{latex}{\out{\hypertarget{method-analysisBase-updateExpt}{}}}
+\subsection{\code{analysisBase$updateExpt()}}{
+  updates the phenotypes
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{analysisBase$updateExpt(phens, flags)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{phens}}{the list of phenotypes}
+      \item{\code{flags}}{options}
+    }
+    \if{html}{\out{</div>}}
   }
 }
 

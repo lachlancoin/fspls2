@@ -21,7 +21,7 @@ knitr::opts_chunk$set(
 ```{r setup}
 library(fspls2)
 
-
+#devtools::load_all( "~/github/fspls2/R")
 ##set the types
   options("fspls.types"= jsonlite::fromJSON('{"gaussian":["correlation","rms"],"binomial":["AUC"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
 
@@ -32,7 +32,7 @@ library(fspls2)
   ## set the flags
   flags = list(min=0,  #minimum number of variables
                max=20, # maximum number of variables,  
-               nfold=10,## number of folds.  10 fold implies a 10 non-overlapping 10% splits
+               nfold=5,## number of folds.  10 fold implies a 10 non-overlapping 10% splits
                batchsize=0, ##batchsize can be specified alternatively to nfold, but only one can be nonzero
                angles_only=FALSE, ## whether to use purely angles to find best variables (RECOMMENDED FALSE)
                topn=20,  ## if using model fit to rank variables, how many top angles to take  (larger takes more time)
@@ -40,16 +40,15 @@ library(fspls2)
                all_v_all=FALSE,  ## for multi-class outcomes, this builds all vs all classifier, instead of a one vs all
                project=TRUE,   ## whether to use the projection approach in model building (TRUE recommended)
             useglmnet=FALSE,  ##whether to useglmnet for model fitting (after variables selected) doesnt work well for randomisation.  Note that useglmnet is TRUE by default for multinomial
-                        verbose=FALSE,
+                        verbose=TRUE,
             lambda = NULL, ## for using glmnet
               show_warnings=FALSE,
-            get_plots=FALSE,  ## get plots of pvalues over iterations
+            show_pvalue_plots=FALSE,  ## get plots of pvalues over iterations
             direction="none" ## can be + , - or none
     )
 
   check_flags(flags)  ## runs som simple checks
-   options(flags)  ## set the flags as options
-  
+
 ```
 
 ```{r example}
@@ -96,12 +95,13 @@ testIterative<-function(example){
     #      
     #vars_all = analysis$select(datasH,  flags, transform_x, phens = dh$pheno()$all)
   
-    #  analysis =analysisEnv$new(flags=flags, dbDir=NULL)
-    #vars_all = dh$select(flags, transform_x, analysis=analysis)
+      analysis =analysisEnv$new(flags=flags, dbDir=NULL)
+      dh$update(phens = dh$pheno()$all, flags = flags, transform_x = transform_x)
+    variables = dh$select( analysis=analysis)
   
-    vars_all = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
+   # vars_all = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
-    all_models =dh$makeAllModels(vars_all,useDB=F)
+    all_models =dh$makeAllModels(variables)
     
     #optionally get predictions
     

@@ -207,7 +207,8 @@ ggp3+ggtitle(paste("fold=",k1))
   ang_extracted
 }
 
-.combineAngles1<-function(angleH, incl, flags,sumAngle, prev_signature, excl=list()){ 
+.combineAngles1<-function(angleH, incl, sumAngle, prev_signature, excl=list()){ 
+  flags = private$flags;
   topn = .readFlag(flags,'topn', 20)
   onlyAll = .readFlag(flags,'only_all',FALSE)
   angles1=angleH$angles;cols_incl1=angleH$cols_incl 
@@ -432,18 +433,12 @@ dataH<-R6::R6Class("dataH",
                    inherit = analysisBase,
  private = list(
    data ="environment",
-  # sigsdir="character",
-  # sigs="environment",
-  #nme="character",
-   type="character",  
+    type="character",  
   plot_results="list",
    flags="list",
   levs="list",
    data_id="character",
-   #transform_x="character",
-   #var_t = "list",
-   
-   dbDir="character",
+    dbDir="character",
   na_inds = "list",  ## these are for imputing uncertain values
   alt_inds = "list",
   mult="numeric",
@@ -476,7 +471,8 @@ dataH<-R6::R6Class("dataH",
     })
     rocs
   },
-   makeModels=function(vars2, inds, phens,flags){
+   makeModels=function(vars2, inds){
+     phens = private$phens; flags = private$flags
      checkRMSV = .readFlag(flags,"checkRMSV",FALSE)
      d = private$data
      logpthresh= log(.readFlag(flags,"pthresh",1e-3))
@@ -517,11 +513,15 @@ dataH<-R6::R6Class("dataH",
      #  print(names(models2))
      models2
    },
-   select_k=function(analysis,phens,flags, k1,
-                     vars_l_todo ,
-                     verbose=FALSE){
+   select_k=function(analysis, k1,
+                     vars_l_todo 
+                   ){
+     verbose=getOption("verbose",FALSE)
+     if(is.null(private$phens)){
+       stop("run  dh$update(phens, flags, transform_x) before running select")
+     }
      expt_id = super$expt_id();
-     get_plots=.readFlag(flags, "get_plots",FALSE) 
+     show_pvalue_plots=.readFlag(flags, "show_pvalue_plots",FALSE) 
      stop_y = .readFlag(flags, 'stop_y',"rand")
      logpvthresh = log(.readFlag(flags,"pthresh",0.1))
      beam= .readFlag(flags,"beam",1)
@@ -530,7 +530,7 @@ dataH<-R6::R6Class("dataH",
      # vars_l = analysis$nextVars(expt_id, flags)
      nvar=0;
      while(length(vars_l_todo$todo1)>0 ){
-       comb2_new1 = try(self$multiAnglesAndPv(comb20 , phens, k1,flags,expt_id, vars_l_todo))
+       comb2_new1 = try(self$multiAnglesAndPv(comb20 , k1,expt_id, vars_l_todo))
        if(inherits(comb2_new1,"try-error")) break;
         comb21 =  lapply(comb2_new1, function(x) x$pvs)
         if(length(unlist(comb21))==0){
@@ -538,13 +538,14 @@ dataH<-R6::R6Class("dataH",
           if(length(vars_l_todo$todo1)==0) vars_l_todo$stop=TRUE;
           next;
         }
-         private$savePvals(flags,phens,k1, dh$name(), vars_l_todo$vars_l,comb21)# no need to save here, just keep
+##         private$savePvals(flags,phens,k1, dh$name(), vars_l_todo$vars_l,comb21)# no need to save here, just keep
+         private$savePvals(k1, dh$name(), vars_l_todo$vars_l,comb21)# no need to save here, just keep
          #try(self$multiAnglesAndPv(comb2, phens, k1,flags,expt_id, vars_l_todo))
       
        data_nme=self$name();
 #       comb2_news1 = list(comb21); names(comb2_news1) = self$name()
        comb2_new = list(comb21);
-       vars_l_todo_new=analysis$savePvalsAndNextVars(flags,phens,vars_l_todo,comb2_new,data_nme,  k1)
+       vars_l_todo_new=analysis$savePvalsAndNextVars(vars_l_todo,comb2_new,data_nme,  k1)
       
        if(length(vars_l_todo$todo1)==length(vars_l_todo_new$todo1)){ ## to account for continuing via shortening todo rather than adding variable
          comb20 = comb21
@@ -556,19 +557,20 @@ dataH<-R6::R6Class("dataH",
        
       
      }
-     #attr(vars_l_todo,"plots")=get_comb_plot(plot_results, nvar)
-     
-     vars_l_todo
+          
+     vars_l_todo$vars_l
    },
    var_thresh = function(qq_t){
      lapply(private$data$vars, function(v) quantile(v, qq_t))
    },
  
-   updateTrain=function( phens, flags, transform_x,  verbose=FALSE, force=FALSE){
-     private$data$updateTrain( phens,flags,transform_x, verbose=verbose, force=force)
+   updateTrain=function(  verbose=FALSE, force=FALSE){
+    
+    
+     private$data$updateTrain( private$phens,private$flags,private$transform_x, verbose=verbose, force=force)
    },
-   updateLOOC=function( phens, flags,varn=c(),verbose=FALSE, force=FALSE){
-     private$data$updateLOOC( phens,flags,varn=varn,force=force, verbose=verbose); ### update training object - updates all
+   updateLOOC=function( varn=c(),verbose=FALSE, force=FALSE){
+     private$data$updateLOOC( private$phens,private$flags,varn=varn,force=force, verbose=verbose); ### update training object - updates all
    },
    findPrev=function(comb20, expt_id, prev_i, k){
      if(is.null(private$sigs)){
@@ -593,7 +595,9 @@ dataH<-R6::R6Class("dataH",
      }
      return(prev_i2);
    },
-   res_inner=function(comb_,prev_i2, flags,k, expt_id, phens){
+   res_inner=function(comb_,prev_i2, k, expt_id){
+     phens = private$phens;
+     flags = private$flags;
      
      nme_comb = names(comb_); names(nme_comb) = nme_comb
      #nme_c1 = nme_comb[[2]]; nme_p1 = names(comb_[[nme_c1]])[[3]]; ik=1
@@ -621,7 +625,7 @@ dataH<-R6::R6Class("dataH",
              nv$sumAngle = sum(nv$angles);
              
            }else{
-             nv= private$getPvsAll(phens,prev_i2, b_i_name,k,  prev_i$Wall,flags, angle=angle)
+             nv= private$getPvsAll(prev_i2, b_i_name,k,  prev_i2$Wall, angle=angle)
              if(is.na(nv$sumPv)) stop(paste(b_i_name, sep=","))
             }
            names(nv$var_names) = nv$varnames;
@@ -652,8 +656,10 @@ dataH<-R6::R6Class("dataH",
      ri_out
    },
    
-   combinedAngles=function(phens, varnames, incl, k, g_incl, qq_t, flags, sumAngle, addPlot=FALSE){ #phens, varnames, incl=incl, k=k, type=type
+   combinedAngles=function( varnames, incl, k, g_incl, qq_t, sumAngle, addPlot=FALSE){ #phens, varnames, incl=incl, k=k, type=type
       type=private$type
+      phens = private$phens;
+      flags = private$flags; 
      prev_signature =paste(unlist(lapply(varnames, function(vn)vn[2])),collapse=";")
      var_t = private$var_thresh(qq_t)
      if(length(which(names(private$data$data) %in% incl))==0) stop("incl does not match data")
@@ -661,17 +667,17 @@ dataH<-R6::R6Class("dataH",
      angles =angles[ unlist(lapply(angles, length))>0]
      angleH=list(angles=angles,
                  cols_incl = private$data$cols_incl(var_t,incl, g_incl,excl=varnames)) ### fix 
-     comb_angle1 =  .combineAngles1(angleH, incl, flags, sumAngle, prev_signature, excl=varnames)
+     comb_angle1 =  .combineAngles1(angleH, incl,  sumAngle, prev_signature, excl=varnames)
      if(addPlot){
        all_angles = .extrAngles(angleH,comb_angle1, incl)
         attr(comb_angle1,"all")=all_angles;
      }
      comb_angle1
    },
-   getPvsAll=function(phens, prev_i2, b_i_name,k, #   prev_i = vars_l1[[nmed]]
+   getPvsAll=function( prev_i2, b_i_name,k, #   prev_i = vars_l1[[nmed]]
                       Wall, # =lapply(subphens, function(f) matrix(nrow=0,ncol=0)),
-                      flags, angle=0){
-   
+                      angle=0){
+   flags = private$flags; phens = private$phens;
      project=.readFlag(flags,"project",TRUE)
      useoffset=.readFlag(flags,"useoffset",TRUE)
      useglm = .readFlag(flags,'useglmnet',TRUE)
@@ -719,7 +725,7 @@ dataH<-R6::R6Class("dataH",
       }
        weights = rep(1, nrow(y))
        private$plot_results=list();
-       private$transform_x = transform_x;
+    #   private$transform_x = transform_x;
     private$levs = lapply(y,function(yc) levels(yc) )       
     private$mult= .readFlag(flags,"mult",100)
     private$original_rows = 1:nrow(y)
@@ -772,8 +778,11 @@ dataH<-R6::R6Class("dataH",
   #' @param flags list of options
   #' @param expt_id and ID for the experiment (can be 0)
   #' @param vars_l_todo  the variables under consideration
-    multiAnglesAndPv=function(comb20, phens1,  k1,flags, expt_id, vars_l_todo){
-      get_plots=.readFlag(flags, "get_plots",FALSE) 
+    multiAnglesAndPv=function(comb20,  k1, expt_id, vars_l_todo){
+      phens1 = private$phens;
+      flags = private$flags; 
+#      self$update(phens, flags, transform_x);
+      show_pvalue_plots=.readFlag(flags, "show_pvalue_plots",FALSE) 
       verbose=.readFlag(flags,'verbose',FALSE)
     saveAngles=FALSE
     if(is.null(expt_id)) stop("expt_id is NULL")
@@ -786,19 +795,19 @@ dataH<-R6::R6Class("dataH",
       prev_i2 = private$findPrev(comb20, expt_id, prev_i, k1);
       varnames = prev_i2$var_names; 
       sumAngle =sum(prev_i2$angles)
-      comb_=private$combinedAngles(phens1, varnames, incl, k1,  g_incl, qq_t, flags, sumAngle,addPlot=get_plots) ;
+      comb_=private$combinedAngles(varnames, incl, k1,  g_incl, qq_t, sumAngle,addPlot=show_pvalue_plots) ;
       if(length(comb_)==0) stop("length zero")
       # return(list(comb_angle1, all_angles));
       
       if(saveAngles) return(comb_)
       #comb_ = private$anglesAndPv(phens, prev_i, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
-      ri = private$res_inner( comb_,prev_i2,flags,k1, expt_id, phens1)
-     super$savePvals(flags,phens1, ri, varnames,k1,useCurrVarnames=TRUE)
+      ri = private$res_inner( comb_,prev_i2,k1, expt_id)
+     super$savePvals( ri, varnames,k1,useCurrVarnames=TRUE)
       
       
       list(angles = comb_, pvs = ri) ;#private$simplify(ri))
     }))
-     if( get_plots){ ## just prints the plot to screen, or to pdf
+     if( show_pvalue_plots){ ## just prints the plot to screen, or to pdf
        
          ggps=try(plot_angle_vs_pv(comb2_new,1, k1))
         print(ggps)
@@ -900,74 +909,58 @@ dataH<-R6::R6Class("dataH",
  #' get the nreps
  #' @returns  nreps
  nreps=function(){
-   ncol(private$data$looc$incl)
+   res = 1:ncol(private$data$looc$incl)
+   names(res) = 1:length(res)
+  
+   names(res)[length(res)]="full";
+   res
  },
- 
- #' @description update the phenotypes without remaking the entire object. You can provide many phenotypes in the initialisation stage, but only consider a subset in model fitting stage in this way.
+
+
+ #' @description update the phenotypes without remaking the entire object. You can provide many phenotypes in the initialisation stage, but only consider a subset in model fitting stage in this way.Must run this before select
  #' @param phens phenotypes
  #' @param flags list of options
  #' @param transform_x transformation object 
  
- update=function(phens, flags, transform_x=fromJSON(flags$transform_x)){
+ update=function(phens=self$pheno()$all, flags=private$flags, transform_x=fromJSON(flags$transform_x)){
+   flags = super$updateExpt(phens, flags, transform_x, self$data_types());
     verbose=.readFlag(flags,'verbose',FALSE)
     force=.readFlag(flags,'force',FALSE);
-    flags$transform_x = transform_x;
-    super$updateExpt(phens, flags)
-   if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(names(private$data$data))
-     private$updateLOOC(phens, flags, verbose=verbose,force=force)
-     private$updateTrain(phens, flags,transform_x, verbose=verbose, force=force)
+    #flags$transform_x = transform_x;
+  #  super$updateExpt(phens, flags)
+     private$updateLOOC(verbose=verbose,force=force)
+     private$updateTrain(verbose=verbose, force=force)
+    
    ##updated after updateLOOC
-   nreps1 =self$nreps()
-   nreps = 1:nreps1
-   names(nreps) = nreps
-   nreps
+  # nreps1 =self$nreps()
+  # nreps = 1:nreps1
+  # names(nreps) = nreps
+  # nreps
  },
+ 
+ 
 #' @description main function for variable selection
-#' @param flags list of options
-#' @param transform_x transformation object 
 #' @param analysis an analysisEnv object
-#' @param phens list of phenotyps
-#' @param useDB boolean to indicate if results should be saved to database
- select=function( flags,transform_x,
-                 analysis =analysisEnv$new(flags=flags, dbDir=NULL),
-                 phens=self$pheno()$all,
-                 useDB=FALSE
-                 ## expt_id specific to this database .. might be diff for global
+
+ select=function( 
+                 analysis =analysisEnv$new(flags=private$flags, dbDir=NULL)
+               
                ){#c(y="function(y) y","function(y) y")
-   options(flags);
+
+   if(is.null(private$phens)) stop("need to update first");
+    nreps =self$nreps();
+     variables = super$loadVars()
+     if(!is.null(variables)) return(variables)
    
-   verbose=.readFlag(flags,'verbose',FALSE);
-   super$updateExpt(phens, flags);
-   flags$transform_x = toJSON(transform_x);
-   if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(self$data_types())
-      if(flags$topn<flags$beam) stop("beam should be less than topn")
-   if(is.null(flags[['data_types']])) flags[['data_types']] = names(private$data$data)
-   nreps = self$update(phens, flags, transform_x);
-   
-     vars_all = self$loadVars(phens)
-     if(!is.null(vars_all)) return(vars_all)
-   
-   vars_l_todo = analysis$getTodo(flags, phens)
-  # expt_id=super$getExpt(flags, phens, add_new=TRUE)
+   vars_l_todo = analysis$getTodo(private$flags, private$phens)
    variables=lapply(nreps, function(k1){
-     if(verbose) print(paste("cv",k1,"of",length(nreps)))
-       private$select_k(analysis, phens,flags, k1, vars_l_todo,verbose=verbose)
+     if(getOption("verbose",FALSE)) print(paste("cv",k1,"of",length(nreps)))
+     private$select_k(analysis, k1, vars_l_todo)
                })
-   variables1 = lapply(variables, function(vars_l_todo){
-     vars_l_todo$vars_l 
-   })
-  
-   get_plots=.readFlag(flags, "get_plots",FALSE) 
-#   private$sigs$clearPvals(expt_id)
-   vars_all=post_process(variables1,flags,phens)
-   self$saveVars(vars_all);
+   attr(variables, "phens")=private$phens; attr(variables,"transform_x") = private$transform_x; attr(variables, "flags") = private$flags
    
-   if(get_plots){
-   attr(vars_all,"plots") = .merge1_new(lapply(variables, function(vars_l_todo){
-     attr(vars_l_todo,"plots") 
-   }), addName="nrep")
-   }
-  vars_all
+   super$saveVars(variables);
+  variables;
   
  },
  #merge22=function(comb2, vars_l){
@@ -992,15 +985,15 @@ y=function(phens = self$pheno()[[1]]){
 
 #' @description ggplot to visualise predictions
 #' @param all_modelsh fitted models from makeAllModels
-#' @param phens list of phenotyps
-#' @param flags list of options
-#' @param transform_x transformation object
+#' @param update whether to update
 #' @param liab return liability score, or probability (for binomial, ordinal multinomial)
 #' @returns  a ggplot
-plotPredictions=function(all_modelsh,phens=all_modelsh$phens,flags=all_modelsh$flags, 
-                         transform_x = jsonlite::fromJSON(flags$transform_x),
+plotPredictions=function(all_modelsh,
+                         update=FALSE,
                          liab=TRUE){
- y = self$y(phens)
+  if(update) self$update(all_modelsh$phens, all_modelsh$flags, transform_x =  fromJSON(all_modelsh$flags$transform_x))
+  
+ y = self$y(private$phens)
   preds= self$extractPredictions(all_modelsh, phens, flags, liab, transform_x = transform_x)
   
   #familys=names(preds[[beam]][[nv]][[cv]]);
@@ -1040,15 +1033,12 @@ toplot=.merge_lapply_nme(preds, "beam",function(beam){
 
 #' @description extract the predictions for the fitted models
 #' @param all_modelsh fitted models from makeAllModels
-#' @param phens list of phenotyps
-#' @param flags list of options
-#' @param transform_x transformation object
 #' @param liab return liability score, or probability (for binomial, ordinal multinomial)
 #' @returns  a table with results
-extractPredictions=function(all_modelsh,phens=all_modelsh$phens, flags=all_modelsh$flags, 
-                            transform_x = jsonlite::fromJSON(flags$transform_x),
+extractPredictions=function(all_modelsh,
                             liab=TRUE){
-  private$updateLOOC(phens, flags)
+  phens = private$phens; flags = private$flags; transform_x = private$transform_x;
+  private$updateLOOC()
     all_models_y0 = all_modelsh$models#[[mod_nme]]
   # eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
   #print(nme1)
@@ -1226,27 +1216,24 @@ getVariance=function(varnames){
 
 #' @description fit models based on variables
 #' @param vars_all list of variables selected by select method
-#' @param phens list of phenotypes
-#' @param flags flags
-#' @param transform_x an object to determine the y transformaton
+#' @param update whether to automatically update phens, transform_x and flags , default TRUE
 #' @param useDB whether to use the DB to save the reuslt
 #' @returns fitted models
-makeAllModels=function(vars_all, 
-                       phens=vars_all[[1]]$phens, flags=vars_all[[1]]$flags, 
-                       transform_x =  fromJSON(flags$transform_x),
-                       useDB=FALSE){
-  self$update(phens, flags,transform_x);
+makeAllModels=function(variables,
+                       update=FALSE
+                       ){
+  attrs = attributes(variables)
+  if(update) self$update(attrs$phens, attrs$flags, transform_x =  attrs$transform_x)
+  
+  vars_all=super$integrate(variables)
+#  phens=vars_all[[1]]$phens, flags=vars_all[[1]]$flags, 
+  useDB = super$useDB;
+  flags = private$flags;phens = private$phens;
   verbose=.readFlag(flags,'verbose',FALSE); max = .readFlag(flags,'max',1e6)
-  sigDB = if(useDB) private$sigs else NULL
-  if(!is.null(sigDB) ){
-    all_models =try( sigDB$loadModels(flags,phens))
-    if(inherits(all_models,"try-error")) {
-      warning(paste("problem reading from DB .. recalculating"))
-    }else if(!is.null(all_models) && length(all_models$models)>0){
-      return(all_models)
-    }
-  }
-  private$updateLOOC(phens,flags)
+  all_models = super$loadModels();
+  if(!is.null(all_models)) return(all_modelsh);
+  
+  private$updateLOOC()
   logpthresh= log(.readFlag(flags,"pthresh",1e-3))
   project=.readFlag(flags,"project",TRUE)
   beams = names(vars_all); names(beams)=beams
@@ -1256,10 +1243,9 @@ makeAllModels=function(vars_all,
   all_models = list()
   variables = vars$variables
   var_inds = vars$inds
-  rem_inds = 1:self$nreps()
-  names(rem_inds) = as.character(rem_inds)
-  names(rem_inds)[which(rem_inds==self$nreps())]="full"
-  all_models = private$makeModels(list(),rem_inds , phens, flags)
+  rem_inds = self$nreps()
+ 
+  all_models = private$makeModels(list(),rem_inds )
 
   if(length(variables)==0)  return(all_models) ;#return(list(models=all_models, flags = flags, phens = phens, trainedOn=private$nme))
   ord = order(unlist(lapply(variables, length)),decreasing=TRUE)
@@ -1275,7 +1261,7 @@ makeAllModels=function(vars_all,
     nme_ = paste(names(vars2),collapse=";")
     models1 = all_models[[nme_]]
     if(is.null(models1)){
-      models1 = private$makeModels( vars2, inds,phens,flags)
+      models1 = private$makeModels( vars2, inds)
       for(k in 1:length(models1)){
         mod1 =   all_models[[names(models1)[[k]]]]
         if(is.null(mod1)){
@@ -1330,27 +1316,20 @@ makeAllModels=function(vars_all,
 
   })
   all_models_=list(models=all_models_full, flags = flags, phens = phens, trainedOn=private$nme)
-  if(useDB  && !is.null(sigDB)){
-    sigDB$saveModels (all_models_)
-  }
+  super$saveModels(all_models_);
   #combined_models
   all_models_
 },
 #' @description evaluate the fit of models
 #' @param all_modelsh  models fitted from makeAllModels
-#' @param phens list of phenotypes
-#' @param flags flags
-#' @param transform_x transformation object
-#' @param useDB whether to save results to DB
+#' @param update whether to automatically update phens, transform_x and flags , default TRUE
 #' @returns evaluation of models
-evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_modelsh$flags,transform_x =  fromJSON(flags$transform_x),useDB=FALSE){ ## different folds with same variables
-  sigDB = if(useDB) private$sigs else NULL
-  if(!is.null(sigDB) ){
-    eval1 = sigDB$loadEval(flags,phens,)
-    if(!is.null(eval1) && nrow(eval1)>0){
-      return(eval1)
-    }
-  }
+evaluateAllModels=function(all_modelsh){ ## different folds with same variables
+  if(update) self$update(all_modelsh$phens, all_modelsh$flags, transform_x =  fromJSON(all_modelsh$flags$transform_x))
+  flags = private$flags; phens = private$phens;
+  eval1 = super$loadEval();
+  if(is.null(eval1)) return(eval1);
+  
   
     private$data$updateTransform(private$transform_x)
     verbose=.readFlag(flags,"verbose",TRUE)
@@ -1379,11 +1358,7 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
   
   #  isfull=eval2$model %in% full_model_nmes
   #  eval2|>tibble::add_column(isfull=isfull)
-  if(!is.null(sigDB) ){
-    sigDB$saveEval(eval2, flags,phens)
-    eval1 = sigDB$loadEval(flags,phens)
-    return(eval1)
-  }
+  
   #print("HH")
   #  if(TRUE) return(eval2)
   eval3 = .calcEval1(eval2, rename=FALSE)
@@ -1394,6 +1369,7 @@ evaluateAllModels=function(all_modelsh, phens=all_modelsh$phens,flags=all_models
   })))
   eval4$variable[is.na(eval4$variable)]=""
   eval5 = eval4 |> tidyr::separate("variable", sep="\\.", into=c("type","variable","func","param"),remove=TRUE)
+  super$saveEval(eval5);
   eval5
 }
     

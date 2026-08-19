@@ -149,23 +149,7 @@ countsMatrix
   }
 }
 
-#' Plot the results from evaluateAll
-#'
-#' @param flags a list of options
-#' @return corrected flags
-#' @export
-check_flags<-function(flags){
-  if(!is.null(.readFlag(flags,"nrep",NULL))){
-    flags[['nfold']] = flags[['nrep']]
-    warning("replaced nrep with nfold")
-  }
-  if(!is.null(.readFlag(flags,"batch",NULL))){
-    flags[['batchsize']] = flags[['batch']]
-    
-   warning("replace batch with batchsize")
-  }
-  invisible(flags)
-}
+
 .avg<-function(eval0){
   nme_cols1 = c("data","subpheno","measure","pheno","trainedOn","pheno_group","numvars","cv","family")
   rem_cols = names(eval0)[!(names(eval0) %in% nme_cols1)]

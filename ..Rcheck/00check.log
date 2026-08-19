@@ -6,14 +6,22 @@
     GNU Fortran (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0
 * running under: Ubuntu 22.04.5 LTS
 * using session charset: UTF-8
-* current time: 2026-07-02 21:29:06 UTC
+* current time: 2026-07-03 12:21:40 UTC
+* using option ‘--as-cran’
 * checking for file ‘./DESCRIPTION’ ... OK
 * checking extension type ... Package
-* this is package ‘fspls2’ version ‘0.1’
+* this is package ‘fspls2’ version ‘0.1.0’
 * package encoding: UTF-8
+* checking CRAN incoming feasibility ... NOTE
+Maintainer: ‘Lachlan Coin <l.coin@imb.uq.edu.au>’
+
+New submission
+
+Package has a VignetteBuilder field but no prebuilt vignette index.
 * checking package namespace information ... OK
 * checking package dependencies ... OK
-* checking if this is a source package ... OK
+* checking if this is a source package ... NOTE
+Subdirectory ‘.’ seems to contain an installed version of the package.
 * checking if there is a namespace ... OK
 * checking for executable files ... OK
 * checking for hidden files and directories ... NOTE
@@ -24,25 +32,40 @@ Found the following hidden files and directories:
   vignettes/.gitignore
   ..Rcheck
   .git
+  .github
+  fspls2.Rcheck/00_pkg_src/fspls2/.github
 These were most likely included in error. See section ‘Package
 structure’ in the ‘Writing R Extensions’ manual.
+
+CRAN-pack does not know about
+  ..Rcheck
+  .git
+  .github
+  fspls2.Rcheck/00_pkg_src/fspls2/.github
 * checking for portable file names ... OK
 * checking for sufficient/correct file permissions ... OK
 * checking whether package ‘fspls2’ can be installed ... OK
 * checking installed package size ... OK
 * checking package directory ... OK
-* checking DESCRIPTION meta-information ... NOTE
-  Missing dependency on R >= 4.1.0 because package code uses the pipe
-  |> or function shorthand \(...) syntax added in R 4.1.0.
-  File(s) using such syntax:
-    ‘dataH.R’ ‘dataObj.R’ ‘helper_functions.R’ ‘sigEnv.R’ ‘ypredObj.R’
-* checking top-level files ... OK
+* checking for future file timestamps ... OK
+* checking DESCRIPTION meta-information ... OK
+* checking top-level files ... NOTE
+Non-standard files/directories found at top level:
+  ‘CRAN-SUBMISSION’ ‘Meta’ ‘cran-comments.md’ ‘doc’ ‘fspls2.Rcheck’
 * checking for left-over files ... OK
 * checking index information ... OK
 * checking package subdirectories ... WARNING
-Found the following directory with the name of a check directory:
+Found the following directories with names of check directories:
   ./..Rcheck
+  ./fspls2.Rcheck
 Most likely, these were included erroneously.
+Found the following directory with the name of a version control directory:
+  ./.git
+These should not be in a package tarball.
+Found the following CITATION files in a non-standard place:
+  fspls2.Rcheck/00_pkg_src/fspls2/inst/CITATION
+  fspls2.Rcheck/fspls2/CITATION
+Most likely ‘inst/CITATION’ should be used instead.
 * checking code files for non-ASCII characters ... OK
 * checking R files for syntax errors ... OK
 * checking whether the package can be loaded ... OK
@@ -51,6 +74,7 @@ Most likely, these were included erroneously.
 * checking whether the namespace can be loaded with stated dependencies ... OK
 * checking whether the namespace can be unloaded cleanly ... OK
 * checking loading without being on the library search path ... OK
+* checking use of S3 registration ... OK
 * checking dependencies in R code ... OK
 * checking S3 generic/method consistency ... OK
 * checking replacement functions ... OK
@@ -58,6 +82,7 @@ Most likely, these were included erroneously.
 * checking R code for possible problems ... OK
 * checking Rd files ... OK
 * checking Rd metadata ... OK
+* checking Rd line widths ... OK
 * checking Rd cross-references ... OK
 * checking for missing documentation entries ... OK
 * checking for code/documentation mismatches ... OK
@@ -74,10 +99,9 @@ Directory 'inst/doc' does not exist.
 Package vignette without corresponding single PDF/HTML:
   ‘demo.Rmd’
 * checking re-building of vignette outputs ... OK
-* checking PDF version of manual ... WARNING
-LaTeX errors when creating PDF version.
-This typically indicates Rd problems.
-LaTeX errors found:
-* checking PDF version of manual without index ... ERROR
+* checking PDF version of manual ... OK
+* checking HTML version of manual ... OK
+* checking for non-standard things in the check directory ... OK
+* checking for detritus in the temp directory ... OK
 * DONE
-Status: 1 ERROR, 4 WARNINGs, 2 NOTEs
+Status: 3 WARNINGs, 4 NOTEs
