@@ -12,12 +12,17 @@ loocObj<-R6::R6Class("loocObj", public = list(
   initialize=function(data,   ## data can be null if nrows is not NULL
                       incl_full =TRUE,
                       nrows = nrow(data$data[[1]]),
+                      folds = c(),
                        ## randomisation
                       nrep=getOption("nfold",1), 
                       batch=getOption("batchsize",0),
                       seed = 42,
                       pheno_balance=NULL
                       ){
+    if(length(folds)>0){
+      nrep = length(folds);
+      batch= length(folds[[1]])
+    }
     self$nrep=nrep
     self$batch=batch
     self$seed = seed
@@ -36,7 +41,15 @@ loocObj<-R6::R6Class("loocObj", public = list(
       tbl2=table(y2)
     }
     
-    if(!is.null(nrep) && nrep!=0){
+    if(length(folds)>0){
+      incl = matrix(T, nrow = len_y, ncol =length(folds) )
+      for(jk in 1:length(folds)){
+        incl[folds[[jk]],jk]=FALSE
+      }
+      if(incl_full) incl = cbind( incl, useAll)
+      self$incl = incl
+      
+    }else if(!is.null(nrep) && nrep!=0){
 #      batch  = ceiling((len_y1)/nrep)
      # incl = matrix(TRUE, nrow = len_y1, ncol =nrep)
       left_over=len_y1 %% nrep

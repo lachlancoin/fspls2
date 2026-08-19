@@ -7,6 +7,7 @@ mergeAll = function(comb2_new, beam){
       .merge1_new(c1,addName="pow")
     }),addName="func")
   }), addName="prev") 
+  if(is.null(comb1)) return(NULL)
    #comb1$prev 
    o =  order(comb1$value)
    comb1[o[1:beam],]
@@ -532,6 +533,11 @@ dataH<-R6::R6Class("dataH",
        comb2_new1 = try(self$multiAnglesAndPv(comb20 , phens, k1,flags,expt_id, vars_l_todo))
        if(inherits(comb2_new1,"try-error")) break;
         comb21 =  lapply(comb2_new1, function(x) x$pvs)
+        if(length(unlist(comb21))==0){
+          vars_l_todo$todo1 = vars_l_todo$todo1[-1]
+          if(length(vars_l_todo$todo1)==0) vars_l_todo$stop=TRUE;
+          next;
+        }
          private$savePvals(flags,phens,k1, dh$name(), vars_l_todo$vars_l,comb21)# no need to save here, just keep
          #try(self$multiAnglesAndPv(comb2, phens, k1,flags,expt_id, vars_l_todo))
       
@@ -590,13 +596,13 @@ dataH<-R6::R6Class("dataH",
    res_inner=function(comb_,prev_i2, flags,k, expt_id, phens){
      
      nme_comb = names(comb_); names(nme_comb) = nme_comb
-    # nme_c1 = nme_comb[[2]]; nme_p1 = names(comb_[[nme_c1]])[[3]]; ik=1
+     #nme_c1 = nme_comb[[2]]; nme_p1 = names(comb_[[nme_c1]])[[3]]; ik=1
      res_inner=lapply(nme_comb, function(nme_c1){
        nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
        lapply(nmesp1, function(nme_p1){
          #print(nme_p1)
          comb = comb_[[nme_c1]][[nme_p1]]
-         if(nrow(comb)==0) return(NULL)
+         if(length(comb)==0 || nrow(comb)==0) return(NULL)
          num_pvals1 = nrow(comb)
          inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
          nxt_vars = lapply(inds1p, function(ik){

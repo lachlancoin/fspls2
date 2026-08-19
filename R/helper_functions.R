@@ -349,7 +349,7 @@ plotEval<-function(eval3,
   legend_position=if(legend) "bottom" else "none";
   ggp<- ggp+ theme(legend.position = legend_position,legend.title = element_text(size = txtsize));#+theme(,    legend.text = element_text(size = 3))
   if(logy)ggp<-ggp+ scale_y_log10() 
-  ggp
+  ggp+ggtitle(ph)
   })
   ggps
 }

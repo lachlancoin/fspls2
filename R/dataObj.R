@@ -2275,6 +2275,7 @@ updateLOOC=function(phens,flags,varn=c(), force=FALSE, verbose=FALSE){
   seed=.readFlag(flags,"seed",42)
   #incl = incls_all
   batch=.readFlag(flags, "batchsize",0)
+  folds = .readFlag(flags, "folds",c())
   nrep = .readFlag(flags,"nfold",if(batch>0) 0 else 1)
   if(batch>0 && nrep>0) warning("only one of batch or nrep greater than zero")
   nrows=nrow(self$data[[1]])
@@ -2284,6 +2285,7 @@ updateLOOC=function(phens,flags,varn=c(), force=FALSE, verbose=FALSE){
   }
   pheno_balance = if(.readFlag(flags,"pheno_balance",FALSE)) unlist(phens) else NULL
   self$looc=loocObj$new(self, nrep = nrep, batch = batch,
+                        folds = folds, 
                         incl_full =TRUE,
                         seed = seed,
                         nrow = nrows,
