@@ -1690,6 +1690,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
                          ){
 
   d = self
+  incl_cv_models = .readFlag(flags, "incl_cv_models",FALSE);
   self$updateLOOC(phens,flags)
   liab = .readFlag(flags,"liab",TRUE)  ## whether to evaluate with liability , default is true
 #  ypred = self$ypred(phens)
@@ -1721,7 +1722,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
               nmesm_full = grep("full",names(all_models3_full),inv=TRUE,value=TRUE);
               inds=as.numeric(nmesm); 
               inds_full = as.numeric(nmesm_full)
-              res1 = NULL; res2 = NULL; res3 = NULL
+              res1 = NULL; res2 = NULL; res3 = NULL; res5 = NULL;
               if(!is.null(full_model)){
                 #ypredObj$updateYP(self, phens, )#= self$looc$incl[,k2]
                 nonNA =self$looc$incl[,self$nreps()]
@@ -1736,21 +1737,29 @@ evaluateAllModels=function(all_models_y,phens,flags,
                   b1[nrow(b1),ik2]
                 }))
                 
-                res1 = res1 |> tibble::add_column(isfull=TRUE, model=full_model_nme, beta, sign = sign(beta))
+                res1 = res1 |> tibble::add_column(isfull=TRUE, model=full_model_nme, beta, sign = sign(beta), cv_index="NA")
                 #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
               }
               if(length(nmesm)>0){
                 #transf=c()
+                res4= vector('list', length(nmesm)) ## need angle object
+                
                 for(j in 1:length(nmesm)){
                   nonNA =self$looc$incl[,inds[[j]]]
                   prev_i1 = all_models3[[j]]
                #   transf = c(transf,prev_i1$transf)
                   ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
+                  if(incl_cv_models){
+                    cv_model_nme=paste(names(prev_i1$var_names), collapse=";")
+                    res4[[j]] = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=FALSE,model=cv_model_nme, beta=NA, sign = NA, cv_index=j)
+                  
+                  }
+                  res5 = .merge1_new(res4)
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
                 nonNA=self$getNonNAInds(inds)
               
-                res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=FALSE,model="cv", beta=NA, sign = NA)
+                res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=FALSE,model="cv", beta=NA, sign = NA, cv_index="all")
               }
               if(length(nmesm_full)>0){
                 #transf=c()
@@ -1762,9 +1771,10 @@ evaluateAllModels=function(all_models_y,phens,flags,
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
                 nonNA=self$getNonNAInds(inds_full)
-                res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=TRUE,model=full_model_nme, beta=NA, sign = NA)
+                res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=TRUE,model=full_model_nme, beta=NA, sign = NA, cv_index="all_full")
               }
-              rbind(res1,res2,res3)
+            
+              rbind(res1,res2,res3, res5)
 #        }),addName="model")
 #     }),addName="trainedOn")
    # }),addName="pheno_group")
@@ -2290,7 +2300,7 @@ updateLOOC=function(phens,flags,varn=c(), force=FALSE, verbose=FALSE){
                         seed = seed,
                         nrow = nrows,
                         pheno_balance = pheno_balance)
-  if(nrep==1){
+  if(nrep==1 && length(folds)==0){
     #should really do this inside looc obj
     self$looc$incl = self$looc$incl[,2,drop=FALSE]
   }

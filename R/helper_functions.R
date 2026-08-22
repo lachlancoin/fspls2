@@ -190,18 +190,23 @@ length(unique(eval1$`data:family`))
 }
 
 .modify<-function(eval3, shape_color,
-                  shape_color_nme ){
+                  shape_color_nme,collapse=" " ){
   if(!(shape_color_nme %in% names(eval3))){
     eval3_sub=eval3[,names(eval3) %in% shape_color,drop=FALSE]
-    for(jk in 1:length(eval3_sub)) eval3_sub[[jk]]=factor(eval3_sub[[jk]])
+    for(jk in 1:length(eval3_sub)) {
+      eval3_sub[[jk]][which(is.na(eval3_sub[[jk]]))]="NA"
+      
+      eval3_sub[[jk]]=factor(as.character(eval3_sub[[jk]]))
+      
+    }
     levs1 = lapply(eval3_sub, function(vv) levels(vv))
     levs_all = levs1[[1]]
     if(length(levs1)>1){
       for(jk in 2:length(levs1)){
-      levs_all = unlist(lapply(levs1[[jk]], function(levs11) paste(levs_all, levs11)))
+      levs_all = unlist(lapply(levs1[[jk]], function(levs11) paste(levs_all, levs11, sep=collapse)))
       }
     }
-      eval4 = eval3 |>  tibble::add_column(shape_color_nme = apply(eval3_sub,1,paste, collapse=" "))
+      eval4 = eval3 |>  tibble::add_column(shape_color_nme = apply(eval3_sub,1,paste, collapse=collapse))
       
       eval4[['shape_color_nme']]=factor(eval4[['shape_color_nme']], levels = levs_all)
         names(eval4) = gsub("shape_color_nme", shape_color_nme, names(eval4))
@@ -290,9 +295,9 @@ plotEval<-function(eval3,
   
   eval3 = .modify(eval3, linetype, linetype_nme)
   eval3 = .modify(eval3, sep_by, sep_by_nme)
-  eval3 = .modify(eval3,grid0, grid0_nme)
+  eval3 = .modify(eval3,grid0, grid0_nme, collapse="\n")
   if(length(grid1)>0){
-  eval3 = .modify(eval3,grid1, grid1_nme)
+  eval3 = .modify(eval3,grid1, grid1_nme, collapse="\n")
   }
   eval2 = eval3
   

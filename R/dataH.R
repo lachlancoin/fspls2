@@ -704,16 +704,15 @@ dataH<-R6::R6Class("dataH",
    #' @param flags list of options, described in the vignette
    #' @param transform_x a transformation object from the function getTransformation
    #' @param family the statistical family of phenotype y, can be calculated by getFamily
-   #' @param dbDir dir for database to store results to speed up re-reruns.  Can be NULL, if not required
+   #' @param dbDir dir for database to store results to speed up re-reruns.  Can be NULL
      initialize=function(
     data,
     y,
     certainty = rep(1, nrow(y)),
     nme,
     flags ,
-    transform_x=getTransform(pow = 1,  n_random=1, perm=FALSE),
     family= getFamily(y),
-         dbDir=tempdir()
+         dbDir=NULL
    ){
        
     super$initialize(nme,dims =lapply(d$data, dim),  flags=flags, dbDir=dbDir);

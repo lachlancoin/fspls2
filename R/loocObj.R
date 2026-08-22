@@ -1,4 +1,47 @@
 
+#' extracts the full model variables from a cross validation run
+#' @param leng length of dataset
+#' @param nrep number of reps
+#' @param batch batch size (one of batch or nrep is non NA)
+#' @param randomize whether to randomize
+#' @export
+getFolds<-function(leng, nrep=NA, batch=NA, randomize=TRUE){
+  len_y1 = leng
+  if(is.na(nrep) && is.na(batch))stop("either batch or NA needs to be numeric")
+  inds = if(randomize) sample.int(len_y1, len_y1) else 1:len_y1
+  if(!is.na(nrep) && nrep>0){
+      left_over=len_y1 %% nrep
+      batch = (len_y1-left_over)/nrep
+  }else{
+      nrep  = floor(len_y1 / batch)
+      left_over=len_y1 %% nrep
+    
+  }
+      len_y2 = len_y1 -left_over
+      reps_k = seq(1, len_y2+1, batch)
+     # reps_k[length(reps_k)] = len_y1+1
+    #  incl = matrix(TRUE, nrow = len_y, ncol =length(reps_k)-1 )
+      if(left_over>0){
+        for(jj in 1:left_over){
+          for(kk in (jj+1):length(reps_k)){
+            reps_k[kk]=reps_k[kk]+1
+          }
+        }
+      }
+      folds= vector('list', length(reps_k)-1) ## need angle object
+      
+      for(jj in 2:length(reps_k)){
+        folds[[jj-1]] = sort(inds[reps_k[jj-1]:(reps_k[jj]-1)])
+      }
+    
+     if(length(which(duplicated(unlist(folds))))>0) stop("error")
+     if(length(unique(unlist(folds))) < len_y1) stop("error")
+      names(folds) = 1:length(folds)
+#      if(addFull) folds[["full"]] = 1:len_y1
+  folds
+  
+
+}
 
 loocObj<-R6::R6Class("loocObj", public = list(
   useAll="vector",
@@ -15,94 +58,32 @@ loocObj<-R6::R6Class("loocObj", public = list(
                       folds = c(),
                        ## randomisation
                       nrep=getOption("nfold",1), 
-                      batch=getOption("batchsize",0),
+                      batch=getOption("batchsize",NA),
                       seed = 42,
                       pheno_balance=NULL
                       ){
-    if(length(folds)>0){
-      nrep = length(folds);
-      batch= length(folds[[1]])
-    }
+    
     self$nrep=nrep
     self$batch=batch
     self$seed = seed
     self$nrows = nrows;
     rand = sample(nrows)
     len_y = nrows #length(data$y[,1])
-#    nonNA = apply(data$y,c(1,2),function(x) !is.na(x))
-#    non_na_inds = which(apply(nonNA, 1,function(x) length(which(x))>0))
+    if(length(folds)==0){
+      folds = getFolds(nrows, nrep=nrep, batch = batch, randomize=TRUE);
+    }
+
     useAll = rep(TRUE, len_y)
     len_y1 = len_y #length(non_na_inds)
-    tbl2 = NULL
-    
-    if(length(pheno_balance)==1){
-      phens1 = unlist(lapply(data$y, function(y1) which(dimnames(y1)[[2]]==pheno_balance)))
-      y2 = data$y[[names(phens1)[[1]]]][,phens1[[1]]]
-      tbl2=table(y2)
-    }
-    
-    if(length(folds)>0){
+  
+      self$nrep = length(folds);
+      self$batch=0;
       incl = matrix(T, nrow = len_y, ncol =length(folds) )
       for(jk in 1:length(folds)){
         incl[folds[[jk]],jk]=FALSE
       }
       if(incl_full) incl = cbind( incl, useAll)
       self$incl = incl
-      
-    }else if(!is.null(nrep) && nrep!=0){
-#      batch  = ceiling((len_y1)/nrep)
-     # incl = matrix(TRUE, nrow = len_y1, ncol =nrep)
-      left_over=len_y1 %% nrep
-      batch = (len_y1-left_over)/nrep
-      reps_k = seq(1+left_over, len_y1+1, batch)
-      reps_k[length(reps_k)] = len_y1+1
-      incl = matrix(TRUE, nrow = len_y, ncol =length(reps_k)-1 )
-      for(jj in 2:length(reps_k)){
-        incl[reps_k[jj-1]:(reps_k[jj]-1),jj-1] = FALSE
-      }
-      if(left_over>0){
-        for(jk in 1:length(left_over)){
-          incl[jk, jk]=FALSE
-        }
-      }
-      if(incl_full) incl = cbind( incl, useAll)
-      self$incl = incl[rand,]
-      # max=nrep
-    }else if(is.null(batch) || batch==0 || is.na(batch) || nrep==1){
-      self$useAll = useAll
-      self$nrep=0
-      self$incl=as.matrix(useAll)
-    }else if(length(pheno_balance)==1  && batch==1 && min(tbl2)>5){
-      phens1 = unlist(lapply(data$y, function(y1) which(dimnames(y1)[[2]]==pheno_balance)))
-      y2 = data$y[[names(phens1)[[1]]]][,phens1[[1]]]
-      tbl=table(y2)
-      cnt=min(tbl)
-      nmet = sort(unique(y2)); names(nmet) = nmet
-      v2 = rep(TRUE, length(y2))
-      incl2 = unlist(lapply(nmet, function(nmet1){
-        s1= as.list(sample(which(y2==nmet1),cnt,replace=TRUE))
-      }))
-        incl= data.frame(lapply(incl2, function(s2){
-            v3 = v2
-            v3[s2] = FALSE
-            v3
-        }))
-        if(incl_full) incl = cbind( incl, useAll)
-        self$incl = incl
-    }else{
-      reps_k = seq(1, len_y1+1, batch)
-      reps_k[length(reps_k)] = len_y1+1
-      incl = matrix(TRUE, nrow = len_y, ncol =length(reps_k)-1 )
-      for(jj in 2:length(reps_k)){
-        incl[reps_k[jj-1]:(reps_k[jj]-1),jj-1] = FALSE
-      }
-      if(incl_full) incl = cbind( incl, useAll)
-      self$incl = incl[rand,]
-    }
-  # if(nrep==1 && batch==0){
-  #    print("keeping useAll only")
-  #    self$incl = self$incl[,2,drop=FALSE]
-  #  }
-    #print(paste("loocObj", dim(self$incl)))
+   
   }
 ))
