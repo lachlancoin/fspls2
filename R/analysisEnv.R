@@ -103,12 +103,12 @@ fspls.iterative<-function(dataset,flags, transform_x ){
   repeat  {
     if(k==0 || select_each_iteration) {
             
-          vars_all = analysis$select(datasH,  flags, transform_x, phens = phens)
+          vars_all = analysis$select(datasH, phens, transform_x)
       
               #vars_all = fspls.select(datasH,  flags, transform_x, phens = dh$pheno()$all)
     }
     k = k+1
-   all_models =dh$makeAllModels(vars_all,useDB=FALSE)
+   all_models =dh$makeAllModels(vars_all)
    updated =  dh$updateWeights(all_models)
      updates[[k]] = updated
    message(paste("sumdiff",k,abs(updated$sumdiff)))
@@ -154,31 +154,8 @@ fspls.select<-function(datasH, flags,
                ){#c(y="function(y) y","function(y) y")
   options(flags);
   analysis =analysisEnv$new(flags=flags, dbDir=dbDir) ;
-  flags =analysis$updateExpt(phens, flags, transform_x)
-  #phens1 = phens
-  mc.cores = .readFlag(flags, "mc.cores",1)
-  flags$transform_x = toJSON(transform_x);
-  verbose=.readFlag(flags,'verbose',FALSE);
-  if(flags$topn<flags$beam) stop("beam should be less than topn")
-  if(is.null(flags[['data_types']]) || flags[['data_types']]=="{}")flags[['data_types']]=toJSON(datasH[[1]]$data_types())
-  
-  nreps_all = lapply(datasH, function(dh){
-    dh$update(phens, flags, transform_x);
-  })
-  nreps = nreps_all[[1]]
-  
-  ## load if already calculated
-    vars_all = analysis$loadVars(phens);
-    if(!is.null(vars_all)) return(vars_all)
-  
-  vars_l_todo = analysis$getTodo(flags, phens)
-  variables1 <-lapply(nreps, function(k1) {
-      analysis$select_k(datasH, phens, flags, k1, vars_l_todo)
-   
-  })
-  
-  vars_all=post_process(variables1,flags,phens)
-  analysis$saveVars(vars_all);
+  vars_all = analysis$select( datasH,phens,transform_x)
+ 
   vars_all
   
 }
@@ -293,8 +270,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
                                                    dims = dims,
                                                    transform_x = private$transform_x)
     },
-    nextVars=function(flags, phens, vars_l_todo,  k1,
+    nextVars=function(vars_l_todo,  k1,
                                           logpvthresh,beam,  comb2_news = NULL,stop_y="rand", verbose=FALSE){
+      flags=private$flags; 
       vars_l = vars_l_todo$vars_l
       todo1 = vars_l_todo$todo1
      # expt_id=super$getExpt(flags, phens, add_new=TRUE)
@@ -440,8 +418,6 @@ analysisEnv<-R6::R6Class("analysisEnv",
   
   #' selection for a single fold
   #' @param datasH a list of dataH objects
-  #' @param phens list of phenotypes
-  #' @param flags list of options
   #' @param k1  the fold
   #' @param vars_l_todo an object representing what is left to do
   #' @returns vars_l_todo object
@@ -558,7 +534,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
 
  savePvalsAndNextVars=function(vars_l_todo,comb2_new,data_nme, k1){
    flags = private$flags;
-   phens = private$phens;
+ #  phens = private$phens;
    beam=.readFlag(flags,'beam',1);
    stop_y=.readFlag(flags,"stop_y","rand")
    verbose=.readFlag(flags,"verbose",FALSE);
@@ -567,7 +543,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
    useDB = !is.null(private$sigs)
    if(angles_only) logpvthresh =0;
     if(useDB)  private$savePvals(k1, data_nme, vars_l_todo$vars_l,comb2_new)
-   vars_l_todo_new= private$nextVars(flags,phens, vars_l_todo,  k1,logpvthresh,beam, 
+   vars_l_todo_new= private$nextVars(vars_l_todo,  k1,logpvthresh,beam, 
                                      comb2_news=if(useDB) NULL else comb2_new, 
                                      stop_y = stop_y, verbose=verbose)
    vars_l_todo_new
@@ -577,14 +553,16 @@ analysisEnv<-R6::R6Class("analysisEnv",
  
  #' main function for variable selection
  #' @param datasH a list of dataH objects
+ #' @param phens list of phenotypes
+ #' @param transform_x transformation object
  #' @param useDB boolean to indicate if results should be saved to database
- select=function(datasH, 
+ select=function(datasH,phens,transform_x,
                  useDB=FALSE){#c(y="function(y) y","function(y) y")
-   phens = private$phens;
+   #phens = private$phens;
    flags = private$flags;
-   transform_x = private$transform_x;
-   phens1 = phens
-   flags = super$updateExpt( phens1, flags, transform_x, datasH[[1]]$data_types())
+   #transform_x = private$transform_x;
+   
+   flags = super$updateExpt( phens, flags, transform_x, datasH[[1]]$data_types())
    #mc.cores = .readFlag(flags, "mc.cores",1)
    ##if(mc.cores>1 && )
   
@@ -592,25 +570,25 @@ analysisEnv<-R6::R6Class("analysisEnv",
    if(flags$topn<flags$beam) stop("beam should be less than topn")
    
    nreps_all = lapply(datasH, function(dh){
-     dh$update(phens1, flags, transform_x);
+     dh$update(phens, flags, transform_x);
      dh$nreps();
    })
    nreps = nreps_all[[1]]
    
    
-     vars_all = super$loadVars(phens)
+     vars_all = super$loadVars()
      if(!is.null(vars_all)) return(vars_all)
   
-   vars_l_todo = self$getTodo(flags, phens1)
+   vars_l_todo = self$getTodo(private$flags, private$phens);
    variables1 <- lapply(nreps, function(k1) {  ## can use mclapply here
-      self$select_k(datasH, phens1, flags, k1,  vars_l_todo)
+      self$select_k(datasH,k1,  vars_l_todo)
      
    })
    
+#   vars_all=super$integrate(variables1)
 
-   vars_all=super$integrate(variables1,flags,phens1)
-   self$saveVars(vars_all)
-   vars_all
+   private$saveVars(variables1)
+   variables1
    
  }
  

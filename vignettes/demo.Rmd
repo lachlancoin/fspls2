@@ -47,17 +47,19 @@ library(fspls2)
             direction="none" ## can be + , - or none
     )
 
-  check_flags(flags)  ## runs som simple checks
+  #check_flags(flags)  ## runs som simple checks
 
 ```
 
 ```{r example}
   examples = c("binomial", "gaussian", "ordinal", "multinomial");
-# example="gaussian"
+#example="gaussian"
   
 ##iterative function carries out imputation of uncertain y values at the same time as feature selection
 testIterative<-function(example){
   prop_na=0.2; seed=42
+  flags$nfold=1
+  
      fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
     dataset = readRDS(fi); 
     if(example=="binomial") dataset$y$y = factor(dataset$y$y, labels=c("A","B"))
@@ -74,7 +76,7 @@ testIterative<-function(example){
   na_remaining= length(which(results$certainty_new<0.95))
   message(paste("na remaining", na_remaining))  
   message(paste("error rate",results$error_rate))
-  print(results$vars_all[[1]]$variables)
+  print(results$vars_all$full)
   
 }
 
@@ -86,27 +88,28 @@ testIterative<-function(example){
     if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
     dataset = readRDS(fi)
        ## set up the objects
-    dh = dataH$new(dataset$dataset, y = dataset$y, 
-                   nme=example, flags=flags, transform_x = transform_x, dbDir=NULL)
+    dh = dataH$new(dataset$dataset, y = dataset$y,    nme=example, flags=flags, transform_x = transform_x, dbDir=NULL)
+                
   
     ##Step 1. run variable selection 
    
-    #    datasH = list(dh)
+        datasH = list(dh)
     #      
     #vars_all = analysis$select(datasH,  flags, transform_x, phens = dh$pheno()$all)
   
       analysis =analysisEnv$new(flags=flags, dbDir=NULL)
+      
       dh$update(phens = dh$pheno()$all, flags = flags, transform_x = transform_x)
     variables = dh$select( analysis=analysis)
   
-   # vars_all = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
+    variables = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
     all_models =dh$makeAllModels(variables)
     
     #optionally get predictions
     
     #Step 3. evaluate the models
-    eval1= dh$evaluateAllModels(all_models, useDB=F)
+    eval1= dh$evaluateAllModels(all_models)
     ## Now visuaise the resultsy
     ggps1=plotEval(eval1,legend=T, grid1=c("subpheno","pheno"), grid0=c("measure","cv_full"),linetype="data", ##"full_model"
                    shape_color=c("data","transf"),sep_by=c("beam"), showranges=T,text="variable",logy=example=="gaussian",
@@ -127,7 +130,7 @@ Example 2
 ```{r, eval = FALSE}
 
   ggp2 = runExample("gaussian", nfold=5)
- ggp2
+  ggp2
 ```
 Example 3
 ```{r, eval = FALSE }

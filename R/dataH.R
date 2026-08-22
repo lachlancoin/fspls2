@@ -207,8 +207,8 @@ ggp3+ggtitle(paste("fold=",k1))
   ang_extracted
 }
 
-.combineAngles1<-function(angleH, incl, sumAngle, prev_signature, excl=list()){ 
-  flags = private$flags;
+.combineAngles1<-function(angleH, incl, sumAngle, prev_signature, flags, excl=list()){ 
+  #flags = private$flags;
   topn = .readFlag(flags,'topn', 20)
   onlyAll = .readFlag(flags,'only_all',FALSE)
   angles1=angleH$angles;cols_incl1=angleH$cols_incl 
@@ -435,7 +435,7 @@ dataH<-R6::R6Class("dataH",
    data ="environment",
     type="character",  
   plot_results="list",
-   flags="list",
+  
   levs="list",
    data_id="character",
     dbDir="character",
@@ -445,7 +445,6 @@ dataH<-R6::R6Class("dataH",
   na_probs_ordered="list",
   original_inds ="list",  ## what is the indices in new matrix of the na_inds original values
   original_rows = "list", ## what is indices of original rows
-  transform_x ="list",
   #returns the weights of the uncertain samples ordered
   sample_na_weights=function(){
     mult = private$mult
@@ -667,7 +666,7 @@ dataH<-R6::R6Class("dataH",
      angles =angles[ unlist(lapply(angles, length))>0]
      angleH=list(angles=angles,
                  cols_incl = private$data$cols_incl(var_t,incl, g_incl,excl=varnames)) ### fix 
-     comb_angle1 =  .combineAngles1(angleH, incl,  sumAngle, prev_signature, excl=varnames)
+     comb_angle1 =  .combineAngles1(angleH, incl,  sumAngle, prev_signature,flags, excl=varnames)
      if(addPlot){
        all_angles = .extrAngles(angleH,comb_angle1, incl)
         attr(comb_angle1,"all")=all_angles;
@@ -1118,7 +1117,11 @@ plotData=function(vars_all, phens = vars_all$phens, all_types=FALSE, transform_x
 #' @returns list of auc beta and updated sumdiff of weights used as stopping criteria
 updateWeights=function(all_models){
   predictions =     self$extractPredictions(all_models, liab=TRUE) ## extract predictions in liability space
-  pr =predictions[[1]][[length(predictions[[1]])]]$full
+  pr1 = predictions[[1]];
+  fulls = lapply(pr1, function(x) x$full)
+  fulls = fulls[unlist(lapply(fulls, length))>0]
+  
+  pr =fulls[[length(fulls)]]
   #calcAUC=TRUE;calcWeights=TRUE;
   auc = private$sample_auc(pr)
   am = all_models$models[[1]]
@@ -1215,9 +1218,8 @@ getVariance=function(varnames){
 },
 
 #' @description fit models based on variables
-#' @param vars_all list of variables selected by select method
+#' @param variables list of variables selected by select method
 #' @param update whether to automatically update phens, transform_x and flags , default TRUE
-#' @param useDB whether to use the DB to save the reuslt
 #' @returns fitted models
 makeAllModels=function(variables,
                        update=FALSE
@@ -1289,9 +1291,8 @@ makeAllModels=function(variables,
       # p_nme = names(inds)[p_i]
       models2 = all_models[[nme_]]#[[p_nme]]  
       if(is.null(models2)){
-        models2 = private$makeModels( vars2, inds#[p_i]
-                                   ,phens#[which(names(phens) %in% p_nme)]
-                                   ,flags)
+        models2 = private$makeModels( vars2, inds)
+                                  
         for(k in 1:length(models2)){
           all_models[[names(models2)[[k]]]] = models2[[k]]#[[p_nme]]#[[p_nme]]
           
@@ -1299,8 +1300,7 @@ makeAllModels=function(variables,
       }else{
         subinds= inds[which(is.na(match(names(inds), names(all_models[[nme_]]))))]
         if(length(subinds)>0){ ## missing inds
-          models3 = private$makeModels( vars2, subinds,phens#[which(names(phens) %in% p_nme)]
-                                     ,flags)
+          models3 = private$makeModels( vars2, subinds)
           for(nme1_ in names(models3)){
             for(r_i in names(models3[[nme1_]])){
               all_models[[nme1_]][[r_i]] = models3[[nme1_]][[r_i]]
@@ -1324,17 +1324,17 @@ makeAllModels=function(variables,
 #' @param all_modelsh  models fitted from makeAllModels
 #' @param update whether to automatically update phens, transform_x and flags , default TRUE
 #' @returns evaluation of models
-evaluateAllModels=function(all_modelsh){ ## different folds with same variables
+evaluateAllModels=function(all_modelsh, update=TRUE){ ## different folds with same variables
   if(update) self$update(all_modelsh$phens, all_modelsh$flags, transform_x =  fromJSON(all_modelsh$flags$transform_x))
   flags = private$flags; phens = private$phens;
   eval1 = super$loadEval();
-  if(is.null(eval1)) return(eval1);
+  if(!is.null(eval1)) return(eval1);
   
   
     private$data$updateTransform(private$transform_x)
     verbose=.readFlag(flags,"verbose",TRUE)
   inv_transform_x=FALSE
-  private$updateLOOC(phens, flags)
+  private$updateLOOC()
   if(length(all_modelsh$models)==0) return(NULL)
  
   all_models_y0 = all_modelsh$models#[[mod_nme]]

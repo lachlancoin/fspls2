@@ -1,6 +1,8 @@
 
 
 check_flags<-function(flags){
+  if(flags$topn<flags$beam) stop("beam should be less than topn")
+  
   if(!is.null(.readFlag(flags,"nrep",NULL))){
     flags[['nfold']] = flags[['nrep']]
     warning("replaced nrep with nfold")
