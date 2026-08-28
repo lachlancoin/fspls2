@@ -41,6 +41,7 @@ analysisBase<-R6::R6Class("analysisBase",
                      dbDir="character",
                      exptid="character",
                      flags ="list",
+                     data_types = "list",
                      transform_x="list",
                      phens="list",
                      useDB="boolean",
@@ -108,8 +109,10 @@ analysisBase<-R6::R6Class("analysisBase",
                        private$flags = flags;
                        private$transform_x = transform_x;
                        private$flags$transform_x = toJSON(transform_x);
+                       private$flags$data_types = toJSON(data_types);
                        private$phens = phens;
-                       if(is.null(private$flags[['data_types']]) || private$flags[['data_types']]=="{}")private$flags[['data_types']]=toJSON(data_types);
+                       private$data_types = data_types;
+                       #if(is.null(private$flags[['data_types']]) || private$flags[['data_types']]=="{}")private$flags[['data_types']]=toJSON(data_types);
                     
                        if(!is.null(private$sigs)){
                          private$exptid =  private$sigs$getExpt(flags, phens, add_new=TRUE)

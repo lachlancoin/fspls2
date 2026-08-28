@@ -88,7 +88,7 @@ testIterative<-function(example){
     if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
     dataset = readRDS(fi)
        ## set up the objects
-    dh = dataH$new(dataset$dataset, y = dataset$y,    nme=example, flags=flags, transform_x = transform_x, dbDir=NULL)
+    dh = dataH$new(dataset$dataset, y = dataset$y,    nme=example, flags=flags)
                 
   
     ##Step 1. run variable selection 
@@ -100,9 +100,11 @@ testIterative<-function(example){
       analysis =analysisEnv$new(flags=flags, dbDir=NULL)
       
       dh$update(phens = dh$pheno()$all, flags = flags, transform_x = transform_x)
-    variables = dh$select( analysis=analysis)
+    direction=  dh$getDirection(times = 1, )
+    direction[[1]][[1]] = "+"
+    variables = dh$select( analysis=analysis, direction=direction)
   
-    variables = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
+    #variables = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
     all_models =dh$makeAllModels(variables)
     

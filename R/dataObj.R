@@ -430,7 +430,7 @@ dataObj<-R6::R6Class("dataObj", public = list(
   types="vector",
   nrow="integer",
   vars="list",
-  direction="character",
+#  direction="character",
 #  var_thresh="double",
 transforms = "list",  ## this is the functions
 #transform_x="list", ## this is the string
@@ -1503,10 +1503,13 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=FALSE, transfor
   phensi = self$phensi(phens1)
   nmei = names(phensi); names(nmei) = nmei
   df = data.frame(lapply(nmei, function(nmei1){
-    as.matrix(self$y[[nmei1]][,phensi[[nmei1]],drop=FALSE])
+    y2=self$y[[nmei1]]
+    y3 = attr(y2,"factor")
+    if(is.null(y3)) y3 = y2
+    as.matrix(y3)
   }))
   
-  variables = vars_all1$variables
+  variables = vars_all1[[1]]$variables
   names(variables)=NULL
   vars = unlist(variables, recursive=FALSE)
   incls = names(self$data); names(incls)=incls
@@ -1541,7 +1544,7 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=FALSE, transfor
    inds = self$convert(vark)
    x = self$data[[inds[1]]][,inds[2]]
    na_x = self$dataNA[[inds[1]]][,inds[2]]
-   x[which(na_x)] = NA
+   x[which(na_x==1)] = NA
    x
   }))
   names(df2)=unlist(lapply(vars, function(x)paste(x,collapse="__")))
@@ -2018,9 +2021,10 @@ getNorm=function(W,var,ik,type){
   }
   return(norm)
 },
-getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
-  assoc=(type %in% c("assoc","assoc1"))
-  W = if(type %in% c("slow","assoc"))self$projOut(ik) else self$projOut1(ik)
+getAngleInnerOld=function(phensi,ik,k,var,type="slow", direction=NULL,var_thresh=1e-5){
+#  assoc=(type %in% c("assoc","assoc1"))
+  #W = if(type %in% c("slow","assoc"))self$projOut(ik) else 
+  W = self$projOut1(ik)
   ##NOTE PROJOUT1 ALSO SUBTRACTS MEAN, BUT FOR PROJOUT WE HAVE TO ADJUST FOR MEAN
   ##IF WE USE PROJOUT1 then x is actually W
   #mean_x = if(type %in% c("slow","assoc")) NULL else self$mean_x[[ik]]#  x_s$mean_x
@@ -2031,21 +2035,18 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
  #d = self$train[[k]]
  # nonNA = lapply(d$nonNA,t)
 #  yTr[,!nonNA]=0
-     if(assoc){
-      stop("not supported")
-      
-     }else{
+   
         norm = self$getNorm(W,var, ik, type)
         norm_sel = abs(norm[unlist(lapply(var, function(v) if(v[1]==ik) v[2] else NULL))])
         if(length(which(norm_sel>var_thresh))>0 ) warning(" not projecting out properly .. possibly due to correlated vars !")
         to_rem = which(norm>-var_thresh)
         P = self$UDVP$P
+        #ii = names(phensi)[[1]]; nmes_prod = names(products)[[1]]; nmes_prod1 = names(products[[nmes_prod]])[[1]]
         angles1 = lapply(names(phensi), function(ii){
                  nme_i = ii
           phensi1 = phensi[[ii]]
                  products =self$train[[k]]$product(ik,ii,phensi1);
           nmes_products = names(products); names(nmes_products) = nmes_products
-          #nmes_prod = "rand"; nmes_prod1 = names(products[[nmes_prod]])[1]
           angle=lapply(nmes_products, function(nmes_prod){
             #print(nmes_prod)
             product0 = products[[nmes_prod]]
@@ -2064,20 +2065,30 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
               product=product-  PY %*% W  #[,self$cols_incl[[ik]],drop=FALSE]
              # dimnames(product) = dimnames(self$train$products[[ik]][[ii]])
             }
-            direction=self$direction
-           # print(paste("dir",direction));
-            if(direction=="+"){
-              angle_1= t((product[]))/(norm)
-              angle_1[angle_1>0]=999
-            }else if(direction=="-"){
-              angle_1= -1* (t((product[]))/(norm))
-              angle_1[angle_1>0]=999
-              
-            }else{
-              angle_1= t(abs(product[]))/(norm)
-            }
+           # direction=self$direction
+            angle_1= t((product[]))/(norm)
             if(ncol(angle_1) != length(norm) || colnames(angle_1)[1]!=names(norm)[1]) angle_1 = t(angle_1)
-            #if(nrow(angle_1) !=nrow(yTr1)) angle_1 = t(angle_1)
+            direction1 = direction[[ii]]
+            mi1 = match( rownames(angle_1),names(direction1))
+            direction1 = direction1[mi1];
+           # print(mi1)
+           # if(length(direction1) !=nrow(angle_1)) stop("problem")
+         #   message(unlist(direction1));
+          #  print("direction");
+          #  print(unlist(direction1));
+          #  print(unlist(rownames(angle_1)))
+            for(jk in 1:nrow(angle_1)){
+              dir1  = direction1[jk]
+           #   print(jk); print(direction1[[jk]])
+              if(dir1=="+"){
+                angle_1[jk,angle_1[jk,]>0]=999
+              }else if( dir1=="-"){
+                angle_1[jk,] = -1*angle_1[jk,]
+                angle_1[jk,angle_1[jk,]>0]=999
+              }else{
+                angle_1[jk,] = -1*abs(angle_1[jk,,drop=F])
+              }
+            }
             if(length(to_rem)>0){
                 angle_1[,to_rem]=999  #after we project out the projected out columns have zero norm
             }
@@ -2086,7 +2097,7 @@ getAngleInnerOld=function(phensi,ik,k,var, type="slow",var_thresh=1e-5){
           })
          angle
         })
-     }
+     
   names(angles1) = names(phensi)
      return(angles1)
 },
@@ -2130,15 +2141,46 @@ phensi=function(subphens){
   names(phensi) = names(subphens)
   phensi
 },
+getDirection=function(inds1){
+# 
+  pos_inds = unique(inds1$pos_inds);
+  neg_inds = unique(inds1$neg_inds);
+ 
+  direction = 
+        lapply(self$y, function(y1){
+          mi1=match(pos_inds,colnames(y1));
+          mi2 = match( neg_inds,colnames(y1))
+        
+          if(length(pos_inds)+length(neg_inds)>0 && length(which(!is.na(mi1)))+length(which(!is.na(mi2)))==0){
+            pos_inds1 = unique(unlist(lapply(pos_inds, function(pi1) grep(paste0(pi1,"$"),colnames(y1),v=TRUE)), recursive=TRUE))
+            neg_inds1 = unique(unlist(lapply(neg_inds, function(pi1) grep(paste0(pi1,"$"),colnames(y1),v=TRUE)), recursive=TRUE))
+            mi1=match(pos_inds1,colnames(y1));
+            mi2 = match( neg_inds1,colnames(y1))
+            
+          }
+          if(length(which(duplicated(c(mi1,mi2)) ) )>0) stop("inconsistent")
+          
+          res = rep("", ncol(y1))
+          names(res)=colnames(y1)
+          res[mi1] = "+";
+          res[mi2] = "-";
+          as.list(res)
+        })
+  direction    
+
+ # dir1 = rep(list(direction),times)
+#  names(dir1) = 1:times
+#  dir1
+},
 ##incl is which of the layers to include
-getAngles1=function(subphens,varnames,incl=names(self$data), k=1,type="slow1"){
+getAngles1=function(subphens,varnames,incl, k=1,type="slow1"){
   var=lapply(varnames, self$convert)
   var = var[unlist(lapply(var, length))>0]
   phensi = self$phensi(subphens)
   names(phensi)=names(subphens)
-  self$getAngles(phensi,var ,incl=incl, k=k, type=type)
+  self$getAngles(phensi,var ,incl, k=k, type=type)
 },
-  getAngles=function(phensi, var,incl=names(self$data), k=1,type="slow1"){  ## type can be fast, slow, assoc, slow1 .. fast gives wrong results
+  getAngles=function(phensi, var,incl, k=1,type="slow1"){  ## type can be fast, slow, assoc, slow1 .. fast gives wrong results
     run_separate=TRUE
     self$updateUDVP(var)
     ntrans=attr(self$data,"ntrans") 
@@ -2147,21 +2189,18 @@ getAngles1=function(subphens,varnames,incl=names(self$data), k=1,type="slow1"){
     nmesd = names(self$norm)
     angles_d= vector('list', length(self$data)) ## need angle object
     names(angles_d) = names(self$data)
+    #incl$direction
     for(ik in 1:length(self$norm)){
     #  (ik)
-      if(names(self$norm)[[ik]] %in% incl){
-        if(type=="fast"){
-          stop("not working")
-          angles_d[[ik]] = self$getAngleInner(phensi,ik,k,var)
-        }else{
+      if(names(self$norm)[[ik]] %in% incl$types){
           angles_d[[ik]] =  tryCatch({
-            self$getAngleInnerOld(phensi,ik, k,var,type)
+            self$getAngleInnerOld(phensi,ik, k,var,type, incl$direction)
           },error=function(errw){
             message(errw)
             NULL
           })
             
-        }
+        
       }
     }    
     # angle[which(dnorm==0)]=999
@@ -2537,7 +2576,7 @@ split=function(proportions){
   initialize=function( cohort,  db_name,dbDir,flags,
                       incl_full=TRUE,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores
   
-    self$direction = .readFlag(flags,'direction','none');
+    #self$direction = .readFlag(flags,'direction','none');
     self$db_name=db_name;
     if(!is.null(memDir)){
       mem_dirp = memDir

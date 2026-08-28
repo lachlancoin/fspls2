@@ -1,4 +1,11 @@
 
+.self<-function(dh){  
+  assign("self", dh, envir = .GlobalEnv) ;
+  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) ;
+  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
+  }
+
+
 rbind_sparse <- function(mats) {
   # sanity check: all matrices must have the same number of columns
   ncols <- vapply(mats, ncol, integer(1))
@@ -90,12 +97,8 @@ is.big.matrix<-function(mat){
  # return (bigmemory::is.big.matrix(mat));
 }
 
-###used strictly for debugging
-#.self<-function(dh){
-#  assign("self", dh, envir = .GlobalEnv) 
-#  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) 
-#  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
-#}
+
+
 
 ## this from sce single cell format
 .convertSCEToSparse<-function(sce){
@@ -190,23 +193,18 @@ length(unique(eval1$`data:family`))
 }
 
 .modify<-function(eval3, shape_color,
-                  shape_color_nme,collapse=" " ){
+                  shape_color_nme ){
   if(!(shape_color_nme %in% names(eval3))){
     eval3_sub=eval3[,names(eval3) %in% shape_color,drop=FALSE]
-    for(jk in 1:length(eval3_sub)) {
-      eval3_sub[[jk]][which(is.na(eval3_sub[[jk]]))]="NA"
-      
-      eval3_sub[[jk]]=factor(as.character(eval3_sub[[jk]]))
-      
-    }
+    for(jk in 1:length(eval3_sub)) eval3_sub[[jk]]=factor(eval3_sub[[jk]])
     levs1 = lapply(eval3_sub, function(vv) levels(vv))
     levs_all = levs1[[1]]
     if(length(levs1)>1){
       for(jk in 2:length(levs1)){
-      levs_all = unlist(lapply(levs1[[jk]], function(levs11) paste(levs_all, levs11, sep=collapse)))
+      levs_all = unlist(lapply(levs1[[jk]], function(levs11) paste(levs_all, levs11)))
       }
     }
-      eval4 = eval3 |>  tibble::add_column(shape_color_nme = apply(eval3_sub,1,paste, collapse=collapse))
+      eval4 = eval3 |>  tibble::add_column(shape_color_nme = apply(eval3_sub,1,paste, collapse=" "))
       
       eval4[['shape_color_nme']]=factor(eval4[['shape_color_nme']], levels = levs_all)
         names(eval4) = gsub("shape_color_nme", shape_color_nme, names(eval4))
@@ -295,9 +293,9 @@ plotEval<-function(eval3,
   
   eval3 = .modify(eval3, linetype, linetype_nme)
   eval3 = .modify(eval3, sep_by, sep_by_nme)
-  eval3 = .modify(eval3,grid0, grid0_nme, collapse="\n")
+  eval3 = .modify(eval3,grid0, grid0_nme)
   if(length(grid1)>0){
-  eval3 = .modify(eval3,grid1, grid1_nme, collapse="\n")
+  eval3 = .modify(eval3,grid1, grid1_nme)
   }
   eval2 = eval3
   

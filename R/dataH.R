@@ -207,19 +207,22 @@ ggp3+ggtitle(paste("fold=",k1))
   ang_extracted
 }
 
-.combineAngles1<-function(angleH, incl, sumAngle, prev_signature, flags, excl=list()){ 
+
+.combineAngles1<-function(angleH, incl, sumAngle, prev_signature, flags){ 
+  #$types
   #flags = private$flags;
   topn = .readFlag(flags,'topn', 20)
   onlyAll = .readFlag(flags,'only_all',FALSE)
   angles1=angleH$angles;cols_incl1=angleH$cols_incl 
   nme_trans = names(angles1[[1]][[1]]); names(nme_trans) = nme_trans
+  types = incl$types; names(types) = types
+  excl = incl$excl
   # nmes_angs1 = names(angles1); names(nmes_angs1)=nmes_angs1
-  #nme_t1 = nme_trans[[1]]; nme_p1 = names(angles1[[1]][[1]][[nme_t1]])[[1]]; inc1 = incl[[1]]; jk=1
-  names(incl) = incl
+  #nme_t1 = nme_trans[[1]]; nme_p1 = names(angles1[[1]][[1]][[nme_t1]])[[1]]; inc1 = types[[1]]; jk=1
   comb_all2=lapply(nme_trans, function(nme_t1){
     nme_pow = names(angles1[[1]][[1]][[nme_t1]]); names(nme_pow)=nme_pow
     lapply(nme_pow, function(nme_p1){
-      comb_all=lapply(incl, function(inc1){
+      comb_all=lapply(types, function(inc1){
         ang1 = angles1[[inc1]]
         if(is.null(ang1)) return(NULL)
         col_incl = cols_incl1[[inc1]]
@@ -230,9 +233,10 @@ ggp3+ggtitle(paste("fold=",k1))
             cs = cs+Matrix::colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
           }
         }
-        excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1 && ex[4] ==nme_p1))]
-        if(length(excl1)>0){
-          col_incl[which(names(col_incl) %in% unlist(lapply(excl1, function(ex) ex[2])))]=FALSE
+     #   excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1 && ex[4] ==nme_p1))]
+        if(length(excl)>0){
+          mi2 = match(excl, names(col_incl))
+          col_incl[mi2[!is.na(mi2)]]=FALSE
         }
         cs[col_incl]
       })
@@ -513,7 +517,7 @@ dataH<-R6::R6Class("dataH",
      models2
    },
    select_k=function(analysis, k1,
-                     vars_l_todo 
+                     vars_l_todo
                    ){
      verbose=getOption("verbose",FALSE)
      if(is.null(private$phens)){
@@ -529,6 +533,7 @@ dataH<-R6::R6Class("dataH",
      # vars_l = analysis$nextVars(expt_id, flags)
      nvar=0;
      while(length(vars_l_todo$todo1)>0 ){
+      # direct = direction[[min(nvar+1, length(direction))]]
        comb2_new1 = try(self$multiAnglesAndPv(comb20 , k1,expt_id, vars_l_todo))
        if(inherits(comb2_new1,"try-error")) break;
         comb21 =  lapply(comb2_new1, function(x) x$pvs)
@@ -546,7 +551,8 @@ dataH<-R6::R6Class("dataH",
        comb2_new = list(comb21);
        vars_l_todo_new=analysis$savePvalsAndNextVars(vars_l_todo,comb2_new,data_nme,  k1)
       
-       if(length(vars_l_todo$todo1)==length(vars_l_todo_new$todo1)){ ## to account for continuing via shortening todo rather than adding variable
+       if(vars_l_todo_new$moveNext){
+       
          comb20 = comb21
        }
        vars_l_todo = vars_l_todo_new
@@ -654,22 +660,43 @@ dataH<-R6::R6Class("dataH",
      })
      ri_out
    },
-   
-   combinedAngles=function( varnames, incl, k, g_incl, qq_t, sumAngle, addPlot=FALSE){ #phens, varnames, incl=incl, k=k, type=type
+##equivalent of combinedAngles1 but for predefined subsignature
+predefined=function(incl1,prev_signature, sumAngle){
+  dt1 = lapply(private$data$data, function(d) which(incl1 %in% colnames(d)))
+  dt1 = dt1[unlist(lapply(dt1, length))>0]
+  lapply(private$transform_x, function(tx){
+    lapply(tx$params, function(tx1){
+      .merge1_new(lapply(dt1, function(ind){
+        signature=        apply(cbind(prev_signature, incl1[ind]),1,paste,collapse=";")
+        
+        data.frame(list(names = incl1[ind],value = 0,sumAngle=sumAngle, signature=signature ))
+      }),addName="data_type")
+    })
+  })
+  
+},
+   combinedAngles=function( varnames, incl, k, g_incl, qq_t, sumAngle,  addPlot=FALSE){ #phens, varnames, incl=incl, k=k, type=type
       type=private$type
       phens = private$phens;
       flags = private$flags; 
      prev_signature =paste(unlist(lapply(varnames, function(vn)vn[2])),collapse=";")
      var_t = private$var_thresh(qq_t)
-     if(length(which(names(private$data$data) %in% incl))==0) stop("incl does not match data")
-     angles=  private$data$getAngles1(phens,varnames,incl=incl,k=k, type=type)
-     angles =angles[ unlist(lapply(angles, length))>0]
-     angleH=list(angles=angles,
-                 cols_incl = private$data$cols_incl(var_t,incl, g_incl,excl=varnames)) ### fix 
-     comb_angle1 =  .combineAngles1(angleH, incl,  sumAngle, prev_signature,flags, excl=varnames)
-     if(addPlot){
-       all_angles = .extrAngles(angleH,comb_angle1, incl)
-        attr(comb_angle1,"all")=all_angles;
+     if(length(which(names(private$data$data) %in% incl$types))==0) stop("incl does not match data")
+     v2 = unlist(lapply(varnames, function(x) x[[2]]))
+     incl2 = incl$incl[!(incl$incl %in% v2)] 
+     if(length(incl2>0)){  ## use pre-defined
+        comb_angle1 = private$predefined(incl2, prev_signature, sumAngle)
+     }else{
+     
+         angles=  private$data$getAngles1(phens,varnames,incl,k=k, type=type)
+         angles =angles[ unlist(lapply(angles, length))>0]
+         angleH=list(angles=angles,
+                     cols_incl = private$data$cols_incl(var_t,incl$types, g_incl,excl=varnames)) ### fix 
+         comb_angle1 =  .combineAngles1(angleH, incl,  sumAngle, prev_signature,flags)
+         if(addPlot){
+           all_angles = .extrAngles(angleH,comb_angle1, incl$types)
+            attr(comb_angle1,"all")=all_angles;
+         }
      }
      comb_angle1
    },
@@ -769,6 +796,8 @@ dataH<-R6::R6Class("dataH",
       
     
   },
+
+  
   #' @description Calculate the angles and pv across multiple phenotypes.  This is an internal function and should not need to be called by user
   #' @param comb20 values from previous iteration
   #' @param phens1 phenotypes being used
@@ -776,7 +805,7 @@ dataH<-R6::R6Class("dataH",
   #' @param flags list of options
   #' @param expt_id and ID for the experiment (can be 0)
   #' @param vars_l_todo  the variables under consideration
-    multiAnglesAndPv=function(comb20,  k1, expt_id, vars_l_todo){
+    multiAnglesAndPv=function(comb20,  k1, expt_id, vars_l_todo ){
       phens1 = private$phens;
       flags = private$flags; 
 #      self$update(phens, flags, transform_x);
@@ -793,7 +822,8 @@ dataH<-R6::R6Class("dataH",
       prev_i2 = private$findPrev(comb20, expt_id, prev_i, k1);
       varnames = prev_i2$var_names; 
       sumAngle =sum(prev_i2$angles)
-      comb_=private$combinedAngles(varnames, incl, k1,  g_incl, qq_t, sumAngle,addPlot=show_pvalue_plots) ;
+      comb_=private$combinedAngles(varnames, incl, k1,  g_incl, qq_t, sumAngle,
+                                   addPlot=show_pvalue_plots) ;
       if(length(comb_)==0) stop("length zero")
       # return(list(comb_angle1, all_angles));
       
@@ -862,9 +892,59 @@ dataH<-R6::R6Class("dataH",
     }), addName="repeat")
   },
   #' get the data types
-  #' @returns which data types are in the dataset
-  data_types=function(){
-    names(private$data$data)
+  #' data_nmes a list of names of the data names to include, optional
+  #' inds a list of positive and negative inds, optional
+  #' direction a direction object
+  #' incl a list of variables to include 
+  #' excl a list of variables to exclude 
+  #' max a list of maximum number of variables for each data type
+  #' @returns an object which is used to specify both directionallity and data types
+  data_types=function(
+    data_nmes=list(all = names(private$data$data)),
+    inds =lapply(data_nmes, function(x) list(pos_inds = c(), neg_inds = c(), max = 1000)),
+    direction = lapply(inds, private$data$getDirection),
+    incl = c(),
+    excl = c()
+  ){
+#  match(data_nmes,     
+    nmes = names(inds); names(nmes) = nmes;
+    all = lapply(nmes, function(nme1){
+      dt1 = data_nmes[[nme1]];
+   
+      dir1 = direction[[nme1]]
+      max = inds[[nme1]]$max
+      if(is.null(max)) max = 100
+      if(is.null(dt1)){
+        res =  lapply(data_nmes, function(dt2){
+          list(direction = dir1, types = dt2, max = max, excl = excl, incl = incl, nvar=0)
+        })
+      }else if(is.null(dir1)){ ## use all directions
+           res =  lapply(direction, function(dir2){
+              list(direction = dir2, types = dt1, max = max, excl = excl, incl = incl, nvar=0)
+            })
+      }else{
+        res = list(list(direction = dir1, types = dt1, max = max, excl = excl, incl = incl, nvar=0))
+        #names(res) = nme1
+      }
+      res
+    })
+    all1 = unlist(all, recursive=F)
+    lapply(all1, function(a1){
+      if(length(a1$incl)>0){
+       a1$incl=unlist(lapply(a1$types, function(t1) {
+          cn =  colnames(private$data$data[[t1]])
+          cn[cn%in% a1$incl]
+        }))
+      }
+      if(length(a1$excl)>0){
+        a1$excl=unlist(lapply(a1$types, function(t1) {
+          cn =  colnames(private$data$data[[t1]])
+          cn[cn%in% a1$excl]
+        }))
+      }
+      a1
+    })
+    
   },
   #' @description split dataset into smaller datasets
   #' @param proportions what proportions to split into
@@ -920,8 +1000,9 @@ dataH<-R6::R6Class("dataH",
  #' @param flags list of options
  #' @param transform_x transformation object 
  
- update=function(phens=self$pheno()$all, flags=private$flags, transform_x=fromJSON(flags$transform_x)){
-   flags = super$updateExpt(phens, flags, transform_x, self$data_types());
+ update=function(phens=self$pheno()$all, flags=private$flags, transform_x=fromJSON(flags$transform_x), 
+                 data_types = self$data_types()){
+   flags = super$updateExpt(phens, flags, transform_x, data_types);
     verbose=.readFlag(flags,'verbose',FALSE)
     force=.readFlag(flags,'force',FALSE);
     #flags$transform_x = transform_x;
@@ -942,8 +1023,7 @@ dataH<-R6::R6Class("dataH",
 
  select=function( 
                  analysis =analysisEnv$new(flags=private$flags, dbDir=NULL)
-               
-               ){#c(y="function(y) y","function(y) y")
+                              ){#c(y="function(y) y","function(y) y")
 
    if(is.null(private$phens)) stop("need to update first");
     nreps =self$nreps();
@@ -1059,31 +1139,39 @@ extractPredictions=function(all_modelsh,
 #' @param violin violin plots
 #' @param assoc use association
 #' @returns  a table with results
-plotData=function(vars_all, phens = vars_all$phens, all_types=FALSE, transform_x = NULL, violin=FALSE, assoc=FALSE){
-  vars_all = vars_all1
+plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=FALSE){
+  
+  attrs = attributes(variables)
+  if(update) self$update(attrs$phens, attrs$flags, transform_x =  attrs$transform_x)
+  
+  vars_all=super$integrate(variables)
+
   df4= #.merge1_new( 
    # lapply(private$datas, function(d) 
-      private$data$plotData(vars_all1, phens1 = phens, all_types=all_types, transform_x = transform_x, violin=violin, assoc=assoc)
+      private$data$plotData(vars_all, phens1 = private$phens, all_types=all_types, transform_x = private$transform_x, 
+                            violin=violin, assoc=assoc)
                #     addName="dataset")
   df4 = df4|>tibble::add_column(dataset=private$nme);
-  facet= if(!is.null(df4[['transform']]) ) "transform~pheno1" else "pheno1"
+  facet= if(!is.null(df4[['transform']]) ) "transform~pheno" else "pheno"
   df4$y = factor(df4$y)
-  gene_levs = unlist(lapply(unlist(vars_all1$variables,recursive=FALSE), function(x) x[[2]]))
+  gene_levs = unlist(lapply(unlist(vars_all[[1]]$variables,recursive=FALSE), function(x) x[[2]]))
   gene_levs = gene_levs[!duplicated(gene_levs)]
   df4$gene = factor(df4$gene, levels = gene_levs)
-  df5=df4|> separate(col="pheno",sep="\\.", into=c("family","pheno1"),fill="right",extra="drop")
+  df5=df4|> separate(col="pheno",sep="\\.", into=c("family","pheno"),fill="right",extra="drop")
   df6=subset(df5, family=="gaussian")
   df7=(subset(df5, family!="gaussian"))
   # color= if(length(unique(df4$dataset))>1) "dataset" else #"pheno"
   ggp = NULL; ggp1 = NULL
   if(nrow(df7)>0){
-    ggp<-ggplot(df7, aes(x=y, y=value, color=gene, shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
+    ggp<-ggplot(df7, aes(x=y, y=value, color=y, shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
     if(violin){
-      ggp<-ggp+geom_violin()+geom_point()
+      ggp<-ggp+ggplot2::geom_violin()+geom_point()
     }else{
-      ggp<-ggp+geom_boxplot()
+      ggp<-ggp+ggplot2::geom_boxplot()
     }
+    ggp<-ggp+facet_wrap("gene")
   }
+ 
   if(nrow(df6)>0){
     prbs=c(0.33,0.5,0.66)
     df6_1 =df6 |> unite("comb",gene,data,family,pheno1,dataset,sep="__")
@@ -1106,6 +1194,7 @@ plotData=function(vars_all, phens = vars_all$phens, all_types=FALSE, transform_x
     quants1$y = as.numeric(quants1$y)
     ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=gene, fill=gene,shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
     ggp1<-ggp1+geom_line()+geom_ribbon(alpha=0.1)
+    ggp1<-ggp1+facet_wrap("gene")
   }
   
   list("binomial"=ggp,"gaussian"=ggp1)

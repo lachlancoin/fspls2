@@ -92,7 +92,7 @@ fspls.iterative<-function(dataset,flags, transform_x ){
   mult = .readFlag(flags, "mult",100)
   dh = dataH$new(dataset$dataset, y = dataset$y, 
                  certainty = dataset$certainty,
-                 nme="iterative", flags=flags, transform_x = transform_x, dbDir=NULL)
+                 nme="iterative", flags=flags)
  vars_all = NULL; all_models = NULL; preds1 = NULL;
  updates = list();
  select_each_iteration = .readFlag(flags, "select_each_iteration",TRUE);
@@ -127,18 +127,7 @@ fspls.iterative<-function(dataset,flags, transform_x ){
 #  plot(roc1)
   
 }
-#' extracts the full model variables from a cross validation run
-#' @param vars_all and object returned by fspls.select
-#' @export
-extractFullVars<-function(vars_all){
-  lapply(vars_all, function(vars_all1){
-    subinds = which(unlist(lapply(vars_all1$inds, function(x) length(grep('full',names(x)))))>0)
-    list(variables = vars_all1$variables[subinds], inds = vars_all1$inds[subinds], cumpv = vars_all1$cumpv[subinds],
-         transf = vars_all1$transf[subinds],
-         flags = vars_all1$flags,
-         phens=vars_all1$phens, transform_x = vars_all1$transform_x)
-  })
-}
+
 
 #' main function for variable selection
 #' @param datasH a list of dataH objects
@@ -150,11 +139,12 @@ extractFullVars<-function(vars_all){
 fspls.select<-function(datasH, flags,
                 transform_x, 
                 phens=datasH[[1]]$pheno()$all,
-                dbDir = NULL
+                direction=datasH[[1]]$getDirection(),
+                                dbDir = NULL
                ){#c(y="function(y) y","function(y) y")
   options(flags);
   analysis =analysisEnv$new(flags=flags, dbDir=dbDir) ;
-  vars_all = analysis$select( datasH,phens,transform_x)
+  vars_all = analysis$select( datasH,phens,transform_x, direction=direction)
  
   vars_all
   
@@ -297,7 +287,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
       
       angles_all = angles_all[unlist(lapply(angles_all, length))>0]
       if(length(angles_all)==0){
-        vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1[-1])
+       # length(vars_l_todo$todo1)==length(vars_l_todo_new$todo1)){ 
+    ## to account for continuing via shortening todo rather than adding variable
+        vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1[-1], moveNext=FALSE)
         return(vars_l_todo)
       }
       ang1 = unlist(unlist(unlist(angles_all, recursive=FALSE),recursive=FALSE),recursive=FALSE)
@@ -361,13 +353,18 @@ analysisEnv<-R6::R6Class("analysisEnv",
         last_non_rand = grep("rand", names(ang1))[1]-1
         if(is.na(last_non_rand)) last_non_rand = beam;      
         ang1 = ang1[1:min(length(ang1),beam, last_non_rand)]
-        vars_l_todo = list(stop=FALSE, vars_l = ang1, todo1 = vars_l_todo$todo1)
+        todo1 = vars_l_todo$todo1;
+        todo1[[1]]$incl$nvar = todo1[[1]]$incl$nvar+1;
+        if(todo1[[1]]$incl$nvar>= todo1[[1]]$incl$max){
+          todo1 = todo1[-1]
+        }
+        vars_l_todo = list(stop=FALSE, vars_l = ang1, todo1 = todo1, moveNext=TRUE)
         if(length(grep("rand", names(vars_l_todo$vars_l)))>0) stop("!!");
         
         return(vars_l_todo)
       }
 
-      vars_l_todo = list( stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1)
+      vars_l_todo = list( stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1, moveNext=FALSE)
       return(vars_l_todo)
     },
     savePvals=function(k1, data_nme, vars_l, comb2){
@@ -422,7 +419,8 @@ analysisEnv<-R6::R6Class("analysisEnv",
   #' @param vars_l_todo an object representing what is left to do
   #' @returns vars_l_todo object
   select_k=function(datasH, k1,
-                    vars_l_todo 
+                    vars_l_todo ,
+                    direction=datasH[[1]]$getDirection()
                   ){
     phens = private$phens;
     flags = private$flags;
@@ -557,6 +555,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
  #' @param transform_x transformation object
  #' @param useDB boolean to indicate if results should be saved to database
  select=function(datasH,phens,transform_x,
+                 direction=datasH[[1]]$getDirection(),
                  useDB=FALSE){#c(y="function(y) y","function(y) y")
    #phens = private$phens;
    flags = private$flags;
@@ -581,7 +580,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
   
    vars_l_todo = self$getTodo(private$flags, private$phens);
    variables1 <- lapply(nreps, function(k1) {  ## can use mclapply here
-      self$select_k(datasH,k1,  vars_l_todo)
+      self$select_k(datasH,k1,  vars_l_todo, direction=direction)
      
    })
    
