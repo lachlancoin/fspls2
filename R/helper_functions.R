@@ -1,9 +1,9 @@
 
-.self<-function(dh){  
-  assign("self", dh, envir = .GlobalEnv) ;
-  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) ;
-  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
-  }
+#.self<-function(dh){  
+#  assign("self", dh, envir = .GlobalEnv) ;
+#  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) ;
+#  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
+ # }
 
 
 rbind_sparse <- function(mats) {

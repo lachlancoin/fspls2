@@ -43,8 +43,7 @@ library(fspls2)
                         verbose=TRUE,
             lambda = NULL, ## for using glmnet
               show_warnings=FALSE,
-            show_pvalue_plots=FALSE,  ## get plots of pvalues over iterations
-            direction="none" ## can be + , - or none
+            show_pvalue_plots=FALSE  ## get plots of pvalues over iterations
     )
 
   #check_flags(flags)  ## runs som simple checks
@@ -55,39 +54,18 @@ library(fspls2)
   examples = c("binomial", "gaussian", "ordinal", "multinomial");
 #example="gaussian"
   
-##iterative function carries out imputation of uncertain y values at the same time as feature selection
-testIterative<-function(example){
-  prop_na=0.2; seed=42
-  flags$nfold=1
-  
-     fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
-    dataset = readRDS(fi); 
-    if(example=="binomial") dataset$y$y = factor(dataset$y$y, labels=c("A","B"))
-    dataset$certainty = rep(1, nrow(dataset$y));
-    set.seed(seed)
-    na_inds1=sort(sample.int(nrow(dataset$y),nrow(dataset$y)*prop_na))
-  dataset$certainty[na_inds1]=0.5;##1/length(levels(dataset$y[[1]]))
-  #dataset$y[na_inds,] = NA
-  
-  flags$mult = 100
-  flags$select_each_iteration = TRUE;
-  results = fspls.iterative(dataset, flags, transform_x)
-  print(results$updates)
-  na_remaining= length(which(results$certainty_new<0.95))
-  message(paste("na remaining", na_remaining))  
-  message(paste("error rate",results$error_rate))
-  print(results$vars_all$full)
-  
-}
+
 
 
   #FUNCTION TO SHOW HOW TO RUN EACH EXAMPLE
-  runExample<-function(example,nfold=10){
+  runExample<-function(example,nfold=5){
    flags$nfold = nfold
     fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
     if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
     dataset = readRDS(fi)
        ## set up the objects
+    
+     
     dh = dataH$new(dataset$dataset, y = dataset$y,    nme=example, flags=flags)
                 
   
@@ -98,12 +76,12 @@ testIterative<-function(example){
     #vars_all = analysis$select(datasH,  flags, transform_x, phens = dh$pheno()$all)
   
       analysis =analysisEnv$new(flags=flags, dbDir=NULL)
-      
-      dh$update(phens = dh$pheno()$all, flags = flags, transform_x = transform_x)
-    direction=  dh$getDirection(times = 1, )
-    direction[[1]][[1]] = "+"
-    variables = dh$select( analysis=analysis, direction=direction)
-  
+     
+      data_types = dh$data_types();
+      dh$update(phens = dh$pheno()$all, flags = flags, transform_x = transform_x, data_types = data_types)
+    variables = dh$select( analysis=analysis)
+  #  selected_plot= dh$plotData(variables, update=T)
+  # print(selected_plot)
     #variables = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
     all_models =dh$makeAllModels(variables)
@@ -122,6 +100,34 @@ testIterative<-function(example){
    
     ggps1[[1]]
   }
+
+
+##iterative function carries out imputation of uncertain y values at the same time as feature selection
+##only works for multinomial and binomial
+runIterative<-function(example, prop_na=0.2, seed=42){
+ 
+  flags$nfold=1 ## only works with one fold currently
+  
+     fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
+    dataset = readRDS(fi); 
+    if(example=="binomial") dataset$y$y = factor(dataset$y$y, labels=c("A","B"))
+    dataset$certainty = rep(1, nrow(dataset$y));
+    set.seed(seed)
+    na_inds1=sort(sample.int(nrow(dataset$y),nrow(dataset$y)*prop_na))
+  dataset$certainty[na_inds1]=0.5;##1/length(levels(dataset$y[[1]]))
+  #dataset$y[na_inds,] = NA
+  
+  flags$mult = 100
+  flags$select_each_iteration = TRUE;
+  results = fspls.iterative(dataset, flags, transform_x)
+  print(results$updates)
+  na_remaining= length(which(results$certainty_new<0.95))
+  message(paste("na remaining", na_remaining))  
+  message(paste("error rate",results$error_rate))
+  print(results$vars_all$full)
+}
+
+
 ```
 Example 1
 ```{r, eval = FALSE}
@@ -147,10 +153,10 @@ ggp4
 Iteratively replacing uncertain values
 ```{r, eval = FALSE}
 ## test Iterative works on binomial and multinomial
-testIterative("binomial")
+runIterative("binomial")
 ```
 
 ```{r, eval = FALSE}
 ## test Iterative works on binomial and multinomial
-testIterative("multinomial")
+runIterative("multinomial")
 ```

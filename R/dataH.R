@@ -838,7 +838,7 @@ predefined=function(incl1,prev_signature, sumAngle){
      if( show_pvalue_plots){ ## just prints the plot to screen, or to pdf
        
          ggps=try(plot_angle_vs_pv(comb2_new,1, k1))
-        print(ggps)
+         print(ggps)
        
       #  if(length(vars_l_todo$todo1)>0){
        
@@ -892,12 +892,11 @@ predefined=function(incl1,prev_signature, sumAngle){
     }), addName="repeat")
   },
   #' get the data types
-  #' data_nmes a list of names of the data names to include, optional
-  #' inds a list of positive and negative inds, optional
-  #' direction a direction object
-  #' incl a list of variables to include 
-  #' excl a list of variables to exclude 
-  #' max a list of maximum number of variables for each data type
+  #' @param data_nmes a list of names of the data names to include, optional
+  #' @param inds a list of positive and negative inds, optional
+  #' @param direction a direction object
+  #' @param incl a list of variables to include 
+  #' @param excl a list of variables to exclude 
   #' @returns an object which is used to specify both directionallity and data types
   data_types=function(
     data_nmes=list(all = names(private$data$data)),
@@ -913,7 +912,7 @@ predefined=function(incl1,prev_signature, sumAngle){
    
       dir1 = direction[[nme1]]
       max = inds[[nme1]]$max
-      if(is.null(max)) max = 100
+      if(is.null(max)) max = 1000
       if(is.null(dt1)){
         res =  lapply(data_nmes, function(dt2){
           list(direction = dir1, types = dt2, max = max, excl = excl, incl = incl, nvar=0)
@@ -928,7 +927,7 @@ predefined=function(incl1,prev_signature, sumAngle){
       }
       res
     })
-    all1 = unlist(all, recursive=F)
+    all1 = unlist(all, recursive=FALSE)
     lapply(all1, function(a1){
       if(length(a1$incl)>0){
        a1$incl=unlist(lapply(a1$types, function(t1) {
@@ -999,7 +998,7 @@ predefined=function(incl1,prev_signature, sumAngle){
  #' @param phens phenotypes
  #' @param flags list of options
  #' @param transform_x transformation object 
- 
+#' @param data_types a data_type object
  update=function(phens=self$pheno()$all, flags=private$flags, transform_x=fromJSON(flags$transform_x), 
                  data_types = self$data_types()){
    flags = super$updateExpt(phens, flags, transform_x, data_types);
@@ -1132,12 +1131,11 @@ extractPredictions=function(all_modelsh,
 },
 
 #' @description plot all data for selected variables
-#' @param vars_all variables
-#' @param phens list of phenotyps
+#' @param variables object returned by fspls.select
 #' @param all_types use all types?
-#' @param transform_x which transform to use on x
 #' @param violin violin plots
 #' @param assoc use association
+#' @param update whether to use attributes from bariables to update this object, default is FALSE
 #' @returns  a table with results
 plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=FALSE){
   
@@ -1153,7 +1151,7 @@ plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=
                #     addName="dataset")
   df4 = df4|>tibble::add_column(dataset=private$nme);
   facet= if(!is.null(df4[['transform']]) ) "transform~pheno" else "pheno"
-  df4$y = factor(df4$y)
+  #df4$y = factor(df4$y)
   gene_levs = unlist(lapply(unlist(vars_all[[1]]$variables,recursive=FALSE), function(x) x[[2]]))
   gene_levs = gene_levs[!duplicated(gene_levs)]
   df4$gene = factor(df4$gene, levels = gene_levs)
@@ -1174,7 +1172,7 @@ plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=
  
   if(nrow(df6)>0){
     prbs=c(0.33,0.5,0.66)
-    df6_1 =df6 |> unite("comb",gene,data,family,pheno1,dataset,sep="__")
+    df6_1 =df6 |> unite("comb",gene,data,family,pheno,dataset,sep="__")
     comb1=unique(df6_1$comb); names(comb1)=comb1
     quants=.merge1_new(lapply(comb1,function(c1){
       df6_2 = subset(df6_1, comb==c1)
@@ -1192,9 +1190,10 @@ plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=
     quants1 = quants |> separate("comb", sep="__", into=c("gene","data","family","pheno1","dataset"))
     names(quants1) = gsub("\\.","",names(quants1))
     quants1$y = as.numeric(quants1$y)
+    #gsub("X50", "median expression", names(quants1))
     ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=gene, fill=gene,shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
     ggp1<-ggp1+geom_line()+geom_ribbon(alpha=0.1)
-    ggp1<-ggp1+facet_wrap("gene")
+    ggp1<-ggp1+facet_wrap("gene")+labs(y="median gene expression for y<=yval", x="yval")
   }
   
   list("binomial"=ggp,"gaussian"=ggp1)

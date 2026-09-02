@@ -84,7 +84,7 @@ expandData<-function(dataset, mult = 100
 #' @param dataset a list with y and data value
 #' @param flags list of options
 #' @param transform_x transformation object 
-fspls.iterative<-function(dataset,flags, transform_x ){
+fspls.iterative<-function(dataset,flags, transform_x){
   options(flags);
   if(is.null(dataset$y) || length(dataset$dataset)==0 || is.null(dataset$certainty)) stop(" dataset not well defined")
   if(!is.factor(dataset$y[[1]])) stop("y should be a factor")
@@ -134,17 +134,18 @@ fspls.iterative<-function(dataset,flags, transform_x ){
 #' @param flags list of options
 #' @param transform_x transformation object 
 #' @param phens list of phenotypes
+#' @param data_types a data type object
 #' @param dbDir database dir, can be NULL
 #' @export
 fspls.select<-function(datasH, flags,
                 transform_x, 
                 phens=datasH[[1]]$pheno()$all,
-                direction=datasH[[1]]$getDirection(),
+                data_types=datasH[[1]]$data_types(),
                                 dbDir = NULL
                ){#c(y="function(y) y","function(y) y")
   options(flags);
   analysis =analysisEnv$new(flags=flags, dbDir=dbDir) ;
-  vars_all = analysis$select( datasH,phens,transform_x, direction=direction)
+  vars_all = analysis$select( datasH,phens,transform_x, data_types)
  
   vars_all
   
@@ -419,9 +420,8 @@ analysisEnv<-R6::R6Class("analysisEnv",
   #' @param vars_l_todo an object representing what is left to do
   #' @returns vars_l_todo object
   select_k=function(datasH, k1,
-                    vars_l_todo ,
-                    direction=datasH[[1]]$getDirection()
-                  ){
+                    vars_l_todo 
+                                 ){
     phens = private$phens;
     flags = private$flags;
     verbose = .readFlag(flags,"verbose",FALSE);
@@ -456,7 +456,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
       vars_l_todo_new= private$nextVars( vars_l_todo,  k1,logpvthresh,beam, 
                                         comb2_news=if(useDB) NULL else comb2_news, 
                                         stop_y = stop_y, verbose=verbose)
-      if(length(vars_l_todo$todo1)==length(vars_l_todo_new$todo1)){
+      if(vars_l_todo_new$moveNext){
         comb2 = comb2_news
       }
       vars_l_todo = vars_l_todo_new
@@ -553,15 +553,13 @@ analysisEnv<-R6::R6Class("analysisEnv",
  #' @param datasH a list of dataH objects
  #' @param phens list of phenotypes
  #' @param transform_x transformation object
- #' @param useDB boolean to indicate if results should be saved to database
- select=function(datasH,phens,transform_x,
-                 direction=datasH[[1]]$getDirection(),
-                 useDB=FALSE){#c(y="function(y) y","function(y) y")
+ #' @param data_types data_types object
+ select=function(datasH,phens,transform_x, data_types=datasH[[1]]$data_types()){#c(y="function(y) y","function(y) y")
    #phens = private$phens;
    flags = private$flags;
    #transform_x = private$transform_x;
    
-   flags = super$updateExpt( phens, flags, transform_x, datasH[[1]]$data_types())
+   flags = super$updateExpt( phens, flags, transform_x, data_types)
    #mc.cores = .readFlag(flags, "mc.cores",1)
    ##if(mc.cores>1 && )
   
@@ -580,7 +578,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
   
    vars_l_todo = self$getTodo(private$flags, private$phens);
    variables1 <- lapply(nreps, function(k1) {  ## can use mclapply here
-      self$select_k(datasH,k1,  vars_l_todo, direction=direction)
+      self$select_k(datasH,k1,  vars_l_todo)
      
    })
    

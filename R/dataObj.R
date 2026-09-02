@@ -1501,17 +1501,25 @@ getNonNAInds=function(inds){
 
 plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=FALSE, transform_x = NULL, violin=FALSE, assoc=FALSE){
   phensi = self$phensi(phens1)
+  
   nmei = names(phensi); names(nmei) = nmei
-  df = data.frame(lapply(nmei, function(nmei1){
+  df0 = lapply(nmei, function(nmei1){
     y2=self$y[[nmei1]]
     y3 = attr(y2,"factor")
-    if(is.null(y3)) y3 = y2
+    if(length(y3)==0) y3 = y2
     as.matrix(y3)
-  }))
+    #y3
+  })
   
+  df = data.frame(df0)
+  names(df) = unlist(lapply(nmei, function(nme1){
+    y2=self$y[[nmei1]]
+    paste(nmei,colnames(y2),sep=".")
+  }))
   variables = vars_all1[[1]]$variables
   names(variables)=NULL
   vars = unlist(variables, recursive=FALSE)
+  vars = vars[!duplicated(names(vars))]
   incls = names(self$data); names(incls)=incls
   
   if(all_types){
@@ -1572,9 +1580,11 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=FALSE, transfor
   nme_df = names(df); names(nme_df) = nme_df
   df4 = .merge1_new(lapply(nme_df, function(nmedf1){
     df_k = df[[nmedf1]]
-    df3=df2 |> tibble::add_column(y=df_k) |> pivot_longer(names(df2)) |> separate("name",sep="__", into=into)
+    df3=df2 |> tibble::add_column(y=df_k,.name_repair="minimal") |> pivot_longer(names(df2)) |> separate("name",sep="__", into=into)
   }),addName="pheno")
-  df4$y = factor(df4$y)
+  if(names(phensi)[[1]]!="gaussian"){
+    df4$y = factor(df4$y)
+  }
   df4 = subset(df4, !is.na(y))
   
   df4
@@ -2086,7 +2096,7 @@ getAngleInnerOld=function(phensi,ik,k,var,type="slow", direction=NULL,var_thresh
                 angle_1[jk,] = -1*angle_1[jk,]
                 angle_1[jk,angle_1[jk,]>0]=999
               }else{
-                angle_1[jk,] = -1*abs(angle_1[jk,,drop=F])
+                angle_1[jk,] = -1*abs(angle_1[jk,,drop=FALSE])
               }
             }
             if(length(to_rem)>0){
@@ -2145,7 +2155,7 @@ getDirection=function(inds1){
 # 
   pos_inds = unique(inds1$pos_inds);
   neg_inds = unique(inds1$neg_inds);
- 
+  dir = inds1$direction
   direction = 
         lapply(self$y, function(y1){
           mi1=match(pos_inds,colnames(y1));
