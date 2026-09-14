@@ -26,27 +26,26 @@ library(fspls2)
   options("fspls.types"= jsonlite::fromJSON('{"gaussian":["correlation","rms"],"binomial":["AUC"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
 
   ## set the y_transforms to explore  
-  transform_x=getTransform(pow = 1,    ## transformations raise to the powers indicated here.  Default is 1 but can add others
-                            n_random=5,perm=FALSE ## number of random transformations, also used in stopping critera
+  transform_x=getTransform(pow = c(1),    ## transformations raise to the powers indicated here.  Default is 1 but can add others
+                            n_random=1,perm=FALSE ## number of random transformations, also used in stopping critera
                             )
   ## set the flags
   flags = list(min=0,  #minimum number of variables
                max=20, # maximum number of variables,  
-               nfold=5,## number of folds.  10 fold implies a 10 non-overlapping 10% splits
+               nfold=1,## number of folds.  10 fold implies a 10 non-overlapping 10% splits
                batchsize=0, ##batchsize can be specified alternatively to nfold, but only one can be nonzero
-               angles_only=FALSE, ## whether to use purely angles to find best variables (RECOMMENDED FALSE)
-               topn=20,  ## if using model fit to rank variables, how many top angles to take  (larger takes more time)
+               angles_only=TRUE, ## whether to use purely angles to find best variables (TRUE is much faster but potentially less accurate)
+               topn=20,  ## if using model fit to rank variables, how many top angles to take  (larger takes more time if angles_only is FALSE)
                beam=1, ## how many best combinations to take through to next round of iteration. minimum value is 1, but higher explores more combinations
                all_v_all=FALSE,  ## for multi-class outcomes, this builds all vs all classifier, instead of a one vs all
                project=TRUE,   ## whether to use the projection approach in model building (TRUE recommended)
-            useglmnet=FALSE,  ##whether to useglmnet for model fitting (after variables selected) doesnt work well for randomisation.  Note that useglmnet is TRUE by default for multinomial
-                        verbose=TRUE,
+            useglmnet=FALSE,  ##whether to use glmnet for model fitting (after variables selected) doesnt work well for randomisation.  Note that useglmnet is TRUE by default for multinomial
+            update_norm_each_iteration=FALSE,  #whether to update norm each iteration
+                        verbose=FALSE,
             lambda = NULL, ## for using glmnet
-              show_warnings=FALSE,
-            show_pvalue_plots=FALSE  ## get plots of pvalues over iterations
+              show_warnings=FALSE
     )
 
-  #check_flags(flags)  ## runs som simple checks
 
 ```
 
@@ -64,28 +63,24 @@ library(fspls2)
     if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
     dataset = readRDS(fi)
        ## set up the objects
-    
-     
-    dh = dataH$new(dataset$dataset, y = dataset$y,    nme=example, flags=flags)
-                
-  
+    dh = dataH$new(dataset$dataset, y = dataset$y,    nme=example, flags=flags)##, family="gaussian")
     ##Step 1. run variable selection 
-   
-        datasH = list(dh)
+    datasH = list(dh)
     #      
     #vars_all = analysis$select(datasH,  flags, transform_x, phens = dh$pheno()$all)
   
-      analysis =analysisEnv$new(flags=flags, dbDir=NULL)
-     
-      data_types = dh$data_types();
+    analysis =analysisEnv$new(flags=flags, dbDir=NULL)
+     flags$maintain_norm=TRUE
+    data_types = dh$data_types();
       dh$update(phens = dh$pheno()$all, flags = flags, transform_x = transform_x, data_types = data_types)
     variables = dh$select( analysis=analysis)
+   ggp2= dh$plot_angles(type=NULL)
   #  selected_plot= dh$plotData(variables, update=T)
   # print(selected_plot)
     #variables = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
     all_models =dh$makeAllModels(variables)
-    
+    #dh$plot_angles()
     #optionally get predictions
     
     #Step 3. evaluate the models
@@ -107,7 +102,7 @@ library(fspls2)
 runIterative<-function(example, prop_na=0.2, seed=42){
  
   flags$nfold=1 ## only works with one fold currently
-  
+ # flags$angles_only = FALSE ## works better with angles_only=FALSE
      fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
     dataset = readRDS(fi); 
     if(example=="binomial") dataset$y$y = factor(dataset$y$y, labels=c("A","B"))
@@ -120,17 +115,19 @@ runIterative<-function(example, prop_na=0.2, seed=42){
   flags$mult = 100
   flags$select_each_iteration = TRUE;
   results = fspls.iterative(dataset, flags, transform_x)
-  print(results$updates)
+  #print(results$updates)
   na_remaining= length(which(results$certainty_new<0.95))
   message(paste("na remaining", na_remaining))  
   message(paste("error rate",results$error_rate))
-  print(results$vars_all$full)
+ results_all =  list(input = data.frame(y = dataset$y, certainty=dataset$certainty ), output = data.frame(results$y_new, results$certainty_new), results = results)
+ return(results_all)
 }
 
 
 ```
 Example 1
 ```{r, eval = FALSE}
+flags$angles_only=FALSE
 ggp1=runExample("binomial", nfold=5);
 ggp1
 ```
@@ -153,10 +150,16 @@ ggp4
 Iteratively replacing uncertain values
 ```{r, eval = FALSE}
 ## test Iterative works on binomial and multinomial
-runIterative("binomial")
+flags$angles_only = FALSE:
+
+results = runIterative("binomial")
+print(cbind(results$input, results$output))
 ```
 
 ```{r, eval = FALSE}
 ## test Iterative works on binomial and multinomial
-runIterative("multinomial")
+flags$angles_only = FALSE:
+results = runIterative("multinomial")
+print(cbind(results$input, results$output))
+
 ```

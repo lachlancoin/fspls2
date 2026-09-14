@@ -52,7 +52,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                     #nonNA="logical",
                     mean_x="numeric",
                    tbls="list",
-                   pvs="list",
+                   pvs="list",pvs_sep="list",
                    pvs_all ="list",
                    sumPv="numeric",
                   
@@ -65,7 +65,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                                           b_i = NULL,b_i_name=NULL,
                                           var = list(), varnames = list(),
                                           Wall = matrix(nrow=0, ncol=0),
-                                         mean_x = NULL, pvs = c(),
+                                         mean_x = NULL, pvs = c(),pvs_sep=c(), 
                                       
                                          useoffset=TRUE
                                          ){
@@ -73,6 +73,7 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                       self$sumAngle=0;
                       self$angles = c();
                       self$pvs = pvs
+                      self$pvs_sep=pvs_sep
                       self$pvs_all = unlist(pvs)
                       if(!is.null(prev_i)) self$pvs_all = c(self$pvs_all, prev_i$pvs_all)
                       self$sumPv = .sumChisq(unlist(pvs))
@@ -179,6 +180,9 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj,
                          constants = self$constants,
+                         pvs = self$pvs, pvs_all=self$pvs_all,pvs_sep = self$pvs_sep,
+                         cum_pv= .sumChisq(unlist(self$pvs)),
+                         cumpv_all= .sumChisq(unlist(self$pvs_all)),
                          betas_proj = self$betas_proj,
                          Wall = self$Wall,
                          mean_x = self$mean_x,tbls = self$tbls,

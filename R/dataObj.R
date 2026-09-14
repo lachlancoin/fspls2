@@ -559,7 +559,7 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,convert=TRUE, bet
     b_i = self$convert(b_i)
     if(length(b_i)<2) {
       pvs = unlist(lapply(phensi,function(xx) 999)) ## returning large positive value since its not in dataset
-       return(list(pvs=pvs))
+       return(list(pvs=pvs, pvs_sep = pvs))
     }
     prev_var = lapply(prev_var, self$convert)
     subphens = self$phensi(subphens)
@@ -878,7 +878,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
     pvs[[kk]] = pv1
     constants[[kk]] = const_term  #-mean_adj*beta_new1
   }
-  list(betas=betas, constants = constants,pvs = pvs,tbls=tbls,Wall1=Wall1)
+  list(betas=betas, constants = constants,pvs = pvs,pvs_sep=pvs, tbls=tbls,Wall1=Wall1)
 },
 
 testBetaProj=function(vars_all, transform_x){
@@ -942,6 +942,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
   tbls =  apply(ys,2, function(v1) list())
   constants = apply(ys,2, function(v1) list())
   pvs =  apply(ys,2, function(v1) list())
+  pvs_sep =  apply(ys,2, function(v1) list())
+  
   j = length(vars1)
   non_na_x = if(is.null(data$dataNA[[vars1[[j]][1]]])) rep(TRUE,nrow(ys) ) else !(data$dataNA[[vars1[[j]][1]]][, vars1[[j]][2]] )
   x_ =self$extractData(vars1, adjust=FALSE)
@@ -949,8 +951,10 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
   
   transf = self$getTransforms(vars1) #lapply(vars1, function(v1) self$transforms[[v1[[3]]]][[2]])
   UDV = data$UDVP ## should check it corresponds to prev_i
-  Wall2 = UDV$getWall(x_[,ncol(x_)]-meanx[,ncol(x_)], Wall1) ## updated projection  may not need to subtract meanx  .. leaving it for now
-  if(!project) Wall2 = diag(ncol(Wall2))
+  #Wall2 = UDV$getWall(x_[,ncol(x_)]-meanx[,ncol(x_)], Wall1) ## updated projection  may not need to subtract meanx  .. leaving it for now
+  Wall2 = UDV$getWall(x_[,ncol(x_)], Wall1) ## updated projection  may not need to subtract meanx 
+  
+    if(!project) Wall2 = diag(ncol(Wall2))
   if(CHECK){
     x1_ = x_[,ncol(x_), drop=FALSE]  
  
@@ -1192,19 +1196,24 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
     #  print(nonNA);
     #  print(dim(y))
     #  print(dim(yp1));
+    pv2 = NA
     if(family=="multinomial"){
       yp_new=x_trans[nonNA ,,drop=FALSE]
       pv1 = .calcPvalue(yp_new,yp1,y, w, family)
-      
     }else{
       yp_new=x_trans[nonNA ,,drop=FALSE]%*% betas[[kk]]
     
-       pv1 = .calcPvalue(yp_new,yp1[,kk,drop=FALSE],y, w, family)
+      pv1 = .calcPvalue(yp_new,yp1[,kk,drop=FALSE],y, w, family)
+     # if(family!="ordinal" ){  ##this was to check the angle was preserving the order, no longer necessar
+    #    coeffs =  summary(glm(y~x_trans[,ncol(x_trans), drop=FALSE], weights = w, family=family))
+    #    pv2 = log(coeffs$coefficients[2,4])
+    #  }
     }
     pvs[[kk]] = pv1
       constants[[kk]] = const_term  #-mean_adj*beta_new1
+    pvs_sep[[kk]] = pv2
   }
-  list(betas=betas, constants = constants,tbls = tbls, pvs = pvs, Wall = Wall2)
+  list(betas=betas, constants = constants,tbls = tbls, pvs = pvs,pvs_sep = pvs_sep,  Wall = Wall2)
 },
 ##var and Wall1 are from one smaller model
 #calcWall=function(b_i, var, Wall1, inv_transform=getOption("x_transform",TRUE)){
@@ -1413,6 +1422,8 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,verbose=FALSE, useglm=TRUE){
     betas_new = b_new_proj$betas
       constants_proj =if(family[[1]]=="multinomial") b_new_proj$constants[[1]] else b_new_proj$constants
       pvs =if(family[[1]]=="multinomial") b_new_proj$pvs[[1]] else b_new_proj$pvs
+      pvs_sep =if(family[[1]]=="multinomial") b_new_proj$pvs_sep[[1]] else b_new_proj$pvs_sep
+      
    #   print(pvs)
     #  if(.sumChisq(pvs)>logpthresh ){
         
@@ -1433,7 +1444,8 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,verbose=FALSE, useglm=TRUE){
     mean_x = self$mean__x(b_i) #[[b_i[[1]]]][b_i[2]]
     
     prev_i1=stateObj$new(phens,data, betas_proj,constants_proj, tbls, prev_i2 , b_i,b_i_name=b_i_name, mean_x = mean_x, Wall = Wall2,
-                         pvs =pvs, useoffset=useoffset)
+                         pvs =pvs, pvs_sep=pvs_sep,
+                         useoffset=useoffset)
   #  prev_i1$setOffset() 
     #if(is.null(prev_i2)) return(prev_i1)
     #prev_i1$setOffset()
@@ -1512,9 +1524,11 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=FALSE, transfor
   })
   
   df = data.frame(df0)
-  names(df) = unlist(lapply(nmei, function(nme1){
+  names(df) = unlist(lapply(nmei, function(nmei1){
     y2=self$y[[nmei1]]
-    paste(nmei,colnames(y2),sep=".")
+    y3 = attr(y2,"factor")
+    if(length(y3)==0) y3 = y2
+    paste(nmei,colnames(y3),sep=".")
   }))
   variables = vars_all1[[1]]$variables
   names(variables)=NULL
@@ -1838,7 +1852,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
     Dall = self$extractData(var, adjust=TRUE)
     self$UDVP=UDVPObj$new(self, var,Dall)
   },
-projOut1=function(ik){
+projOut1=function(ik){ ## calculates W which is Vinv %*% Dinv %*% Ut %*% x
   UDV=self$UDVP
 #  d = self$train[[k]]
  # nonNA = d$nonNA
@@ -1953,7 +1967,7 @@ saveParquet=function(){
   return(NULL)
 },
 getNorm=function(W,var,ik,type){
-  if( length(var)==0){
+  if( length(var)==0 || !getOption("update_norm_each_iteration", FALSE)){
     return(self$norm[[ik]])
   }
  
@@ -2034,7 +2048,7 @@ getNorm=function(W,var,ik,type){
 getAngleInnerOld=function(phensi,ik,k,var,type="slow", direction=NULL,var_thresh=1e-5){
 #  assoc=(type %in% c("assoc","assoc1"))
   #W = if(type %in% c("slow","assoc"))self$projOut(ik) else 
-  W = self$projOut1(ik)
+  W = self$projOut1(ik)  ## depends on x only, not y
   ##NOTE PROJOUT1 ALSO SUBTRACTS MEAN, BUT FOR PROJOUT WE HAVE TO ADJUST FOR MEAN
   ##IF WE USE PROJOUT1 then x is actually W
   #mean_x = if(type %in% c("slow","assoc")) NULL else self$mean_x[[ik]]#  x_s$mean_x
@@ -2046,16 +2060,18 @@ getAngleInnerOld=function(phensi,ik,k,var,type="slow", direction=NULL,var_thresh
  # nonNA = lapply(d$nonNA,t)
 #  yTr[,!nonNA]=0
    
-        norm = self$getNorm(W,var, ik, type)
-        norm_sel = abs(norm[unlist(lapply(var, function(v) if(v[1]==ik) v[2] else NULL))])
-        if(length(which(norm_sel>var_thresh))>0 ) warning(" not projecting out properly .. possibly due to correlated vars !")
+        norm = self$getNorm(W,var, ik, type) ## note the norm of previously selected variables is zero, unless maintain_norm=TRUE
+        #norm_sel = abs(norm[unlist(lapply(var, function(v) if(v[1]==ik) v[2] else NULL))])
+     #   if(length(which(norm_sel>var_thresh))>0 ) warning(" not projecting out properly .. possibly due to correlated vars !")
+      
+        to_rem1 =  unlist(lapply(var, function(v1)v1[2]))[unlist(lapply(var, function(v1)v1[1]))==ik]
         to_rem = which(norm>-var_thresh)
-        P = self$UDVP$P
+        P = self$UDVP$P #depends on x only and var
         #ii = names(phensi)[[1]]; nmes_prod = names(products)[[1]]; nmes_prod1 = names(products[[nmes_prod]])[[1]]
         angles1 = lapply(names(phensi), function(ii){
                  nme_i = ii
           phensi1 = phensi[[ii]]
-                 products =self$train[[k]]$product(ik,ii,phensi1);
+          products =self$train[[k]]$product(ik,ii,phensi1);
           nmes_products = names(products); names(nmes_products) = nmes_products
           angle=lapply(nmes_products, function(nmes_prod){
             #print(nmes_prod)
@@ -2073,7 +2089,10 @@ getAngleInnerOld=function(phensi,ik,k,var,type="slow", direction=NULL,var_thresh
               PY = yTr1[phensi1,,drop=FALSE] %*% P
               #diff1 = PY %*% W
               product=product-  PY %*% W  #[,self$cols_incl[[ik]],drop=FALSE]
-             # dimnames(product) = dimnames(self$train$products[[ik]][[ii]])
+              if(length(to_rem1)>0 && max(abs(apply(product[,to_rem1,drop=F],2,sum)))>var_thresh){
+                warning("may not be projecting properly")
+              }
+             # dimnames(product) = dimnames(self$train$products[[ik]][[ii]])  
             }
            # direction=self$direction
             angle_1= t((product[]))/(norm)
@@ -2305,8 +2324,23 @@ updateTransform=function(transform_x){
   self$transforms = transforms
   update_trans
 },
+means_y=function(k){
+  self$train[[k]]$means_y
+},
+counts_y=function(k){
+  self$train[[k]]$counts_y
+},
+updateTrain =function(k, phens,
+                      means_y = self$means_y(k),
+                       force=FALSE){
+#  for(k in 1:length(self$train)){
+    #if(verbose) cat(paste("update",k))
+  
+    self$train[[k]]$update(self,phens,  means_y = means_y,force=force)
+ # }
+},
 ## gets ready for training - updates train, prev looc
-updateTrain=function(phens,flags, transform_x, verbose=FALSE, force=FALSE){ ## this updates the reps and train  ## called after updateLOOC
+initTrain=function(phens,flags, transform_x, verbose=FALSE, force=FALSE){ ## this updates the reps and train  ## called after updateLOOC
  update_trans = self$updateTransform(transform_x);
   nrep = ncol(self$looc$incl)
   if(verbose) cat("update train")
@@ -2314,21 +2348,18 @@ updateTrain=function(phens,flags, transform_x, verbose=FALSE, force=FALSE){ ## t
   if(length(incls) == 0 )incls = list("all"=names(self$data))
   incls_all = unique(unlist(incls))
   if(force || length(self$train)!=nrep  ||  is.null(self$train[[1]]) || update_trans){ # || toJSON(self$train[[1]]$func_str)!=toJSON(transform_x)){
-    self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$looc , incls_all, self$transforms,family=self$family)) #lapply(1:ncol,function(k)
+    self$train = lapply(1:nrep, function(k)trainObj$new( self$y,self$weights, self$looc$incl[,k] , incls_all, self$transforms,family=self$family)) #lapply(1:ncol,function(k)
   }
   if(!is.null(self$subset)){
     ## apply subset via the looc object to avoid subsetting big matrix
     self$looc$incl[!self$subset,] = rep(FALSE, ncol(self$looc$incl))
   }
-  within=TRUE
-  for(k in 1:length(self$train)){
-    if(verbose) cat(paste("update",k))
-    self$train[[k]]$update(self,k,phens, force=force)
-  }
-  reweight=.readFlag(flags,"reweight",FALSE)
-  if(reweight){
-    self$updateWeights(phens)
-  }
+ # within=TRUE
+ 
+ # reweight=.readFlag(flags,"reweight",FALSE)
+#  if(reweight){
+#    self$updateWeights(phens)
+#  }
 },
 updateLOOC=function(phens,flags,varn=c(), force=FALSE, verbose=FALSE){
   seed=.readFlag(flags,"seed",42)
@@ -2554,35 +2585,7 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
 updateTransforms=function(transform_x){
   self$transforms =.convertToTransform(transform_x)
 },
-split=function(proportions){
- 
-  db_name = self$db_name
-  #    p = proportions[[1]]
-  prop1 = cumsum(proportions)
-  nrow = self$nrow
-  prop2 = c(0,round(prop1*nrow))
-  inds_new = lapply(1:(length(prop2)-1), function(i){
-    start = prop2[i]+1
-    end = prop2[i+1]
-    inds = prop2[i]:prop2[i+1]
-  }); 
-  names(inds_new) =  paste(db_name,prop2[-1],sep=".")
-  mats = lapply(inds_new, function(inds){
-    nme_d = names(self$data); names(nme_d) = nme_d
-      lapply(nme_d, function(nme){
-          list(
-          matrix = self$data[[nme]][inds,,drop=FALSE],
-          matrixNA =  self$dataNA[[nme]][inds,,drop=FALSE]
-          )
-        })
-  })
-    ys =  lapply(inds_new, function(inds){
-      lapply(self$y, function(y1){
-      y1[inds,,drop=FALSE]
-    })
-    })
-  list(mats = mats, ys = ys);  
-},
+
   initialize=function( cohort,  db_name,dbDir,flags,
                       incl_full=TRUE,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores
   

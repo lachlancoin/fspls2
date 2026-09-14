@@ -1,9 +1,9 @@
 
-#.self<-function(dh){  
-#  assign("self", dh, envir = .GlobalEnv) ;
-#  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) ;
-#  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
- # }
+.self<-function(dh){  
+  assign("self", dh, envir = .GlobalEnv) ;
+  assign("private",  dh[[".__enclos_env__"]]$private, envir = .GlobalEnv) ;
+  assign("super", dh[[".__enclos_env__"]]$super, envir = .GlobalEnv)
+  }
 
 
 rbind_sparse <- function(mats) {
@@ -212,7 +212,82 @@ length(unique(eval1$`data:family`))
   }
   eval3
 }
-
+plot_outliers1<-function(df,x="x",y="y", group="group",labelsize=2){
+  #plot(comb12$pval, comb12$angle)
+  
+  df1=df |> tidyr::unite("Column_group",Column, group,nvar, sep="__",remove=FALSE) 
+  df1 = df1[sample.int(nrow(df1),nrow(df1)),,drop=F]
+  df1 = df1[!duplicated(df1$Column_group),,drop=F]
+  df1$x=-.5; df1$y=-.5
+  df2 = subset(df, is_outlier==TRUE)
+  df2$gene = gsub("^X","",df2$gene)
+  ggp1 = ggplot(df, aes(x, y, color = is_outlier)) +
+    geom_point() +
+    ggplot2::geom_label(df1,mapping=aes(x,y,label=r_spearman),color='black', size=labelsize )+
+    geom_text_repel(df2,mapping=aes(x,y,label=gene),size=labelsize )+
+    
+    ggplot2::geom_smooth(method = "glm", method.args = list(family = gaussian()))+labs(x='pval',y='angle')
+  if(length(unique(df$group))==1){
+    return ( ggp1+facet_wrap('nvar',scales="free"))
+  }
+  ggp1+facet_grid(group~nvar,scales="free")
+    #ggplot2::annotate("text", x = -Inf, y = Inf, label = label_text,
+     #                 hjust = -0.1, vjust = 1.5, size = 4);
+}
+plot_outliers<-function(df,x="pval", y="angle",title=""){
+  names(df) = sub(y,"y",sub(x,"x",names(df)))
+  fit <- glm(y ~ x, data = df, family = gaussian())  # or poisson/binomial etc.
+  df$resid_dev   <- residuals(fit, type = "deviance")
+  df$resid_pear  <- residuals(fit, type = "pearson")
+  df$std_resid   <- rstandard(fit)   # standardized residuals
+  df$cooksd      <- cooks.distance(fit)
+  df$leverage    <- hatvalues(fit)
+  df$is_outlier <- abs(df$std_resid) > 3          # crude z-score-like cutoff
+  # or, more robust to model influence:
+  df$is_outlier <- df$cooksd > 4 / nrow(df)  
+  df$r_spearman <- round(cor(df$x, df$y, method = "spearman"),2)
+  df$r_pearson  <- round(cor(df$x, df$y, method = "pearson"),2);
+  
+ 
+  df$group =title;
+  return(df);
+  
+}
+getSplitInds<-function(nrow, proportions){
+  prop1 = cumsum(proportions)
+  prop2 = c(0,round(prop1*nrow))
+  inds_new = lapply(1:(length(prop2)-1), function(i){
+    start = prop2[i]+1
+    end = prop2[i+1]
+     start:end
+  }); 
+  names(inds_new) = prop2[-1]# paste(db_name,prop2[-1],sep=".")
+  inds_new
+}
+##assumes dimensions all same
+#' @param matrices a list of matrices with samples by rows, with same row ordering
+#' @param y the y matrix, with exactly same row ordering
+#' @param proportions the proportion to split into, should add to 1
+#' @returns a list of datasets
+#' @export
+split_dataset<-function(matrices,y, proportions, randomise=FALSE, inds_new = getSplitInds(nrow(y), proportions)){
+    #    p = proportions[[1]]
+ family = getFamily(y)
+  rand_inds = if(randomise) sample.int(nrow(y), nrow(y), replace=FALSE) else 1:nrow(y)
+  inds_nme = names(inds_new); names(inds_nme) = inds_nme
+result = lapply(inds_nme, function(nme){
+  inds = inds_new[[nme]]
+  inds1 = rand_inds[inds]
+    nme_d = names(matrices); names(nme_d) = nme_d
+    list(dataset=lapply(matrices, function(mat){
+      mat[inds1,,drop=F]
+    }),
+    y=y[inds1,,drop=FALSE], family = family,
+    name=nme)
+    })
+ table(result[[1]]$y)
+  result
+}
 
 plotEval2<-function(eval1,...){
   if(is.null(eval1[['experiment_id']])){

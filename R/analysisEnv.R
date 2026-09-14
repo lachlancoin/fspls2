@@ -1,7 +1,6 @@
 
 
 
-
 plot_traj<-function(comb_plot, y="value"  ,facet="data~maxsig", keep_best=10, txtsize=5, step=2){ #y="cumulative";
   if(!is.null(comb_plot$nrep)){
     if(length(unique(comb_plot$nrep))>1) stop(" need to subset on nrep first")
@@ -169,9 +168,6 @@ fspls.select<-function(datasH, flags,
   res_inner=lapply(nme_comb, function(nme_c1){
     nmesp1 = names(res_inner1[[1]][[nme_c1]]);names(nmesp1) = nmesp1
     lapply(nmesp1, function(nme_p1){
-    #  comb = comb_[[nme_c1]][[nme_p1]]
-     # if(nrow(comb)==0) return(NULL)
-#      nme_comb = names(comb_); names(nme_comb) = nme_comb
       varnames = unique(unlist(lapply(res_inner1, function(ri) names(ri[[nme_c1]][[nme_p1]]))))
      
       #varnames = comb$names; names(varnames) = varnames
@@ -261,6 +257,45 @@ analysisEnv<-R6::R6Class("analysisEnv",
                                                    dims = dims,
                                                    transform_x = private$transform_x)
     },
+    means_y=function(datasH){
+      means_y_all =lapply(datasH, function(dh) dh$means_y());
+      counts_y_all = lapply(datasH, function(dh) dh$counts_y());
+      #means_y = list();
+    #  means_y[[colk]][[f_k]][[g_k]]
+      nreps = datasH[[1]]$nreps();
+      nmes = names(means_y_all); names(nmes) = nmes
+  # l1 = 1
+      means_y_comb = lapply(nreps, function(k){
+        
+        means_y = means_y_all[[1]][[k]]
+        
+       nmes1=names(means_y); names(nmes1)=nmes1;
+   #    nme1  = nmes1[[1]];  nmes2 = names(means_y[[nme1]]); nme2 = nmes2[[1]];  nmes3 = names(means_y[[nme1]][[nme2]]);  nme3 = nmes3[[1]]
+  
+      lapply(nmes1, function(nme1){
+         nmes2 = names(means_y[[nme1]]); names(nmes2) =nmes2
+          lapply(nmes2, function(nme2){
+           
+              nmes3 = names(means_y[[nme1]][[nme2]]); names(nmes3) = nmes3;
+              lapply(nmes3, function(nme3){
+              df_mean = data.frame(lapply(nmes, function(nme){
+                means_y_all[[nme]][[k]][[nme1]][[nme2]][[nme3]]
+                
+              })  )
+              df_counts = data.frame(lapply(nmes, function(nme){
+                counts_y_all[[nme]][[k]][[nme1]][[nme2]][[nme3]]
+              })  )
+              weights = (apply(df_counts,1,function(v) v/sum(v)))
+              apply(df_mean * weights,1,sum)
+             
+            })
+          })
+        })
+     })
+     
+     
+      means_y_comb
+    },
     nextVars=function(vars_l_todo,  k1,
                                           logpvthresh,beam,  comb2_news = NULL,stop_y="rand", verbose=FALSE){
       flags=private$flags; 
@@ -349,11 +384,24 @@ analysisEnv<-R6::R6Class("analysisEnv",
           print(head(sort(logpvs_all[gp]),beam))
           print(names(vars_l))
         }
-        dupls=(unlist(lapply(ang1, function(a1) paste(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2],collapse="::"))), collapse=";;"))))
+        ##remove signatures which are same in different order
+        dupls=(unlist(lapply(ang1, function(a1) paste(sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2],collapse="::")))), collapse=";;"))))
         ang1 = ang1[!duplicated(dupls)]
+        if(getOption("exclusion_in_beam",FALSE)){  ##KEEPS DIFFERENT N-1 signatures
+          len = length(ang1[[1]]$var_names)
+          if(len>1){
+            if(verbose) print("thinning signature ")
+            dupls1=(unlist(lapply(ang1, function(a1) paste(sort(unlist(lapply(a1$var_names[-len], function(vv1)paste(vv1[1:2],collapse="::")))), collapse=";;"))))
+            
+            ang1 = ang1[!duplicated(dupls1)]
+          }
+        }
+        
         last_non_rand = grep("rand", names(ang1))[1]-1
-        if(is.na(last_non_rand)) last_non_rand = beam;      
+        if(is.na(last_non_rand)) last_non_rand = beam;     
+        
         ang1 = ang1[1:min(length(ang1),beam, last_non_rand)]
+       
         todo1 = vars_l_todo$todo1;
         todo1[[1]]$incl$nvar = todo1[[1]]$incl$nvar+1;
         if(todo1[[1]]$incl$nvar>= todo1[[1]]$incl$max){
@@ -420,8 +468,12 @@ analysisEnv<-R6::R6Class("analysisEnv",
   #' @param vars_l_todo an object representing what is left to do
   #' @returns vars_l_todo object
   select_k=function(datasH, k1,
-                    vars_l_todo 
+                    vars_l_todo, means_y_k = NULL
                                  ){
+    force=FALSE
+    invisible(lapply(datasH, function(dh){
+      dh$updateTrain(k1,means_y_k = means_y_k, force=force);
+    }))
     phens = private$phens;
     flags = private$flags;
     verbose = .readFlag(flags,"verbose",FALSE);
@@ -537,7 +589,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
    stop_y=.readFlag(flags,"stop_y","rand")
    verbose=.readFlag(flags,"verbose",FALSE);
    logpvthresh = log(.readFlag(flags,'pthresh',0.05));
-   angles_only = .readFlag(flags,'angles_only',FALSE);
+   angles_only = .readFlag(flags,'angles_only',TRUE);
    useDB = !is.null(private$sigs)
    if(angles_only) logpvthresh =0;
     if(useDB)  private$savePvals(k1, data_nme, vars_l_todo$vars_l,comb2_new)
@@ -554,20 +606,14 @@ analysisEnv<-R6::R6Class("analysisEnv",
  #' @param phens list of phenotypes
  #' @param transform_x transformation object
  #' @param data_types data_types object
- select=function(datasH,phens,transform_x, data_types=datasH[[1]]$data_types()){#c(y="function(y) y","function(y) y")
-   #phens = private$phens;
+ select=function(datasH,phens,transform_x, data_types=datasH[[1]]$data_types(), avg_mean_y = FALSE){#c(y="function(y) y","function(y) y")
    flags = private$flags;
-   #transform_x = private$transform_x;
-   
    flags = super$updateExpt( phens, flags, transform_x, data_types)
-   #mc.cores = .readFlag(flags, "mc.cores",1)
-   ##if(mc.cores>1 && )
-  
    verbose=.readFlag(flags,'verbose',FALSE);
    if(flags$topn<flags$beam) stop("beam should be less than topn")
    
    nreps_all = lapply(datasH, function(dh){
-     dh$update(phens, flags, transform_x);
+     dh$update(phens=phens, flags=flags, transform_x=transform_x, data_types=data_types);
      dh$nreps();
    })
    nreps = nreps_all[[1]]
@@ -577,8 +623,12 @@ analysisEnv<-R6::R6Class("analysisEnv",
      if(!is.null(vars_all)) return(vars_all)
   
    vars_l_todo = self$getTodo(private$flags, private$phens);
+   means_y = private$means_y(datasH);
+   
    variables1 <- lapply(nreps, function(k1) {  ## can use mclapply here
-      self$select_k(datasH,k1,  vars_l_todo)
+     
+     means_y_k =if(avg_mean_y) means_y[[k1]] else NULL
+      self$select_k(datasH,k1,  vars_l_todo, means_y_k =means_y_k)
      
    })
    

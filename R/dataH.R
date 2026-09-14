@@ -130,53 +130,42 @@ plot_angle_vs_pv<-function(comb2_new, alpha =.5, k1 = 1){
   ri = comb2_new[[1]]$pvs
   comb_ = comb2_new[[1]]$angles
   all_angles = attr(comb_,"all")
-  typs = names(ri)
+  typs = names(ri); names(typs) = typs
 #  typ1 = typs[[1]]; ni1 =names(ri[[typ1]])[[1]] 
-df1 = .merge1_new(lapply(typs, function(typ1){
+plots_all = .merge1_new(lapply(typs, function(typ1){
     ni = names(ri[[typ1]]); 
-    .merge1_new(lapply(ni, function(ni1){
-      
-      if(FALSE){
-      pval = unlist(lapply(ri[[typ1]][[ni1]], function(x)  .sumChisq(x$pvs)))
-      angle = comb_[[typ1]][[ni1]]$value
-      comb22=cbind( comb_[[typ1]][[ni1]]$names, data.frame(cbind(angle,pval)),typ1, ni1)
-      }else{
-        pval_all = unlist(lapply(ri[[typ1]][[ni1]], function(x)  (x$pvs)))
-        
+    names(ni )=ni
+   plots_all1 =  .merge1_new(lapply(ni, function(ni1){
         ang_all = all_angles[[typ1]][[ni1]]
-        mat = t(as.matrix(ang_all))
-        triples <- mat |> 
-          as.data.frame() |> 
-          tibble::rownames_to_column(var = "Row") |> 
-          pivot_longer(
-            cols = -Row, 
-            names_to = "Column", 
-            values_to = "angle"
-          )
-        comb11=cbind(triples, pval_all, typ1, ni1)
-        names(comb11)=gsub("pval_all","pval", names(comb11))
-        comb11
-      }
-      comb11
-    }))
-    
+        rn = rownames(ang_all); names(rn) = rn
+        cn = colnames(ang_all); names(cn) = cn
+        mi2 = match(names(ri[[typ1]][[ni1]]), cn)
+        cn_ind = 1:length(cn); names(cn_ind) =cn
+        pval_all =.merge1_new(lapply(cn_ind, function(x) {
+        # pval = unlist(ri[[typ1]][[ni1]][[cn[x]]]$pvs_sep[[1]])
+         pval = unlist(ri[[typ1]][[ni1]][[cn[x]]]$pvs[[1]])
+         
+         mi3 = match(rn,names(pval))
+         angle = ang_all[mi3,x]
+         Column = names(pval)
+         cbind(Column,data.frame(cbind(pval, angle)))
+        }), addName="gene")
+        
+      comb11  = pval_all  
+       
+     plots = .merge1_new(lapply(rn, function(rn1){
+        df = subset(comb11, Column==rn1)
+        
+          plot_outliers(df, "angle","pval",title=paste(rn1, typ1, ni1))
+         
+     }
+     ), addName="rn")
+     plots
+    }), addName="ni")
+  plots_all1
   }))
-df2=pivot_wider(df1[,!(names(df1)=="angle")],names_from = c("Column"), values_from = pval)
-df3=pivot_wider(df1[,!(names(df1)=="pval")],names_from = c("Column"), values_from = angle)
-df22 = cbind(df2[,1:3],apply(df2[,-(1:3)],1,.sumChisq))
-df33 = cbind(df3[,1:3],apply(df3[,-(1:3)],1,sum))
-names(df33)[4] = "angle"
-df4 = cbind(df33, df22[,4])
-names(df4)[5] = "pval"
-#my_colors <- grDevices::colorRampPalette(brewer.pal(12, "Paired"))(100)
-#ggp1=ggplot(df1, aes(angle,pval, color=Column, shape=Row))+geom_point(alpha = alpha,size=2)+facet_grid("typ1 ~ni1")+ scale_shape_manual(values = rep(0:25, length.out = 100))+scale_color_manual(values = my_colors)
-#ggp2=ggplot(df1, aes(angle,pval, color=Row, shape=Column))+geom_point(alpha = alpha,size=2)+facet_grid("typ1 ~ni1")+ scale_shape_manual(values = rep(0:25, length.out = 100))+ scale_color_manual(values = my_colors)
-
-
-
-ggp3 = ggplot(df4, aes(angle,pval, color=typ1))+geom_text(alpha = alpha, aes(label=ni1))
-ggp3+ggtitle(paste("fold=",k1))
-
+ plots_all
+  
 
 }
 
@@ -208,53 +197,6 @@ ggp3+ggtitle(paste("fold=",k1))
 }
 
 
-.combineAngles1<-function(angleH, incl, sumAngle, prev_signature, flags){ 
-  #$types
-  #flags = private$flags;
-  topn = .readFlag(flags,'topn', 20)
-  onlyAll = .readFlag(flags,'only_all',FALSE)
-  angles1=angleH$angles;cols_incl1=angleH$cols_incl 
-  nme_trans = names(angles1[[1]][[1]]); names(nme_trans) = nme_trans
-  types = incl$types; names(types) = types
-  excl = incl$excl
-  # nmes_angs1 = names(angles1); names(nmes_angs1)=nmes_angs1
-  #nme_t1 = nme_trans[[1]]; nme_p1 = names(angles1[[1]][[1]][[nme_t1]])[[1]]; inc1 = types[[1]]; jk=1
-  comb_all2=lapply(nme_trans, function(nme_t1){
-    nme_pow = names(angles1[[1]][[1]][[nme_t1]]); names(nme_pow)=nme_pow
-    lapply(nme_pow, function(nme_p1){
-      comb_all=lapply(types, function(inc1){
-        ang1 = angles1[[inc1]]
-        if(is.null(ang1)) return(NULL)
-        col_incl = cols_incl1[[inc1]]
-        ang2=ang1[[1]][[nme_t1]][[nme_p1]]
-        cs = Matrix::colSums(ang2)
-        if(length(ang1)>1){
-          for(jk in 1:length(ang1)){
-            cs = cs+Matrix::colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
-          }
-        }
-     #   excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1 && ex[4] ==nme_p1))]
-        if(length(excl)>0){
-          mi2 = match(excl, names(col_incl))
-          col_incl[mi2[!is.na(mi2)]]=FALSE
-        }
-        cs[col_incl]
-      })
-      top_angles=whichpart1(comb_all, n=topn, return_scores=TRUE)
-      t1 = .merge1_new(lapply(top_angles, function(ta){
-        data.frame(list(names = names(ta), value=ta))
-      }),addName="data_type")
-      if(is.null(t1)) return(t1)
-      
-      t1 = t1[order(t1$value),]
-      signature=if(prev_signature=="") t1$names else paste(prev_signature, t1$names, sep=";")
-      
-     t2 =   t1 |> tibble::add_column(sumAngle, signature);
-     subset(t2, value<999)
-    })
-  })
-  comb_all2
-}
 
 ## this is a class which holds a data object and interacts with the coordination node
 .getAllSparseMatrices<-function(data, hasNA=TRUE, convertToBigMatrix=FALSE, min_variance =0.001, max_na_proportion=0.99){
@@ -439,7 +381,7 @@ dataH<-R6::R6Class("dataH",
    data ="environment",
     type="character",  
   plot_results="list",
-  
+  angle_plots="list",
   levs="list",
    data_id="character",
     dbDir="character",
@@ -474,6 +416,64 @@ dataH<-R6::R6Class("dataH",
     })
     rocs
   },
+  combineAngles1=function(angleH, incl, sumAngle, prev_signature){ 
+    #$types
+    flags = private$flags;
+    topn = .readFlag(flags,'topn', 20)
+    onlyAll = .readFlag(flags,'only_all',FALSE)
+    angles1=angleH$angles;cols_incl1=angleH$cols_incl 
+    nme_trans = names(angles1[[1]][[1]]); names(nme_trans) = nme_trans
+    types = incl$types; names(types) = types
+    excl = incl$excl
+    # nmes_angs1 = names(angles1); names(nmes_angs1)=nmes_angs1
+    #nme_t1 = nme_trans[[1]]; nme_p1 = names(angles1[[1]][[1]][[nme_t1]])[[1]]; inc1 = types[[1]]; jk=1
+    comb_all2=lapply(nme_trans, function(nme_t1){
+      nme_pow = names(angles1[[1]][[1]][[nme_t1]]); names(nme_pow)=nme_pow
+      lapply(nme_pow, function(nme_p1){
+        comb_all=lapply(types, function(inc1){
+          ang1 = angles1[[inc1]]
+          if(is.null(ang1)) return(NULL)
+          col_incl = cols_incl1[[inc1]]
+          ang2=ang1[[1]][[nme_t1]][[nme_p1]]
+          cs = Matrix::colSums(ang2)
+          if(length(ang1)>1){
+            for(jk in 1:length(ang1)){
+              cs = cs+Matrix::colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
+            }
+          }
+          #   excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1 && ex[4] ==nme_p1))]
+          if(length(excl)>0){
+            mi2 = match(excl, names(col_incl))
+            col_incl[mi2[!is.na(mi2)]]=FALSE
+          }
+          cs[col_incl]
+        })
+        top_angles=whichpart1(comb_all, n=topn, return_scores=TRUE)
+        t1 = .merge1_new(lapply(top_angles, function(ta){
+          data.frame(list(names = names(ta), value=ta))
+        }),addName="data_type")
+        if(is.null(t1)) return(t1)
+        
+        t1 = t1[order(t1$value),]
+        signature=if(prev_signature=="") t1$names else paste(prev_signature, t1$names, sep=";")
+        t2 =   t1 |> tibble::add_column(sumAngle, signature);
+        t2=subset(t2, value<999)
+        
+        ##add norm
+        
+        levs = unique(t1$data_type) ; names(levs) = levs
+        t4 =  .merge1_new(lapply(levs, function(l){
+          t3 = subset(t2,data_type==l )
+          indsk= match( t3$names,names( private$data$norm[[l]]))
+          t3 |> tibble::add_column(norm=private$data$norm[[l]][indsk])
+        }))
+        t4[order(t4$value),,drop=F]
+        ##
+      })
+    })
+    comb_all2
+  },
+  
    makeModels=function(vars2, inds){
      phens = private$phens; flags = private$flags
      checkRMSV = .readFlag(flags,"checkRMSV",FALSE)
@@ -516,9 +516,12 @@ dataH<-R6::R6Class("dataH",
      #  print(names(models2))
      models2
    },
+  
    select_k=function(analysis, k1,
-                     vars_l_todo
+                     vars_l_todo, 
+                     means_y_k = private$data$means_y(k1), force=FALSE
                    ){
+     self$updateTrain(k1, means_y_k=means_y_k, force=force);
      verbose=getOption("verbose",FALSE)
      if(is.null(private$phens)){
        stop("run  dh$update(phens, flags, transform_x) before running select")
@@ -569,10 +572,9 @@ dataH<-R6::R6Class("dataH",
      lapply(private$data$vars, function(v) quantile(v, qq_t))
    },
  
-   updateTrain=function(  verbose=FALSE, force=FALSE){
-    
-    
-     private$data$updateTrain( private$phens,private$flags,private$transform_x, verbose=verbose, force=force)
+   initTrain=function(  verbose=FALSE, force=FALSE){
+  
+         private$data$initTrain( private$phens,private$flags,private$transform_x, verbose=verbose, force=force)
    },
    updateLOOC=function( varn=c(),verbose=FALSE, force=FALSE){
      private$data$updateLOOC( private$phens,private$flags,varn=varn,force=force, verbose=verbose); ### update training object - updates all
@@ -603,10 +605,10 @@ dataH<-R6::R6Class("dataH",
    res_inner=function(comb_,prev_i2, k, expt_id){
      phens = private$phens;
      flags = private$flags;
-     
      nme_comb = names(comb_); names(nme_comb) = nme_comb
-     #nme_c1 = nme_comb[[2]]; nme_p1 = names(comb_[[nme_c1]])[[3]]; ik=1
-     res_inner=lapply(nme_comb, function(nme_c1){
+     #nme_c1 = nme_comb[[2]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
+     #print("HHHHHHH")
+     res_inner1=lapply(nme_comb, function(nme_c1){
        nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
        lapply(nmesp1, function(nme_p1){
          #print(nme_p1)
@@ -641,9 +643,18 @@ dataH<-R6::R6Class("dataH",
            nv
          })
          
+         if(FALSE){ ##checks correlation between angle and pvalue
+           df3 = t(data.frame(lapply(nxt_vars,function(nv){
+             c(nv$sumPv, nv$angle)
+           })))
+           colnames(df3) =c("pv", "angle")
+           cor(df3, method="spearman")
+         }
+         nxt_vars
+             
        })
      })
-     res_inner   
+     res_inner1
    },
   
    
@@ -669,7 +680,8 @@ predefined=function(incl1,prev_signature, sumAngle){
       .merge1_new(lapply(dt1, function(ind){
         signature=        apply(cbind(prev_signature, incl1[ind]),1,paste,collapse=";")
         
-        data.frame(list(names = incl1[ind],value = 0,sumAngle=sumAngle, signature=signature ))
+        data.frame(list(names = incl1[ind],value = 0,sumAngle=sumAngle, signature=signature ,
+                        norm=private$data$norm[[ind]][match(incl1[ind],names(private$data$norm[[ind]]))]))
       }),addName="data_type")
     })
   })
@@ -692,7 +704,7 @@ predefined=function(incl1,prev_signature, sumAngle){
          angles =angles[ unlist(lapply(angles, length))>0]
          angleH=list(angles=angles,
                      cols_incl = private$data$cols_incl(var_t,incl$types, g_incl,excl=varnames)) ### fix 
-         comb_angle1 =  .combineAngles1(angleH, incl,  sumAngle, prev_signature,flags)
+         comb_angle1 =  private$combineAngles1(angleH, incl,  sumAngle, prev_signature)
          if(addPlot){
            all_angles = .extrAngles(angleH,comb_angle1, incl$types)
             attr(comb_angle1,"all")=all_angles;
@@ -754,7 +766,7 @@ predefined=function(incl1,prev_signature, sumAngle){
     private$levs = lapply(y,function(yc) levels(yc) )       
     private$mult= .readFlag(flags,"mult",100)
     private$original_rows = 1:nrow(y)
-    
+   # private$angle_plots = list();
     d = expandData(data, y, certainty,family,  weights, mult = private$mult)
     private$na_inds = d$na_inds; private$alt_inds = d$alt_inds;
    private$original_inds = d$original_inds
@@ -797,6 +809,15 @@ predefined=function(incl1,prev_signature, sumAngle){
     
   },
 
+  #' @description Updates the train object for the kth cross validation.  This is an internal function and should not need to be called by user
+  #' @param k cross validation index
+  #' @param means_y_k the means to use for y.  Optional, can be internally calculated
+  #' @param force whether to force the update, even if previously calculated
+  updateTrain=function(k,   means_y_k = NULL, force=FALSE){
+    private$data$updateTrain(k,   private$phens,
+                             means_y = if(is.null(means_y_k)) private$data$means_y(k) else means_y_k,
+                             force=force);
+  },
   
   #' @description Calculate the angles and pv across multiple phenotypes.  This is an internal function and should not need to be called by user
   #' @param comb20 values from previous iteration
@@ -810,6 +831,8 @@ predefined=function(incl1,prev_signature, sumAngle){
       flags = private$flags; 
 #      self$update(phens, flags, transform_x);
       show_pvalue_plots=.readFlag(flags, "show_pvalue_plots",FALSE) 
+      angles_only=.readFlag(flags, "angles_only",TRUE) 
+      
       verbose=.readFlag(flags,'verbose',FALSE)
     saveAngles=FALSE
     if(is.null(expt_id)) stop("expt_id is NULL")
@@ -818,6 +841,8 @@ predefined=function(incl1,prev_signature, sumAngle){
     incl=todo1$incl
     g_incl = todo1$g_incl
     qq_t = todo1$qq
+    nvar = length(vars_l_todo$vars_l[[1]]$var)+1
+    
     comb2_new=invisible( lapply(vars_l, function(prev_i){
       prev_i2 = private$findPrev(comb20, expt_id, prev_i, k1);
       varnames = prev_i2$var_names; 
@@ -835,16 +860,15 @@ predefined=function(incl1,prev_signature, sumAngle){
       
       list(angles = comb_, pvs = ri) ;#private$simplify(ri))
     }))
-     if( show_pvalue_plots){ ## just prints the plot to screen, or to pdf
+     if( show_pvalue_plots && !angles_only){ ## just prints the plot to screen, or to pdf if pdf was specified before running this
        
-         ggps=try(plot_angle_vs_pv(comb2_new,1, k1))
-         print(ggps)
+        private$angle_plots[[k1]][[nvar]] = try(plot_angle_vs_pv(comb2_new,1, k1))
+        
        
       #  if(length(vars_l_todo$todo1)>0){
        
        # }
      }
-    nvar = length(vars_l_todo$vars_l[[1]]$var)+1
     if(nvar==1){
       private$plot_results[[k1]] = list()
     }
@@ -862,6 +886,24 @@ predefined=function(incl1,prev_signature, sumAngle){
       warning("need to set drop=TRUE if you are sure, this will delete all saved signatures")
     }
     
+  },
+
+#' @description plot of angles vs pvalue
+#' @param type which transformation to use, default use all
+#' @param fold which fold to use
+#' @returns a plot
+  plot_angles=function(type=NULL,fold ='full', labelsize=2){
+    if(length(private$angle_plots[[fold]])==0) {
+      warning("no angle plots, perhaps angles_only is set to TRUE")
+      return (NULL)
+    }
+    names(private$angle_plots[[fold]]) = 1:length(private$angle_plots[[fold]])
+    df = .merge1_new(private$angle_plots[[fold]], addName="nvar")
+    if(!is.null(type)){
+      df = df[grep(type, df$group),,drop=F]
+    }
+    ggp1= plot_outliers1(df, labelsize=labelsize)
+    ggp1
   },
   
   #' @description returns data on trajectory
@@ -957,12 +999,16 @@ predefined=function(incl1,prev_signature, sumAngle){
    one_v_rest = .readFlag(private$flags,"one_v_rest",FALSE)
    dbDir =private$dbDir;
    #nme = nme_d[[1]]
-   lapply(nme_d, function(nme){
+   result = lapply(nme_d, function(nme){
      mat = mats[[nme]]
-     dh1 = dataH$new(NULL,nme=nme, y=NULL, y1=ys[[nme]], family = private$data$family, mat = mat,       dbDir = dbDir, flags=flags, useDB=!is.null(private$sigs))
+     y = ys[[nme]]
+       dh = dataH$new(mat, y =NULL, y1 = y,   nme=nme, flags=flags,dbDir=dbDir)
+
+     dh1 = dataH$new(NULL,nme=nme, y=NULL, y1=ys[[nme]], family = private$data$family, mat = mat,       dbDir = dbDir, flags=flags, )
          dh1
      
    })
+   result
  },
  
  #' @description get the phenotyeps
@@ -1007,8 +1053,8 @@ predefined=function(incl1,prev_signature, sumAngle){
     #flags$transform_x = transform_x;
   #  super$updateExpt(phens, flags)
      private$updateLOOC(verbose=verbose,force=force)
-     private$updateTrain(verbose=verbose, force=force)
-    
+     private$initTrain(verbose=verbose, force=force)
+   
    ##updated after updateLOOC
   # nreps1 =self$nreps()
   # nreps = 1:nreps1
@@ -1016,23 +1062,40 @@ predefined=function(incl1,prev_signature, sumAngle){
   # nreps
  },
  
+means_y=function(){
+  means_y = list();
+  nreps = self$nreps()
+  for(k in nreps){
+    means_y[[k]] = private$data$means_y(k);
+  }
+  means_y;
+},
+counts_y=function(){
+   counts_y = list();
+   nreps = self$nreps()
+  for(k in nreps){
+      counts_y[[k]] = private$data$counts_y(k);
+  }
+   counts_y;
+},
  
 #' @description main function for variable selection
 #' @param analysis an analysisEnv object
 
  select=function( 
-                 analysis =analysisEnv$new(flags=private$flags, dbDir=NULL)
+                 analysis =analysisEnv$new(flags=private$flags, dbDir=NULL),
+                 means_y = self$means_y()
                               ){#c(y="function(y) y","function(y) y")
-
    if(is.null(private$phens)) stop("need to update first");
     nreps =self$nreps();
      variables = super$loadVars()
      if(!is.null(variables)) return(variables)
    
    vars_l_todo = analysis$getTodo(private$flags, private$phens)
+   private$angle_plots = lapply(nreps, function(x) list())
    variables=lapply(nreps, function(k1){
      if(getOption("verbose",FALSE)) print(paste("cv",k1,"of",length(nreps)))
-     private$select_k(analysis, k1, vars_l_todo)
+     private$select_k(analysis, k1, vars_l_todo, means_y_k = means_y[[k1]], force=TRUE)
                })
    attr(variables, "phens")=private$phens; attr(variables,"transform_x") = private$transform_x; attr(variables, "flags") = private$flags
    
@@ -1161,7 +1224,7 @@ plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=
   # color= if(length(unique(df4$dataset))>1) "dataset" else #"pheno"
   ggp = NULL; ggp1 = NULL
   if(nrow(df7)>0){
-    ggp<-ggplot(df7, aes(x=y, y=value, color=y, shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
+    ggp<-ggplot(df7, aes(x=y, y=value, color=y, shape=data, linetype=data))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
     if(violin){
       ggp<-ggp+ggplot2::geom_violin()+geom_point()
     }else{
@@ -1329,22 +1392,20 @@ makeAllModels=function(variables,
   all_models_full=lapply(beams, function(beam){
     vars_all0 = vars_all[[beam]]
     vars = vars_all0#[[nme_v_all]]
-  all_models = list()
-  variables = vars$variables
-  var_inds = vars$inds
-  rem_inds = self$nreps()
- 
-  all_models = private$makeModels(list(),rem_inds )
-
-  if(length(variables)==0)  return(all_models) ;#return(list(models=all_models, flags = flags, phens = phens, trainedOn=private$nme))
-  ord = order(unlist(lapply(variables, length)),decreasing=TRUE)
-  variables = variables[ord]
-  var_inds = var_inds[ord]
+   all_models = list()
+   variables1 = vars$variables
+   var_inds = vars$inds
+   rem_inds = self$nreps()
+   all_models = private$makeModels(list(),rem_inds )
+   if(length(variables1)==0)  return(all_models) ;#return(list(models=all_models, flags = flags, phens = phens, trainedOn=private$nme))
+   ord = order(unlist(lapply(variables1, length)),decreasing=TRUE)
+   variables1 = variables1[ord]
+   var_inds = var_inds[ord]
   #v_nme = names(variables)[1]; #max=10; verbose=TRUE; k=1;variables =vars_all$variables; 
   
-  for(v_nme in names(variables)){
+  for(v_nme in names(variables1)){
     if(verbose)print(v_nme)
-    vars2 = variables[[v_nme]]
+    vars2 = variables1[[v_nme]]
     vars2 = vars2[1:min(length(vars2), max)]
     inds =var_inds[[v_nme]]
     nme_ = paste(names(vars2),collapse=";")
@@ -1399,10 +1460,28 @@ makeAllModels=function(variables,
       
     }
   }
+ 
   all_models
 
   })
-  all_models_=list(models=all_models_full, flags = flags, phens = phens, trainedOn=private$nme)
+ 
+  pres= .merge1_new(lapply(beams, function(beam){
+    varl = 1:length(variables); names(varl) = varl
+    .merge1_new( lapply(varl, function(k){
+    pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cum_pv))
+    cum_pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cumpv_all))
+    length=as.vector(unlist(lapply(all_models_full[[beam]], function(am) length(am$full$var_names))))
+    model_names=names(length)
+    names(length)=NULL
+    df = data.frame(cbind(length ,pvs, cum_pvs))
+      rownames(df)=NULL
+      df
+  }), addName="cv")
+   
+    }), addName="beam")
+  
+
+  all_models_=list(models=all_models_full, flags = flags, phens = phens, trainedOn=private$nme, pres = pres)
   super$saveModels(all_models_);
   #combined_models
   all_models_
