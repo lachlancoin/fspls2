@@ -193,22 +193,34 @@ length(unique(eval1$`data:family`))
 }
 
 .modify<-function(eval3, shape_color,
-                  shape_color_nme ){
+                  shape_color_nme,collapse=" " ){
+  if(length(shape_color)==0) return(eval3)
   if(!(shape_color_nme %in% names(eval3))){
     eval3_sub=eval3[,names(eval3) %in% shape_color,drop=FALSE]
-    for(jk in 1:length(eval3_sub)) eval3_sub[[jk]]=factor(eval3_sub[[jk]])
+    for(jk in 1:length(eval3_sub)) {
+      #    eval3_sub[[jk]][which(is.na(eval3_sub[[jk]]))]="NA"
+      x2 = eval3_sub[[jk]]
+      if(!is.factor(x2)){
+        levs = unique(x2)
+        if(length(grep("|", levs))==length(levs)){
+          levs = levs[order(as.numeric(unlist(lapply(levs, function(x) strsplit(x,"\\|")[[1]][1]))))]
+        }
+        eval3_sub[[jk]]=factor(x2, levels = levs)
+        
+      }
+    }
     levs1 = lapply(eval3_sub, function(vv) levels(vv))
     levs_all = levs1[[1]]
     if(length(levs1)>1){
       for(jk in 2:length(levs1)){
-      levs_all = unlist(lapply(levs1[[jk]], function(levs11) paste(levs_all, levs11)))
+        levs_all = unlist(lapply(levs1[[jk]], function(levs11) paste(levs_all, levs11, sep=collapse)))
       }
     }
-      eval4 = eval3 |>  tibble::add_column(shape_color_nme = apply(eval3_sub,1,paste, collapse=" "))
-      
-      eval4[['shape_color_nme']]=factor(eval4[['shape_color_nme']], levels = levs_all)
-        names(eval4) = gsub("shape_color_nme", shape_color_nme, names(eval4))
-        return(eval4)
+    eval4 = eval3 |>  tibble::add_column(shape_color_nme = apply(eval3_sub,1,paste, collapse=collapse))
+    
+    eval4[['shape_color_nme']]=factor(eval4[['shape_color_nme']], levels = levs_all)
+    names(eval4) = gsub("shape_color_nme", shape_color_nme, names(eval4))
+    return(eval4)
   }
   eval3
 }
@@ -368,9 +380,9 @@ plotEval<-function(eval3,
   
   eval3 = .modify(eval3, linetype, linetype_nme)
   eval3 = .modify(eval3, sep_by, sep_by_nme)
-  eval3 = .modify(eval3,grid0, grid0_nme)
+  eval3 = .modify(eval3,grid0, grid0_nme,collapse="\n")
   if(length(grid1)>0){
-  eval3 = .modify(eval3,grid1, grid1_nme)
+  eval3 = .modify(eval3,grid1, grid1_nme, collapse="\n")
   }
   eval2 = eval3
   
