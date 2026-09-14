@@ -491,9 +491,10 @@ dataH<-R6::R6Class("dataH",
      #k=inds1[[1]]; d = datas[[1]]
      mods1 = lapply(inds1, function(k){
        # print(k)
+      # if(verbose)print(k)
        # lapply(datas[names(datas) %in% train_nme], function(d){
        mods = d$makeModels(phens, vars2,k,logpthresh = logpthresh,project=project,
-                           flags=flags,checkRMSV=checkRMSV,
+                           flags=flags,checkRMSV=checkRMSV,verbose=verbose,
                            useglm=useglm, useoffset=useoffset)
        mods
        #})
@@ -1401,7 +1402,7 @@ makeAllModels=function(variables,
    ord = order(unlist(lapply(variables1, length)),decreasing=TRUE)
    variables1 = variables1[ord]
    var_inds = var_inds[ord]
-  #v_nme = names(variables)[1]; #max=10; verbose=TRUE; k=1;variables =vars_all$variables; 
+  #v_nme = names(variables1)[1]; #max=10; verbose=TRUE; k=1;variables =vars_all$variables; 
   
   for(v_nme in names(variables1)){
     if(verbose)print(v_nme)

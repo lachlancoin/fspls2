@@ -1278,6 +1278,7 @@ makeModels=function(phens1, vars2,k,
                   
                   ){
     nonNA = self$looc$incl[,k]
+    if(verbose) print("making models")
   if(is.null(self$looc)){
     self$updateLOOC( phens1,flags,varn=c(),force=FALSE, verbose=FALSE)
   }
@@ -1316,12 +1317,14 @@ makeModels=function(phens1, vars2,k,
   #print(rmsv1)
   while(jk<=len){
     b_i_name = vars2[[jk]]
+    if(verbose) cat(paste(jk,"of",len,";"))
 #    transform_func=eval(str2lang(func_str1[var_transf[[jk]]]))
    # transform_x1=transform_x[[var_transf[[jk]]]]
     prev_i1 = self$makeNextModel(prev_i,b_i_name,subphens,k,Wall=Wall,
                                  family, ypred=ypred, project=project, useglm=useglm, logpthresh =logpthresh,useoffset=useoffset)
     if(is.null(prev_i1)) break;
-    nme2 = paste(vars2[[jk]], collapse=".")
+    nme2 = paste(vars2[[
+      jk]], collapse=".")
     nme1 = if(jk==1)  nme2 else paste(nme1, nme2,sep=";")
     nmes[[jk+1]] = nme1
     models[[jk+1]] =prev_i1$simplify(useoffset)
@@ -1342,6 +1345,8 @@ makeModels=function(phens1, vars2,k,
    
       }
       rmsv = rmsv2
+      if(verbose && !is.null(rmsv))print(quantile(rmsv$value))
+      
     }
    
     prev_i = prev_i1
@@ -1728,7 +1733,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
   #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
   if(length(all_models_y)==0) return(NULL)
   
-  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[1]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+#  nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)cat(paste("numvar",numvar))
           if(is.null(ypred)) stop("ypred is null")

@@ -343,7 +343,7 @@ plotEval<-function(eval3,
   
   eval3$sign = as.character(eval3$sign)
   eval3$sign = factor(eval3$sign, levels = c(-1,0,1), labels=c("-","","+"))
-      eval3 = eval3[,names(eval3) %in% c(shape_color,sep_by, linetype, text, dotsize, color, title1, grid0, grid1, "numvars","mid","low","high"),drop=FALSE]
+    #  eval3 = eval3[,names(eval3) %in% c(shape_color,sep_by, linetype, text, dotsize, color, title1, grid0, grid1, "numvars","mid","low","high"),drop=FALSE]
   
   
   l1 = apply(eval3,1,paste, collapse="::");
@@ -465,6 +465,36 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
     
                      }
 
+auprc_boot <- function(data, indices) {
+  d <- data[indices, ]
+  curves <- evalmod(scores = d$scores, labels = d$labels)
+  aucs <- auc(curves)
+  aucs$aucs[aucs$curvetypes == "PRC"]
+}
+
+
+
+
+.calcAUPRC<-function(ypred, y, w,  conf.level=getOption("conf.level",0.95),R=getOption("bootstrap_repeats", 0)){
+  nonNA = !(is.na(y) | is.na(y))
+  data = data.frame(scores = ypred[nonNA], labels = y[nonNA])
+  if(R<10){
+    mid = auprc_boot(data, 1:nrow(data))
+    return(c(NA,mid,NA))
+  }
+  boot_results <- boot(
+ data = data,
+    statistic = auprc_boot,
+    R = R
+  )
+#  res1 = boot.ci(boot_results, type = "bca") 
+  
+  ci <- boot.ci(boot_results, type = "bca", conf = conf.level)
+  lower <- ci$bca[4]
+  upper <- ci$bca[5]
+  
+  c(lower, boot_results$t0, upper)
+}
 .calcAUCW<-function(ypred,y, w,
                     conf.level=getOption("conf.level",0.95)
 ){

@@ -391,7 +391,11 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
     rms = -1*.misclass(yp,y1, w1,auc=TRUE)
     names(rms) =c("low","mid","high")
  
- } else if(type_i=="AUC"){
+ } else if(type_i=="AUPRC"){
+   rms = 1*(.calcAUPRC(yp[,1],y1, w1))
+   names(rms)=c("low","mid","high")
+   
+   }else if(type_i=="AUC"){
     rms = 1*(.calcAUCW(yp[,1],y1, w1))
     names(rms)=c("low","mid","high")
   }else if(type_i=="AUC_full"){
