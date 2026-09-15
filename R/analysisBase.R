@@ -2,7 +2,7 @@
 
 check_flags<-function(flags){
   if(flags$topn<flags$beam) stop("beam should be less than topn")
-  
+ 
   if(!is.null(.readFlag(flags,"nrep",NULL))){
     flags[['nfold']] = flags[['nrep']]
     warning("replaced nrep with nfold")
@@ -166,14 +166,25 @@ analysisBase<-R6::R6Class("analysisBase",
                    
                 
                    #' @description integrates variables from different CV runs
+                   #' @param max_model_length length maximum model length
                    #' @param variables a variables object
-                   integrate=function(variables){
+                   integrate=function(variables, max_model_length=1000, max_beam = 1000){
+                    # if(names(variables[['full']][[1]]=="nvar_1")) {
+                       ##if variables is all variables, we take the last of each
+                      
+                     #}
                      flags = private$flags;
+                  #   keepAll = .readFlag(flags,"keep_all", TRUE);
+                   #  if(keepAll){
+                         variables = lapply(variables, function(x) x[[min(length(x), max_model_length)]])
+                       
+                    # }
                      phens = private$phens;
                     useDB=private$useDB;
                      useAngles = !is.null(flags$angles_only) && flags$angles_only
-                     full_index = length(variables) 
-                     beams = 1:length(variables[[full_index]])
+                     full_index = length(variables)
+                     beam_m = min(length(variables[[full_index]]), max_beam)
+                     beams = 1:beam_m
                      names(beams)=beams
                      names(variables) = 1:length(variables)
                      

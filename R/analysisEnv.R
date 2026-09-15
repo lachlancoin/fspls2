@@ -1,6 +1,24 @@
 
-
-
+#' Extracts all the variables selected from the variables object. Useful when using beam>1 
+#' @param variables a variables object
+#' @export
+extract_all_variables<-function(variables){
+.merge1_new(lapply(variables, function(var){
+    names(var) = unlist(lapply(names(var), function(x) strsplit(x,"_")[[1]][2]))
+     .merge1_new(lapply(var, function(var1){
+       var1n = 1:length(var1); names(var1n) = names(var1)
+       .merge1_new(lapply(var1n, function(beam){
+         var2 = var1[[beam]]
+         vn = var2$var_names[[length(var2$var_names)]]
+         df =  data.frame(list(varname=vn[2],data = vn[1] , transform=vn[3], param=vn[4],
+                               beam = beam,
+                               angle=var2$angle, cumulative_angle=var2$cum_angle))
+        df
+       }), addName="model")
+     }), addName = "nvar")
+   }), addName="nrep")
+   
+ }
 plot_traj<-function(comb_plot, y="value"  ,facet="data~maxsig", keep_best=10, txtsize=5, step=2){ #y="cumulative";
   if(!is.null(comb_plot$nrep)){
     if(length(unique(comb_plot$nrep))>1) stop(" need to subset on nrep first")
@@ -84,6 +102,7 @@ expandData<-function(dataset, mult = 100
 #' @param flags list of options
 #' @param transform_x transformation object 
 fspls.iterative<-function(dataset,flags, transform_x){
+  flags$keep_all = FALSE;
   options(flags);
   if(is.null(dataset$y) || length(dataset$dataset)==0 || is.null(dataset$certainty)) stop(" dataset not well defined")
   if(!is.factor(dataset$y[[1]])) stop("y should be a factor")
@@ -142,6 +161,7 @@ fspls.select<-function(datasH, flags,
                 data_types=datasH[[1]]$data_types(),
                                 dbDir = NULL
                ){#c(y="function(y) y","function(y) y")
+  flags$keep_all = FALSE;
   options(flags);
   analysis =analysisEnv$new(flags=flags, dbDir=dbDir) ;
   vars_all = analysis$select( datasH,phens,transform_x, data_types)
@@ -385,18 +405,36 @@ analysisEnv<-R6::R6Class("analysisEnv",
           print(names(vars_l))
         }
         ##remove signatures which are same in different order
-        dupls=(unlist(lapply(ang1, function(a1) paste(sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2],collapse="::")))), collapse=";;"))))
+        #non_rand = grep("rand", names(ang1),inv=TRUE)
+        #dupls = rep(FALSE, length(ang1))
+        dupls=(unlist(lapply(ang1, function(a1) paste(sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:3],collapse="::")))), collapse=";;"))))
         ang1 = ang1[!duplicated(dupls)]
-        if(getOption("exclusion_in_beam",FALSE)){  ##KEEPS DIFFERENT N-1 signatures
+        exclusion_in_beam = getOption("max_exclusion_in_beam",0)  ## can be a number of max
+        if(exclusion_in_beam=="max"){  ## excludes any overlapping signature
+          non_rand = grep("rand", names(ang1),inv=TRUE)
+          dupls1 = rep(FALSE, length(ang1))
+          vn_all = lapply(ang1[non_rand], function(a1) sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2], collapse="::")))))
+          dupls = rep(FALSE, length(vn_all));
+          for(kk in 2:length(vn_all)){
+              
+              mi1 = match(vn_all[[kk]], unlist(vn_all[1:(kk-1)]))
+              if(length(which(!is.na(mi1)))>0) dupls[[kk]] = TRUE
+          }
+          dupls1[non_rand] = dupls
+          ang1 = ang1[!dupls1]
+        }else if(is.numeric(exclusion_in_beam) && exclusion_in_beam>0){  ##KEEPS DIFFERENT N-1 signatures
           len = length(ang1[[1]]$var_names)
+          exclusion_in_beam = min(len-1, exclusion_in_beam)
           if(len>1){
             if(verbose) print("thinning signature ")
-            dupls1=(unlist(lapply(ang1, function(a1) paste(sort(unlist(lapply(a1$var_names[-len], function(vv1)paste(vv1[1:2],collapse="::")))), collapse=";;"))))
+            non_rand = grep("rand", names(ang1),inv=TRUE)
+            dupls1 = 1:length(ang1)
+            toincl = 1:(len-exclusion_in_beam)
+            dupls1[non_rand]=(unlist(lapply(ang1[non_rand], function(a1) paste(sort(unlist(lapply(a1$var_names[toincl], function(vv1)paste(vv1[1:2],collapse="::")))), collapse=";;"))))
             
             ang1 = ang1[!duplicated(dupls1)]
           }
         }
-        
         last_non_rand = grep("rand", names(ang1))[1]-1
         if(is.na(last_non_rand)) last_non_rand = beam;     
         
@@ -483,6 +521,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     stop_y = .readFlag(flags, 'stop_y',"rand")
     logpvthresh = log(.readFlag(flags,"pthresh",0.1))
     beam= .readFlag(flags,"beam",1)
+    
     saveAngles=FALSE
     #plot_results = list()
     # vars_l = analysis$nextVars(expt_id, flags)
@@ -494,6 +533,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     #  comb2_old = comb2
     useDB = !is.null(private$sigs)
     # nmesH = names(datasH); names(nmesH) = nmesH;
+    vars_all = list();
     while(length(vars_l_todo$todo1)>0 ){
       comb2_news =try(lapply(nmesH, function(nmeh){
         dh = datasH[[nmeh]]
@@ -515,10 +555,13 @@ analysisEnv<-R6::R6Class("analysisEnv",
       
       nvar = length(vars_l_todo$vars_l[[1]]$var)
       if(verbose) print(names(vars_l_todo$vars_l))
+      vars_all[[nvar]] = vars_l_todo$vars_l
       
       if(length(vars_l_todo$vars_l[[1]]$var_names)>=flags$max  ) break;
     }
-    vars_l_todo$vars_l
+    if(length(vars_all)>0) names(vars_all) = paste("nvar",1:length(vars_all),sep="_")
+     return(vars_all)  ## this keeps the vars from each stage of iteration
+    #vars_l_todo$vars_l
   },
   
   #' Get todo 

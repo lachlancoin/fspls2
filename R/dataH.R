@@ -419,7 +419,11 @@ dataH<-R6::R6Class("dataH",
   combineAngles1=function(angleH, incl, sumAngle, prev_signature){ 
     #$types
     flags = private$flags;
-    topn = .readFlag(flags,'topn', 20)
+    angles_only = .readFlag(flags,'angles_only', TRUE)
+    #if(angles_only) topn = 1000;
+    topn_default = if(angles_only)1000 else 20
+    topn =.readFlag(flags,'topn', topn_default)
+    
     onlyAll = .readFlag(flags,'only_all',FALSE)
     angles1=angleH$angles;cols_incl1=angleH$cols_incl 
     nme_trans = names(angles1[[1]][[1]]); names(nme_trans) = nme_trans
@@ -530,12 +534,14 @@ dataH<-R6::R6Class("dataH",
      expt_id = super$expt_id();
      show_pvalue_plots=.readFlag(flags, "show_pvalue_plots",FALSE) 
      stop_y = .readFlag(flags, 'stop_y',"rand")
+    
      logpvthresh = log(.readFlag(flags,"pthresh",0.1))
      beam= .readFlag(flags,"beam",1)
      comb20 = NULL;
      private$plot_results[[k1]] = list()
      # vars_l = analysis$nextVars(expt_id, flags)
      nvar=0;
+     vars_all = list();
      while(length(vars_l_todo$todo1)>0 ){
       # direct = direction[[min(nvar+1, length(direction))]]
        comb2_new1 = try(self$multiAnglesAndPv(comb20 , k1,expt_id, vars_l_todo))
@@ -560,14 +566,19 @@ dataH<-R6::R6Class("dataH",
          comb20 = comb21
        }
        vars_l_todo = vars_l_todo_new
-       nvar = length(vars_l_todo$vars_l[[1]]$var)
+       nvar = length(vars_l_todo$vars_l[[1]]$var_names)
        if(verbose) print(names(vars_l_todo$vars_l))
+       vars_all[[nvar]] = vars_l_todo$vars_l
        if(length(vars_l_todo$vars_l[[1]]$var_names)>=flags$max) break;
-       
+      
       
      }
-          
-     vars_l_todo$vars_l
+     if(length(vars_all)>0) names(vars_all) = paste("nvar",1:length(vars_all),sep="_")
+     nvar1 = length(vars_l_todo$vars_l[[1]]$var)
+     if(nvar1!=length(vars_all)) stop("problem!")
+     #if(keepAll)
+       return( vars_all)    
+     #vars_l_todo$vars_l
    },
    var_thresh = function(qq_t){
      lapply(private$data$vars, function(v) quantile(v, qq_t))
@@ -1200,13 +1211,14 @@ extractPredictions=function(all_modelsh,
 #' @param violin violin plots
 #' @param assoc use association
 #' @param update whether to use attributes from bariables to update this object, default is FALSE
+#' @param max_model_length the maximum model length to consider
 #' @returns  a table with results
-plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=FALSE){
+plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=FALSE, max_model_length=1000, max_beam = 1){
   
   attrs = attributes(variables)
   if(update) self$update(attrs$phens, attrs$flags, transform_x =  attrs$transform_x)
   
-  vars_all=super$integrate(variables)
+  vars_all=super$integrate(variables, max_model_length=max_model_length, max_beam = max_beam)
 
   df4= #.merge1_new( 
    # lapply(private$datas, function(d) 
@@ -1371,14 +1383,15 @@ getVariance=function(varnames){
 #' @description fit models based on variables
 #' @param variables list of variables selected by select method
 #' @param update whether to automatically update phens, transform_x and flags , default TRUE
+#' @param max_model_length the maximum model length to include
 #' @returns fitted models
 makeAllModels=function(variables,
-                       update=FALSE
+                       update=FALSE, max_model_length=1000, max_beam = 1000
                        ){
   attrs = attributes(variables)
   if(update) self$update(attrs$phens, attrs$flags, transform_x =  attrs$transform_x)
   
-  vars_all=super$integrate(variables)
+  vars_all=super$integrate(variables, max_model_length = max_model_length, max_beam = max_beam)
 #  phens=vars_all[[1]]$phens, flags=vars_all[[1]]$flags, 
   useDB = super$useDB;
   flags = private$flags;phens = private$phens;
@@ -1467,15 +1480,15 @@ makeAllModels=function(variables,
   })
  
   pres= .merge1_new(lapply(beams, function(beam){
-    varl = 1:length(variables); names(varl) = varl
+    varl = 1:length(variables); names(varl) = varl; names(varl)[[length(varl)]]="full"
     .merge1_new( lapply(varl, function(k){
     pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cum_pv))
     cum_pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cumpv_all))
-    length=as.vector(unlist(lapply(all_models_full[[beam]], function(am) length(am$full$var_names))))
-    model_names=names(length)
-    names(length)=NULL
-    df = data.frame(cbind(length ,pvs, cum_pvs))
-      rownames(df)=NULL
+    length=(unlist(lapply(all_models_full[[beam]], function(am) length(am$full$var_names))))
+    model_names=names(pvs)
+    #names(length)=NULL
+    df = data.frame(cbind(pvs, cum_pvs)) |> tibble::add_column(model_names)
+    
       df
   }), addName="cv")
    

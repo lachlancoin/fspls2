@@ -23,7 +23,7 @@ library(fspls2)
 
 #devtools::load_all( "~/github/fspls2/R")
 ##set the types
-  options("fspls.types"= jsonlite::fromJSON('{"gaussian":["correlation","rms"],"binomial":["AUC"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
+  options("fspls.types"= jsonlite::fromJSON('{"gaussian":["correlation","rms"],"binomial":["AUC","AUPRC"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
 
   ## set the y_transforms to explore  
   transform_x=getTransform(pow = c(1),    ## transformations raise to the powers indicated here.  Default is 1 but can add others
@@ -68,26 +68,31 @@ library(fspls2)
     datasH = list(dh)
     #      
     #vars_all = analysis$select(datasH,  flags, transform_x, phens = dh$pheno()$all)
-  
+   #   flags$keep_all = TRUE
+
     analysis =analysisEnv$new(flags=flags, dbDir=NULL)
-     flags$maintain_norm=TRUE
+     #flags$maintain_norm=TRUE
     data_types = dh$data_types();
       dh$update(phens = dh$pheno()$all, flags = flags, transform_x = transform_x, data_types = data_types)
     variables = dh$select( analysis=analysis)
-   ggp2= dh$plot_angles(type=NULL)
+    allvar_table = extract_all_variables(variables)
+    #vars_all1 = dh$integrate(variables)
+    #  vars_all2 = dh$integrate(variables2)
+   #ggp2= dh$plot_angles(type=NULL)
   #  selected_plot= dh$plotData(variables, update=T)
   # print(selected_plot)
     #variables = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
-    all_models =dh$makeAllModels(variables)
+    all_models =dh$makeAllModels(variables, max_model_length=2)
     #dh$plot_angles()
     #optionally get predictions
     
     #Step 3. evaluate the models
     eval1= dh$evaluateAllModels(all_models)
     ## Now visuaise the resultsy
-    ggps1=plotEval(eval1,legend=T, grid1=c("subpheno","pheno"), grid0=c("measure","cv_full"),linetype="data", ##"full_model"
-                   shape_color=c("data","transf"),sep_by=c("beam"), showranges=T,text="variable",logy=example=="gaussian",
+    ggps1=plotEval(eval1,legend=T, grid1=c("subpheno","pheno", "measure"), grid0=c("cv_full"),linetype="data",
+                   color="beam",##"full_model"
+                   shape=c("data","transf"),sep_by="data", showranges=F,text="variable",logy=example=="gaussian",
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   
     ##optionally get all predictions
@@ -150,7 +155,7 @@ ggp4
 Iteratively replacing uncertain values
 ```{r, eval = FALSE}
 ## test Iterative works on binomial and multinomial
-flags$angles_only = FALSE:
+flags$angles_only = TRUE;
 
 results = runIterative("binomial")
 print(cbind(results$input, results$output))
@@ -158,7 +163,7 @@ print(cbind(results$input, results$output))
 
 ```{r, eval = FALSE}
 ## test Iterative works on binomial and multinomial
-flags$angles_only = FALSE:
+flags$angles_only = TRUE;
 results = runIterative("multinomial")
 print(cbind(results$input, results$output))
 
