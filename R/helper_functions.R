@@ -479,8 +479,10 @@ invrandomize <- function(y1, seed, norm=1, offset=0) {
 
 auprc_boot <- function(data, indices) {
   d <- data[indices, ]
-  curves <- evalmod(scores = d$scores, labels = d$labels)
-  aucs <- auc(curves)
+  curves <- precrec::evalmod(scores = d$scores, labels = d$labels)
+#  tbl = table(d$labels);
+ # if(length(tbl)<=1 ||min(tbl)<2) return c(NA,NA,NA)
+  aucs <- precrec::auc(curves)
   aucs$aucs[aucs$curvetypes == "PRC"]
 }
 
@@ -490,11 +492,14 @@ auprc_boot <- function(data, indices) {
 .calcAUPRC<-function(ypred, y, w,  conf.level=getOption("conf.level",0.95),R=getOption("bootstrap_repeats", 0)){
   nonNA = !(is.na(y) | is.na(y))
   data = data.frame(scores = ypred[nonNA], labels = y[nonNA])
-  if(R<10){
+  tbl= table(y[nonNA]);
+  if(length(which(nonNA))<5) return(c(NA,NA,NA))
+  #print(data)
+  if(R<10 || length(tbl)<=1 || min(tbl)<10){
     mid = auprc_boot(data, 1:nrow(data))
     return(c(NA,mid,NA))
   }
-  boot_results <- boot(
+  boot_results <- boot::boot(
  data = data,
     statistic = auprc_boot,
     R = R

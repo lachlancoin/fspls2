@@ -401,7 +401,7 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
   }else if(type_i=="AUC_full"){
     rms = 1*(.calcAUCW(yp[,1],y1, w1))
     names(rms)=c("low","mid","high")
-  }else if(type_i=="AUC_all"){
+  }else if(type_i %in% c("AUC_all","AUPRC_all")){
     if(fam=="ordinal"){
       levs = min(y1, na.rm=TRUE):(max(y1,na.rm=TRUE)-1) 
       lev_inds = 1:length(levs)
@@ -410,7 +410,8 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
         gt =y1<=levs[kj]  ##interpret as probability of being less or equal to  count
         if(length(which(gt))==0) return(NA)
         y2 = ifelse(gt,1,0)
-        data.frame(value= 1*(.calcAUCW(yp[,kj],y2, w1)), submeasure=c("low","mid","high"))
+        if(type_i=="AUC_all") return(data.frame(value= 1*(.calcAUCW(yp[,kj],y2, w1)), submeasure=c("low","mid","high")))
+        data.frame(value= 1*(.calcAUPRC(yp[,kj],y2, w1)), submeasure=c("low","mid","high"))
       }),addName="subpheno")
       #names(rms_l )=paste(names(y)[[ycol]],levs,sep=".")
       rms = rms_l #+0.5

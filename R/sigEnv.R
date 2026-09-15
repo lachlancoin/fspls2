@@ -501,14 +501,15 @@ get_data_flags=function( user=self$user, nmes = self$data_names, types = self$da
    ###NEED TO UPDATE THIS AND ALSO LOAD VARS
    tbls = self$tbls()
    hasVars = "vars" %in% tbls
-   flags=vars_all[[1]]$flags;
-   phens=vars_all[[1]]$phens
+   flags=vars_all[[1]][[1]]$flags;
+   phens=vars_all[[1]][[1]]$phens
    expt_id = self$getExpt(flags=flags, phens=phens,  user=user,add_new=TRUE)
    if(replace & hasVars){
      dbExecute(self$mydb, 'DELETE FROM vars where experiment_id =:expt_id',list(expt_id=expt_id))
    }
    for(vars_all1 in vars_all){
-   res1 = .convertVarsToTable(vars_all1, expt_id=expt_id)
+     ##save the last one
+   res1 = .convertVarsToTable(vars_all1[[length(vars_all1)]], expt_id=expt_id)
    
    #}))
    try(dbWriteTable(self$mydb, "vars", res1,overwrite=!hasVars,append=hasVars))
