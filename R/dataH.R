@@ -3,14 +3,15 @@
 mergeAll = function(comb2_new, beam){
   comb1 = .merge1_new(lapply(comb2_new, function(c){
     .merge1_new(lapply(c$angles, function(c1){
-    
+      
       .merge1_new(c1,addName="pow")
     }),addName="func")
   }), addName="prev") 
   if(is.null(comb1)) return(NULL)
    #comb1$prev 
    o =  order(comb1$value)
-   comb1[o[1:beam],]
+   beam1 = min(beam, length(o))
+   comb1[o[1:beam1],]
   
 }
 permuteLabel<-function(y,certainty,na_inds,
@@ -884,7 +885,7 @@ predefined=function(incl1,prev_signature, sumAngle){
     if(nvar==1){
       private$plot_results[[k1]] = list()
     }
-    private$plot_results[[k1]][[nvar]] = mergeAll(comb2_new, flags$beam)
+    private$plot_results[[k1]][[nvar]] = try(mergeAll(comb2_new, flags$beam))
     comb2_new
   },
   #' clear database. This is only used if you want to clear the database.  Internal function
@@ -1141,55 +1142,118 @@ y=function(phens = self$pheno()[[1]]){
 #' @param liab return liability score, or probability (for binomial, ordinal multinomial)
 #' @returns  a ggplot
 plotPredictions=function(all_modelsh,
+                         phens = private$phens,
                          update=FALSE,
                          liab=TRUE){
   if(update) self$update(all_modelsh$phens, all_modelsh$flags, transform_x =  fromJSON(all_modelsh$flags$transform_x))
   
- y = self$y(private$phens)
-  preds= self$extractPredictions(all_modelsh, phens, flags, liab, transform_x = transform_x)
+ y = self$y(phens)
+ preds= self$extractPredictions(all_modelsh, liab=liab)
+ 
+ families = names(y); names(families) = families;
+ plot_results=lapply(families, function(fam){
+   print(fam)
+   y1 = y[[fam]]; 
+   if(ncol(y1)==0) return(NULL)
+   coln = 1:ncol(y1); names(coln) =colnames(y1) 
+   toplot=
+   .merge_lapply_nme(preds, "beam", function(beam){
+       #print(beam)
+       p1 = preds[[beam]]
+      .merge_lapply_nme(p1, "modelname",function(nvar){
+        #print(paste(beam,nvar))
+        p2 = p1[[nvar]]
+        .merge_lapply_nme(p2, "cv",function(cv){
+         # print(paste(beam, nvar, cv, fam))
+         p3 = p2[[cv]]
+       
+           p4 = p3[[fam]]
+         coln1 = 1:ncol(p4); names(coln1)=colnames(p4);
+         if(fam=="gaussian"){
+           df = .merge1_new(lapply(coln, function(cn1){
+             df1=data.frame(list(prediction=p4[,cn1], value=y1[,cn1], text=""))
+             text_df = round(cor(df1$prediction, df1$value,use="pairwise.complete.obs"),2)
+            rbind(df1,data.frame( list(prediction = mean(df1$prediction, na.rm=T), value = mean(df1$value, na.rm=T),text=text_df)))
+           }), addName="pheno")
+           
+         }else if(ncol(y1)==1){
+           df = .merge1_new(lapply(coln1, function(cn1){
+           #  print(cn1)
+             ap = tryCatch({
+               y2 = ifelse(y1[,1]<cn1, 1, 2)
+               getAreaPlot( p4[,cn1], y2)
+             },error=function(ew){
+               return(NULL)
+             })
+            ap
+           }), addName = "pheno")
+         }else{
+           df = .merge1_new(lapply(coln, function(cn1){
+            # print(cn1)
+            ap =tryCatch({
+               getAreaPlot( p4[,cn1], y1[,cn1])
+             },error=function(ew){
+               return(NULL)
+             })
+           ap
+           }), addName = "pheno")
+          
+         }
+         df
+       })
+     })
+   })
+   toplot$cv = factor(toplot$cv); levs = levels(toplot$cv); names(levs) =levs
+   modnames = unique(toplot$modelname); names(modnames) = modnames
+   modvars = unlist( lapply(modnames, function(x) rev(strsplit(x,";")[[1]])[1]))
+   modlens =  unlist( lapply(modnames, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]])))
+   o = order(modlens)
+   modnames = modnames[o]; modvars = modvars[o]; modlens =modlens[o]
+   
+   toplot1 =  toplot |> tibble::add_column(variables= factor(toplot$modelname, levels=modnames, labels = modvars), 
+                                           nvar =as.numeric(as.character(factor(toplot$modelname, levels=modnames, labels = modlens ))))
+   if(fam=="gaussian"){
+     plots_all = lapply(levs,function(lev){
+       ss1 = subset(toplot1, cv==lev)
+       ggp2 = ggplot(subset(ss1, text=="") , aes(x =value, y=prediction,color=pheno, shape=beam ))+facet_grid("pheno~variables")+geom_point()
+       ggp2+ggplot2::geom_label(data=subset(ss1,text!=""), aes(x=value, y=prediction, color=pheno, label=text))
+       })
   
+     
+   }else{
+   #toplot$subpheno
+  # pheno = as.numeric(toplot$pheno)
+  
+   toplot1$subpheno = factor(toplot1$subpheno, levels = sort(unique(toplot1$subpheno)));
+   pheno_levs = unique(toplot$pheno);
+  
+   toplot1$pheno = factor(toplot1$pheno, levels = pheno_levs)
+  
+   #toplot1 = toplot |> tidyr::unite("cv_pheno",cv,pheno,sep="_", remove=FALSE)
+   plots_all = lapply(levs,function(lev)   ggplot(subset(toplot1, cv==lev), aes(x =knots, y=value,color=subpheno, shape=beam, size=counts ))+facet_grid("pheno~variables")+geom_point())
+   }
+    plots_all
+   })
+ plot_results = plot_results[unlist(lapply(plot_results, length))>0]
   #familys=names(preds[[beam]][[nv]][[cv]]);
   #family = familys[[1]];td=1
   ##beams = names(preds); names()  .merge_lapply_nme
-toplot=.merge_lapply_nme(preds, "beam",function(beam){
- .merge_lapply_nme(preds[[beam]], "numvar",function(nv){
-    cvs = preds[[beam]][[nv]]
-   
-    .merge_lapply_nme(cvs, "cv",function(cv){
-      familys = preds[[beam]][[nv]][[cv]]
-      .merge_lapply_nme(familys, "family",function(family){
-        pred = preds[[beam]][[nv]][[cv]][[family]];
-        y1 = y[[family]];
-        todo =1:ncol(y1) ; names(todo) = colnames(y1);
-        .merge1_new(lapply(todo, function(td){
-          df = data.frame(pred[,td],y1[,td])
-          names(df) = c("prediction","value")
-          df;
-        }),addName="subpheno")
-        
-      })
-    })
-  })
-})
-  
- 
-  
-  toplot$numvar = factor(toplot$numvar, levels = sort(unique(as.numeric(toplot$numvar))))
-  toplot1 <- toplot |> 
-    tidyr::unite("cv_family_beam", cv,family,beam, remove = FALSE)
-  ggplot(toplot1, aes(x=value, y=prediction, color=subpheno, shape=beam))+geom_point()+facet_grid("numvar~cv_family_beam")
-  
+plot_results
 },
 
 
 
 #' @description extract the predictions for the fitted models
 #' @param all_modelsh fitted models from makeAllModels
+#' @param phens the phens to include
+#' @param cv_index if a specific cv_index is required , default is NA
 #' @param liab return liability score, or probability (for binomial, ordinal multinomial)
 #' @returns  a table with results
 extractPredictions=function(all_modelsh,
+                            phens = private$phens,
+                            cv_index = NA,
                             liab=TRUE){
-  phens = private$phens; flags = private$flags; transform_x = private$transform_x;
+  flags = private$flags; transform_x = private$transform_x;
   private$updateLOOC()
     all_models_y0 = all_modelsh$models#[[mod_nme]]
   # eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
@@ -1197,7 +1261,7 @@ extractPredictions=function(all_modelsh,
   d = private$data
   #all_models_y = all_models_y0[[1]]
   predictions0 = lapply(all_models_y0, function(all_models_y){
-    d$extractPredictions(all_models_y, phens, flags, transform_x = transform_x, liab= liab)
+    d$extractPredictions(all_models_y, phens, flags, transform_x = transform_x, liab= liab, cv_index = cv_index)
   ##  d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
   })
  

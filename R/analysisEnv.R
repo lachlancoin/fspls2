@@ -277,7 +277,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
                                                    dims = dims,
                                                    transform_x = private$transform_x)
     },
-    means_y=function(datasH){
+    means_y=function(datasH){ ## averages over the datasH
       means_y_all =lapply(datasH, function(dh) dh$means_y());
       counts_y_all = lapply(datasH, function(dh) dh$counts_y());
       #means_y = list();
@@ -285,34 +285,35 @@ analysisEnv<-R6::R6Class("analysisEnv",
       nreps = datasH[[1]]$nreps();
       nmes = names(means_y_all); names(nmes) = nmes
   # l1 = 1
-      means_y_comb = lapply(nreps, function(k){
-        
-        means_y = means_y_all[[1]][[k]]
-        
-       nmes1=names(means_y); names(nmes1)=nmes1;
-   #    nme1  = nmes1[[1]];  nmes2 = names(means_y[[nme1]]); nme2 = nmes2[[1]];  nmes3 = names(means_y[[nme1]][[nme2]]);  nme3 = nmes3[[1]]
-  
-      lapply(nmes1, function(nme1){
-         nmes2 = names(means_y[[nme1]]); names(nmes2) =nmes2
-          lapply(nmes2, function(nme2){
-           
-              nmes3 = names(means_y[[nme1]][[nme2]]); names(nmes3) = nmes3;
-              lapply(nmes3, function(nme3){
-              df_mean = data.frame(lapply(nmes, function(nme){
-                means_y_all[[nme]][[k]][[nme1]][[nme2]][[nme3]]
-                
-              })  )
-              df_counts = data.frame(lapply(nmes, function(nme){
-                counts_y_all[[nme]][[k]][[nme1]][[nme2]][[nme3]]
-              })  )
-              weights = (apply(df_counts,1,function(v) v/sum(v)))
-              apply(df_mean * weights,1,sum)
-             
+      lapply(1:2, function(jk){  ##iterates over means_y0 and means_y1
+          means_y_comb = lapply(nreps, function(k){
+            
+            means_y = means_y_all[[jk]][[1]][[k]]
+            
+           nmes1=names(means_y); names(nmes1)=nmes1;
+       #    nme1  = nmes1[[1]];  nmes2 = names(means_y[[nme1]]); nme2 = nmes2[[1]];  nmes3 = names(means_y[[nme1]][[nme2]]);  nme3 = nmes3[[1]]
+      
+          lapply(nmes1, function(nme1){
+             nmes2 = names(means_y[[nme1]]); names(nmes2) =nmes2
+              lapply(nmes2, function(nme2){
+               
+                  nmes3 = names(means_y[[nme1]][[nme2]]); names(nmes3) = nmes3;
+                  lapply(nmes3, function(nme3){
+                  df_mean = data.frame(lapply(nmes, function(nme){
+                    means_y_all[[jk]][[nme]][[k]][[nme1]][[nme2]][[nme3]]
+                    
+                  })  )
+                  df_counts = data.frame(lapply(nmes, function(nme){
+                    counts_y_all[[nme]][[k]][[nme1]][[nme2]][[nme3]]
+                  })  )
+                  weights = (apply(df_counts,1,function(v) v/sum(v)))
+                  apply(df_mean * weights,1,sum)
+                 
+                })
+              })
             })
-          })
-        })
-     })
-     
+         })
+      })
      
       means_y_comb
     },

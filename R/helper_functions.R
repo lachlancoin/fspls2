@@ -496,16 +496,25 @@ auprc_boot <- function(data, indices) {
   if(length(which(nonNA))<5) return(c(NA,NA,NA))
   #print(data)
   if(R<10 || length(tbl)<=1 || min(tbl)<10){
-    mid = auprc_boot(data, 1:nrow(data))
+    mid = try(auprc_boot(data, 1:nrow(data)))
+    if(inherits(mid,"try-error")) return (c(NA,NA,NA))
+      
+      
     return(c(NA,mid,NA))
   }
-  boot_results <- boot::boot(
+  boot_results <-try( boot::boot(
  data = data,
     statistic = auprc_boot,
     R = R
-  )
+  ))
 #  res1 = boot.ci(boot_results, type = "bca") 
-  
+  if(inherits(boot_results,"try-error")){
+    mid = auprc_boot(data, 1:nrow(data))
+    if(inherits(mid,"try-error")) return (c(NA,NA,NA))
+    
+    return(c(NA,mid,NA))
+  }
+    
   ci <- boot.ci(boot_results, type = "bca", conf = conf.level)
   lower <- ci$bca[4]
   upper <- ci$bca[5]
@@ -954,6 +963,11 @@ isbigmatrix<-function(x){
 }
 
 .merge1_new<-function(t,num_cols = c(), addName=NULL, checkNames=TRUE){
+  if(length(t)==0) return(NULL)
+  
+  t = t[unlist(lapply(t, length))>0]
+  if(length(t)==0) return(NULL)
+  
   if(checkNames && length(t)>0){
     nme_aa = names(t[[1]])
     t1 = lapply(t, function(aa1){
@@ -1297,6 +1311,12 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   df=.merge1_new(df_l, addName="subpheno",num_cols=c("knots","value"))
   df = cbind(df, "cumulative")
   names(df)[ncol(df)] = "type"
+  subpheno = as.numeric(df$subpheno)
+  if(length(which(is.na(subpheno )))==0){
+    df$subpheno = factor(subpheno)
+  }else{
+    df$subpheno = factor(df$subpheno)
+  }
   df
 }
 summariseAreaPlot<-function(df){

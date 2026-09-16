@@ -653,6 +653,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
 #                                     betas1 = prev_kj$betas[[kk1]],
 #                                   constants = constants, liab=liab)  ## for multi-prediction
         self$ypreds[[kk1]][ind_1,] =ab
+        colnames(self$ypreds[[kk1]]) = colnames(ab)
       #}
     }else{
       kk_1 = 1
@@ -671,6 +672,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
       #    ab=apply(ab,2,inv_func)
       #  }
         self$ypreds[[kk1]][ind_1,] = ab
+        colnames(self$ypreds[[kk1]]) = colnames(ab)
   #    }
     }
     

@@ -1618,7 +1618,7 @@ ypred=function(phens1){
 
 extractPredictions=function(all_models_y,phens, flags, 
                             transform_x = jsonlite::fromJSON(flags$transform_x),
-                            ypred = self$ypred(phens), liab=TRUE
+                            ypred = self$ypred(phens), liab=TRUE, cv_index = NA
                                    ){
   
   self$updateTransforms(transform_x   )      
@@ -1629,10 +1629,16 @@ extractPredictions=function(all_models_y,phens, flags,
   minv = .readFlag(flags,"min",0)
   maxv = .readFlag(flags,"max",1e6)
   verbose=.readFlag(flags, "verbose",FALSE)
+  full_models = lapply(all_models_y, function(am)am[['full']])
+  full_models = full_models[unlist(lapply(full_models, length))>0]
+  numvars1 = sort(unlist(lapply(full_models, function(am)length(am$var_names))))
+  
+  #numvars1 = sort(numvars1)
+  
   group_names= names(all_models_y); names(group_names)=group_names
   numvars = unlist(lapply(group_names, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]])))
-  numvars1 = sort(unique(numvars))
-  names(numvars1) = numvars1
+ # numvars1 = sort(unique(numvars))
+#  names(numvars1) = numvars1
   numvars1 = numvars1[numvars1>=minv & numvars1<=maxv]
   #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
   if(length(all_models_y)==0) return(NULL)
@@ -1662,6 +1668,7 @@ extractPredictions=function(all_models_y,phens, flags,
     full_model = all_models3[["full"]]
     full_model_nme=paste(names(full_model$var_names), collapse=";")
     nmesm = grep("full",names(all_models3),inv=TRUE,value=TRUE);
+    if(!is.na(cv_index)) nmesm = nmesm[nmesm %in% cv_index]
     nmesm_full = grep("full",names(all_models3_full),inv=TRUE,value=TRUE);
     inds=as.numeric(nmesm); 
     inds_full = as.numeric(nmesm_full)
@@ -2330,18 +2337,19 @@ updateTransform=function(transform_x){
   update_trans
 },
 means_y=function(k){
-  self$train[[k]]$means_y
+  list(self$train[[k]]$means_y0, self$train[[k]]$means_y1)
 },
+
 counts_y=function(k){
   self$train[[k]]$counts_y
 },
 updateTrain =function(k, phens,
-                      means_y = self$means_y(k),
+                      means_y = self$means_y(k), 
                        force=FALSE){
 #  for(k in 1:length(self$train)){
     #if(verbose) cat(paste("update",k))
   
-    self$train[[k]]$update(self,phens,  means_y = means_y,force=force)
+    self$train[[k]]$update(self,phens,  means_y = means_y, force=force)
  # }
 },
 ## gets ready for training - updates train, prev looc
