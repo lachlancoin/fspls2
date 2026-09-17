@@ -355,6 +355,10 @@ analysisEnv<-R6::R6Class("analysisEnv",
       vn = unlist(lapply(ang1, function(a1)paste(names(a1[["var_names"]]), collapse=";")), recursive=FALSE)
       names(ang1) = vn 
       
+      #logpvs_angles =angles_
+      #logpvs_all_angles = unlist(lapply(ang1, function(a1)a1[["cum_angle"]]))
+      
+      
       logpvs =if(useAngles) angles_ else   unlist(lapply(ang1, function(a1)a1[["cum_pv"]]))
       logpvs_all = if(useAngles) unlist(lapply(ang1, function(a1)a1[["cum_angle"]])) else  unlist(lapply(ang1, function(a1)a1[["cumpv_all"]]))
       
@@ -372,7 +376,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
         
       
         stop_random =  min(logpvs[gp1], na.rm=TRUE) < min(logpvs[gp], na.rm=TRUE) 
-       # stop_random1= min(angles_[gp1]) < min(angles_[gp])
+        stop_random1= min(angles_[gp1]) < min(angles_[gp])
         stop_random2= min(logpvs_all[gp1], na.rm=TRUE) < min(logpvs_all[gp], na.rm=TRUE)
         
 
@@ -382,6 +386,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
           print(paste(stop_random, stop_random2))
               print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles))
               print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
+              print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
               print("cumulative ")
               print(unlist(list(rand=min(logpvs_all[gp1]),nonrand= min(logpvs_all[gp]))))
         }
@@ -394,7 +399,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
       logpv =min(logpvs)
       
       
-      if(stop_random || stop_random2){
+      if(stop_random || stop_random2 || stop_random1){
         if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
       }
       

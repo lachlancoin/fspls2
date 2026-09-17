@@ -635,10 +635,11 @@ dataH<-R6::R6Class("dataH",
           # print(ik)
            b_i_name = c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
            angle=comb$value[[ik]]
-           if(!is.null(flags$angles_only) && flags$angles_only){
+           if(!is.null(flags$angles_only) && flags$angles_only || b_i_name[3]=="rand"){ ## no point calculating pvalue for random, use angles
              b_i = private$data$convert(b_i_name)
              nv = list(angle = angle, var = c(prev_i2$var, list(b_i)), 
                        angles = c(prev_i2$angles, angle),
+                       cum_pv=0, cumpv_all=0,
                        var_names = c(prev_i2$var_names, list(b_i_name)),
                        varnames = c(prev_i2$varnames, paste(b_i_name, collapse="."))
              )
