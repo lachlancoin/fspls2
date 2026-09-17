@@ -763,7 +763,7 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
 #     aa1[,match(nme_aa,names(aa1))]
 #  })
   res_aa = .merge1_new(aa,addName="family")
-  
+  lapply(aa, function(x)names(x))
   res_aa
   #.merge1_new(rms_3, num_cols = "value", addName="beam")
   # dimnames(res_df)[[1]] = names(rms_3)
