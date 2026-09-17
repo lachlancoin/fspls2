@@ -1400,23 +1400,63 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,verbose=FALSE, useglm=TRUE){
                         CHECK=getOption("fspls.check",FALSE),
                         verbose=getOption("fspls.verbose1",FALSE)) {
     data =self
+    transform_x = self$transforms
     b_i = if(length(b_i_name)==0) c() else self$convert(b_i_name)
     prev_var = if(is.null(prev_i2)) list() else lapply(prev_i2$var_names, self$convert)
     self$updateUDVP(prev_var)
     #Wall = data$calcWall(b_i, prev_i$var, prev_i$Wall) ## WALL not important, we can get rid of it later
     #prev_var = if(jk==1) prev_i$var  else lapply(vars2[1:(jk-1)], self$convert)
     betas = prev_i2$betas_proj;
-  
-    b_new_proj <- withCallingHandlers(
-      self$calcBetaProj1(phens, k, b_i, b_i_name, prev_var, Wall,
-                         betas = betas, project = project, convert = FALSE,
-                         strict = TRUE, useglm = useglm, useoffset = useoffset),
-      warning = function(w) {
-        if (grepl("fitted probabilities numerically 0 or 1 occurred", conditionMessage(w))) {
-          invokeRestart("muffleWarning")
-        }
+    explore=getOption("explore_params",TRUE)
+
+    if(explore && length(b_i)>0){
+   
+      if(verbose) {
+       print(b_i_name);
+         print("exploring params");
       }
-    )  
+      nmes_t1 = names(transform_x); names(nmes_t1) = nmes_t1;
+      nmes_t1 = nmes_t1[nmes_t1!="rand"]
+      b_new_proj_all = lapply(nmes_t1, function(nme_t1){
+        b_new_proj1 = lapply(transform_x[[nme_t1]]$params, function(p){
+          b_i_name1 = b_i_name; b_i_name1[3] = nme_t1;          b_i_name1[4] = p
+         
+
+          b2=withCallingHandlers(
+            self$calcBetaProj1(phens, k, self$convert(b_i_name1), b_i_name1, prev_var, Wall,
+                               betas = betas, project = project, convert = FALSE,
+                               strict = TRUE, useglm = useglm, useoffset = useoffset),
+            warning = function(w) {
+              if (grepl("fitted probabilities numerically 0 or 1 occurred", conditionMessage(w))) {
+                invokeRestart("muffleWarning")
+              }
+            }
+          )
+          b2$b_i_name = b_i_name1;
+          b2
+        })
+        pvl=unlist(lapply(b_new_proj1, function(x) .sumChisq(x$pvs)))
+        if(verbose)print(pvl);
+        best_ind = which.min(pvl)
+        b_new_proj1[[best_ind]]
+      })
+      pvl=unlist(lapply(b_new_proj_all, function(x) .sumChisq(x$pvs)))
+      best_ind = which.min(pvl)
+      b_new_proj= b_new_proj_all[[best_ind]]
+   
+    }else{
+          b_new_proj <- withCallingHandlers(
+            self$calcBetaProj1(phens, k, b_i, b_i_name, prev_var, Wall,
+                               betas = betas, project = project, convert = FALSE,
+                               strict = TRUE, useglm = useglm, useoffset = useoffset),
+            warning = function(w) {
+              if (grepl("fitted probabilities numerically 0 or 1 occurred", conditionMessage(w))) {
+                invokeRestart("muffleWarning")
+              }
+            }
+          )
+          b_new_proj$b_i_name = b_i_name;
+    }
     if(length(b_i)>0  && sum(unlist(b_new_proj$pvs))==0 && getOption("show_warnings",FALSE)) {
    
       warning(paste("log pvalues should not reach 0 at ", paste(b_i_name, collapse=",")))
@@ -1448,7 +1488,8 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,verbose=FALSE, useglm=TRUE){
     }
     mean_x = self$mean__x(b_i) #[[b_i[[1]]]][b_i[2]]
     
-    prev_i1=stateObj$new(phens,data, betas_proj,constants_proj, tbls, prev_i2 , b_i,b_i_name=b_i_name, mean_x = mean_x, Wall = Wall2,
+    prev_i1=stateObj$new(phens,data, betas_proj,constants_proj, tbls, prev_i2 , self$convert(b_new_proj$b_i_name),
+                         b_i_name=b_new_proj$b_i_name, mean_x = mean_x, Wall = Wall2,
                          pvs =pvs, pvs_sep=pvs_sep,
                          useoffset=useoffset)
   #  prev_i1$setOffset() 

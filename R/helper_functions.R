@@ -969,11 +969,14 @@ isbigmatrix<-function(x){
   if(length(t)==0) return(NULL)
   
   if(checkNames && length(t)>0){
-    nme_aa = names(t[[1]])
-    t1 = lapply(t, function(aa1){
-      aa1[,match(nme_aa,names(aa1)),drop=FALSE]
+    nmes1 = lapply(t, names)
+  
+    mi1 = lapply(nmes1, function(aa1){
+      match(nmes1[[1]],aa1)
+      
     })
-    t = t1
+    if(length(which(is.na(unlist(mi1))))>0) stop(" colnames mismatch")
+    #t = t1
   }
   t = t[!unlist(lapply(t, is.null))]
   

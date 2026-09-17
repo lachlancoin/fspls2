@@ -153,7 +153,7 @@ trainObj<-R6::R6Class("trainObj",
                                     # meansy[[j]] = (v[nonNA2]%*% d_w)/sum(d_w) 
                                     
                                      v2 = v2/sd(v2,na.rm=TRUE)
-                                 ### new line to avoid giving advantage to transformations
+                                 ### new line to avoid giving advantage to transformations 
                                  self$yTr[[colk]][[f_k]][[g_k]][j,nonNA1] =v2 #y[,j]  - mean_y[j]
                                     if(length(which(!nonNA1))>0){
                                       self$yTr[[colk]][[f_k]][[g_k]][j,!nonNA1] =0   ## will not contribute to dot product

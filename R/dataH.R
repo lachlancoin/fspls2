@@ -486,6 +486,8 @@ dataH<-R6::R6Class("dataH",
      logpthresh= log(.readFlag(flags,"pthresh",1e-3))
      project=.readFlag(flags,"project",TRUE)
      useoffset=.readFlag(flags,"useoffset",TRUE)
+#     private$transform_x$pow
+     
      #  train_nme = .readFlag(flags,'train', names(datas)[1])
      #  if(length(which(train_nme %in% names(private$datas)))==0)train_nme = names(private$datas)[[1]]
      verbose=.readFlag(flags,"verbose",FALSE)
@@ -1152,24 +1154,28 @@ plotPredictions=function(all_modelsh,
  
  families = names(y); names(families) = families;
  plot_results=lapply(families, function(fam){
-   print(fam)
-   y1 = y[[fam]]; 
+      y1 = y[[fam]]; 
    if(ncol(y1)==0) return(NULL)
    coln = 1:ncol(y1); names(coln) =colnames(y1) 
    toplot=
    .merge_lapply_nme(preds, "beam", function(beam){
        #print(beam)
        p1 = preds[[beam]]
+      
       .merge_lapply_nme(p1, "modelname",function(nvar){
+        #nvars = names(p1); names(nvars) = nvars;
+       #l1 = lapply(nvars, function(nvar){ 
         #print(paste(beam,nvar))
         p2 = p1[[nvar]]
         .merge_lapply_nme(p2, "cv",function(cv){
-         # print(paste(beam, nvar, cv, fam))
+   #       print(paste(beam, nvar, cv, fam))
          p3 = p2[[cv]]
-       
            p4 = p3[[fam]]
-         coln1 = 1:ncol(p4); names(coln1)=colnames(p4);
-         if(fam=="gaussian"){
+         coln1 = 1:ncol(p4); 
+         if(is.null(names(coln1))){
+         names(coln1)=if(ncol(p4) == ncol(y1) && !is.null(colnames(y1))) colnames(y1) else 1:ncol(p4) 
+         }
+         if(length(grep("gaussian",fam))>0){
            df = .merge1_new(lapply(coln, function(cn1){
              df1=data.frame(list(prediction=p4[,cn1], value=y1[,cn1], text=""))
              text_df = round(cor(df1$prediction, df1$value,use="pairwise.complete.obs"),2)
@@ -1212,7 +1218,7 @@ plotPredictions=function(all_modelsh,
    
    toplot1 =  toplot |> tibble::add_column(variables= factor(toplot$modelname, levels=modnames, labels = modvars), 
                                            nvar =as.numeric(as.character(factor(toplot$modelname, levels=modnames, labels = modlens ))))
-   if(fam=="gaussian"){
+   if(length(grep("gaussian",fam))>0){
      plots_all = lapply(levs,function(lev){
        ss1 = subset(toplot1, cv==lev)
        ggp2 = ggplot(subset(ss1, text=="") , aes(x =value, y=prediction,color=pheno, shape=beam ))+facet_grid("pheno~variables")+geom_point()
