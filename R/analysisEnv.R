@@ -614,13 +614,13 @@ analysisEnv<-R6::R6Class("analysisEnv",
             dh = datasH[[nmeh]]
             comb_filtered=comb2_filtered[[nmeh]];
             
-            comb_new=dh$calcPvs(comb20,comb_filtered, k1, expt_id, angles_only=FALSE)
+            comb_new=dh$calcPvs(comb20,comb_filtered, k1, expt_id)
             lapply(comb_new, function(x) x$pvs)
           })
           ang1 = private$topAngles( vars_l_todo, k1,comb2_new=if(useDB) NULL else comb2_news, verbose=verbose );
-          cum_pvs = unlist(lapply(ang2, function(x) x$cum_pv))
+       #   cum_pvs = unlist(lapply(ang1, function(x) x$cum_pv))
           #ang2 = ang2[order(cum_pvs)]
-          if(verbose)print(head(cum_pvs))
+        #  if(verbose)print(head(cum_pvs))
           
       }
     # grep("rand", names(ang2))

@@ -690,7 +690,7 @@ res_inner2=function(comb_,prev_i2, k, expt_id){
   phens = private$phens;
   flags = private$flags;
   nme_comb = names(comb_); names(nme_comb) = nme_comb
-  #nme_c1 = nme_comb[[3]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
+  #nme_c1 = nme_comb[[1]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
   #print("HHHHHHH")
   res_inner1=lapply(nme_comb, function(nme_c1){
     nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
@@ -706,6 +706,7 @@ res_inner2=function(comb_,prev_i2, k, expt_id){
         # print(ik)
         #print(paste(nme_p1, nme_c1, ik))
         var_names = comb[[ik]]$var_names
+        if(is.null(var_names)) stop("should not be null")
         b_i_name = var_names[[length(var_names)]]
           #c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
         angle=comb[[ik]]$angle
@@ -896,23 +897,26 @@ predefined=function(incl1,prev_signature, sumAngle){
                              force=force);
   },
   
-  calcPvs=function(comb20, comb_filtered, k1, expt_id, angles_only){
+  calcPvs=function(comb20, comb_filtered, k1, expt_id){
     comb2_new = lapply(comb_filtered, function(comb2_new1){
       var_names = comb2_new1[[1]][[1]][[1]]$var_names  
       var_names = var_names[-length(var_names)]
       prev_i2 = private$findPrev(comb20, expt_id, var_names, k1);
       if(is.null(comb2_new1$angles)) {
-        comb_ = NULL;
-        ri = private$res_inner2(comb2_new1, prev_i2, k1, expt_id);
+        comb_ = comb2_new1
+      
       }else{
              comb_ =  comb2_new1$angles;
-          ri = private$res_inner( comb_,prev_i2,k1, expt_id, angles_only)
+         
       }
+      ri = private$res_inner2(comb_, prev_i2, k1, expt_id);
+      
       super$savePvals( ri, prev_i2$var_names,k1,useCurrVarnames=TRUE)
       list(angles=comb_, pvs = ri)
     })
-    if( .readFlag(flags, "show_pvalue_plots",FALSE) && !angles_only){ ## just prints the plot to screen, or to pdf if pdf was specified before running this
-      
+    ##need to calculate nvar
+    if( .readFlag(flags, "show_pvalue_plots",FALSE) && !angles_only && FALSE){ ## just prints the plot to screen, or to pdf if pdf was specified before running this
+      nvar = length(comb_filtered[[1]][[1]][[1]][[1]]$var_names)
       private$angle_plots[[k1]][[nvar]] = try(plot_angle_vs_pv(comb2_new,1, k1))
       
       
