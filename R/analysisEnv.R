@@ -20,24 +20,7 @@ extract_all_variables<-function(variables){
    
 }
 
-filter_comb<-function(comb2_news, nme_ang1){
-  comb2_filtered = lapply(comb2_news, function(comb2_new){
-    #  nme_new = names(comb2_new); names(nme_new)=sub("empty","",nme_new);# nme_new=sub("empty","",nme_new)
-    lapply_filter(comb2_new, function(nme1){
-      lapply_filter(nme1, function(nme2){
-        lapply_filter(nme2, function(nme3){
-          lapply_filter(nme3, function(nme4){
-            varnames = nme4$varnames
-            if(paste(varnames,collapse=";") %in% nme_ang1) nme4 else NULL
-            #                  paste(nme1,nme2,nme3,nme4,sep=".")
-          })
-        })
-      })
-    })
-    
-  })
-  comb2_filtered
-}
+
 
 plot_traj<-function(comb_plot, y="value"  ,facet="data~maxsig", keep_best=10, txtsize=5, step=2){ #y="cumulative";
   if(!is.null(comb_plot$nrep)){
@@ -381,131 +364,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
       return(ang1);
      
     },
-    nextVars=function(vars_l_todo,  k1,
-                                          logpvthresh,beam,  comb2_news = NULL,stop_y="rand", verbose=FALSE,
-                      ang1 = private$topAngles(vars_l_todo, k1, comb2_news, verbose=verbose), ###
-                      
-                      useAngles=FALSE){
-      
-      angles_ = unlist(lapply(ang1, function(a1)a1[["angle"]]))
-      
-      flags=private$flags; 
-      vars_l = vars_l_todo$vars_l
-      todo1 = vars_l_todo$todo1
-     # expt_id=super$getExpt(flags, phens, add_new=TRUE)
-
-     # useAngles = !is.null(flags$angles_only) && flags$angles_only
-    
-      
-    
-      
-      #logpvs_angles =angles_
-      #logpvs_all_angles = unlist(lapply(ang1, function(a1)a1[["cum_angle"]]))
-      
-      
-      logpvs =if(useAngles) angles_ else   unlist(lapply(ang1, function(a1)a1[["cum_pv"]]))
-      logpvs_all = if(useAngles) unlist(lapply(ang1, function(a1)a1[["cum_angle"]])) else  unlist(lapply(ang1, function(a1)a1[["cumpv_all"]]))
-      
-      
-      ord = order(logpvs)
-      names(ord) = names(logpvs)
-      ord_all = order(logpvs_all)
-      ang1 = ang1[ord_all]
-      logpvs = logpvs[ord_all]
-      logpvs_all = logpvs_all[ord_all]
-      angles_ = angles_[ord_all]
-      if(!is.null(stop_y)){
-        gp1=grep(stop_y, names(logpvs))
-        gp=grep(stop_y, names(logpvs), inv=TRUE)
-        
-      
-        stop_random =  min(logpvs[gp1], na.rm=TRUE) < min(logpvs[gp], na.rm=TRUE) 
-        stop_random1= min(angles_[gp1]) < min(angles_[gp])
-        stop_random2= min(logpvs_all[gp1], na.rm=TRUE) < min(logpvs_all[gp], na.rm=TRUE)
-        
-
-        # stop_random= min(gp1)<=min(gp)
-
-        if(verbose){
-          print(paste(stop_random, stop_random1,stop_random2))
-              print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles))
-              print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
-              print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
-              print("cumulative ")
-              print(unlist(list(rand=min(logpvs_all[gp1]),nonrand= min(logpvs_all[gp]))))
-        }
-        if(!useAngles && verbose) {
-          print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
-          print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
-        }
-        
-      }
-      logpv =min(logpvs)
-      
-      
-      if(stop_random || stop_random2 || stop_random1){
-        if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
-      }
-      
-      ##ADD MORE RESTRICTIONS .. eg maxsize
-      #     while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! vars_l_todo$stop_random){
-      if((!stop_random && !stop_random2 && !stop_random1 && logpv<=logpvthresh  ) ){
-        if(verbose){
-          print(head(sort(logpvs_all[gp]),beam))
-          print(names(vars_l))
-        }
-        ##remove signatures which are same in different order
-        #non_rand = grep("rand", names(ang1),inv=TRUE)
-        #dupls = rep(FALSE, length(ang1))
-       
-        exclusion_in_beam = getOption("max_exclusion_in_beam",0)  ## can be a number of max
-        if(exclusion_in_beam=="max"){  ## excludes any overlapping signature
-          non_rand = grep("rand", names(ang1),inv=TRUE)
-          dupls1 = rep(FALSE, length(ang1))
-          vn_all = lapply(ang1[non_rand], function(a1) sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2], collapse="::")))))
-          dupls = rep(FALSE, length(vn_all));
-          for(kk in 2:length(vn_all)){
-            
-            mi1 = match(vn_all[[kk]], unlist(vn_all[1:(kk-1)]))
-            if(length(which(!is.na(mi1)))>0) dupls[[kk]] = TRUE
-          }
-          dupls1[non_rand] = dupls
-          ang1 = ang1[!dupls1]
-        }else if(is.numeric(exclusion_in_beam) && exclusion_in_beam>0){  ##KEEPS DIFFERENT N-1 signatures
-          len = length(ang1[[1]]$var_names)
-          exclusion_in_beam = min(len-1, exclusion_in_beam)
-          if(len>1){
-            if(verbose) print("thinning signature ")
-            non_rand = grep("rand", names(ang1),inv=TRUE)
-            dupls1 = 1:length(ang1)
-            toincl = 1:(len-exclusion_in_beam)
-            dupls1[non_rand]=(unlist(lapply(ang1[non_rand], function(a1) paste(sort(unlist(lapply(a1$var_names[toincl], function(vv1)paste(vv1[1:2],collapse="::")))), collapse=";;"))))
-            
-            ang1 = ang1[!duplicated(dupls1)]
-          }
-        }
-        last_non_rand = grep("rand", names(ang1))[1]-1
-        if(is.na(last_non_rand)) last_non_rand = beam;     
-        topn = .readFlag(flags,'topn', 20);
-        num_pvals = min(topn, 20)
-        
-        ang1 = ang1[1:min(length(ang1), last_non_rand,beam)]#beam
-        
-        
-        todo1 = vars_l_todo$todo1;
-        todo1[[1]]$incl$nvar = todo1[[1]]$incl$nvar+1;
-        if(todo1[[1]]$incl$nvar>= todo1[[1]]$incl$max){
-          todo1 = todo1[-1]
-        }
-        vars_l_todo = list(stop=FALSE, vars_l = ang1, todo1 = todo1, moveNext=TRUE)
-        if(length(grep("rand", names(vars_l_todo$vars_l)))>0) stop("!!");
-        
-        return(vars_l_todo)
-      }
-     todo1=vars_l_todo$todo1[-1]
-      vars_l_todo_new = list( stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1, jj = vars_l_todo$jj+1, moveNext=FALSE)
-      return(vars_l_todo_new)
-    },
+   
     savePvals=function(k1, data_nme, vars_l, comb2){
       flags = private$flags;
       phens = private$phens;
@@ -576,6 +435,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     logpvthresh = log(.readFlag(flags,"pthresh",0.1))
     beam= .readFlag(flags,"beam",1)
     topn = .readFlag(flags,'topn',1000)
+    useAngles = .readFlag(flags,"angles_only", FALSE)
     
     saveAngles=FALSE
     #plot_results = list()
@@ -603,12 +463,11 @@ analysisEnv<-R6::R6Class("analysisEnv",
       ang1 = private$topAngles( vars_l_todo, k1,comb2_news=if(useDB) NULL else comb2_news, verbose=verbose );
      
      # if(verbose) print(ang1)
-      useAngles = .readFlag(flags,"angles_only", FALSE)
       if(!useAngles){
           minv = min(length(ang1), topn, grep("rand", names(ang1)))
           ang1 = ang1[1:minv]
           nme_ang1 = names(ang1)
-          comb2_filtered = filter_comb(comb2_news, nme_ang1)
+          comb2_filtered = lapply(comb2_news, filter_comb, nme_ang1)
           comb2_news =lapply(nmesH, function(nmeh){
             comb20=comb2[[nmeh]]
             dh = datasH[[nmeh]]
@@ -617,7 +476,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
             comb_new=dh$calcPvs(comb20,comb_filtered, k1, expt_id)
             lapply(comb_new, function(x) x$pvs)
           })
-          ang1 = private$topAngles( vars_l_todo, k1,comb2_new=if(useDB) NULL else comb2_news, verbose=verbose );
+       #   ang1 = private$topAngles( vars_l_todo, k1,comb2_new=if(useDB) NULL else comb2_news, verbose=verbose );
        #   cum_pvs = unlist(lapply(ang1, function(x) x$cum_pv))
           #ang2 = ang2[order(cum_pvs)]
         #  if(verbose)print(head(cum_pvs))
@@ -625,9 +484,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
       }
     # grep("rand", names(ang2))
       
-      vars_l_todo_new= private$nextVars( vars_l_todo,  k1,logpvthresh,beam, 
+      vars_l_todo_new= self$nextVars( vars_l_todo,  k1,logpvthresh,beam, 
                                         comb2_news=if(useDB) NULL else comb2_news, 
-                                        ang1=ang1,
+                                      #  ang1=ang1,
                                         stop_y = stop_y, verbose=verbose, useAngles=useAngles)
       if(vars_l_todo_new$moveNext){
         comb2 = comb2_news
@@ -716,16 +575,151 @@ analysisEnv<-R6::R6Class("analysisEnv",
    verbose=.readFlag(flags,"verbose",FALSE);
    logpvthresh = log(.readFlag(flags,'pthresh',0.05));
    angles_only = .readFlag(flags,'angles_only',TRUE);
+   verbose=.readFlag(flags,'verbose',TRUE);
    useDB = !is.null(private$sigs)
    if(angles_only) logpvthresh =0;
     if(useDB)  private$savePvals(k1, data_nme, vars_l_todo$vars_l,comb2_new)
-   vars_l_todo_new= private$nextVars(vars_l_todo,  k1,logpvthresh,beam, 
-                                     comb2_news=if(useDB) NULL else comb2_new, 
-                                     stop_y = stop_y, verbose=verbose)
-   vars_l_todo_new
+   #private$topAngles(vars_l_todo, k1, comb2_new,v)
+   ang1 = private$topAngles(vars_l_todo, k1, comb2_new, verbose=verbose) ###
+   return(ang1);
+  # vars_l_todo_new= private$nextVars(vars_l_todo,  k1,logpvthresh,beam, 
+  #                                   comb2_news=if(useDB) NULL else comb2_new, 
+  #                                   stop_y = stop_y, verbose=verbose)
+  # vars_l_todo_new
    # private$nextVars(flags,phens, vars_l_todo,  k1,logpvthresh,beam, stop_y = stop_y, verbose=verbose)
  },
  
+ #' Get the next vars in iteration.  Internal function
+ #'
+ #' @param vars_l_todo vars_l_todo
+ #' @param comb2_news results
+ #' @param data_nme name of dataset
+ #' @param k1 which repetition
+ #' @param stop_y should be "rand"
+ #' @return object outlining what is left to do
+ nextVars=function(vars_l_todo,  k1,
+                   logpvthresh,beam,  comb2_news = NULL,stop_y="rand", verbose=FALSE,
+                                   useAngles=FALSE){
+   ang1 = private$topAngles(vars_l_todo, k1, comb2_news, verbose=verbose)
+   angles_ = unlist(lapply(ang1, function(a1)a1[["angle"]]))
+   
+   flags=private$flags; 
+   vars_l = vars_l_todo$vars_l
+   todo1 = vars_l_todo$todo1
+   # expt_id=super$getExpt(flags, phens, add_new=TRUE)
+   
+   # useAngles = !is.null(flags$angles_only) && flags$angles_only
+   
+   
+   
+   
+   #logpvs_angles =angles_
+   #logpvs_all_angles = unlist(lapply(ang1, function(a1)a1[["cum_angle"]]))
+   
+   
+   logpvs =if(useAngles) angles_ else   unlist(lapply(ang1, function(a1)a1[["cum_pv"]]))
+   logpvs_all = if(useAngles) unlist(lapply(ang1, function(a1)a1[["cum_angle"]])) else  unlist(lapply(ang1, function(a1)a1[["cumpv_all"]]))
+   
+   
+   ord = order(logpvs)
+   names(ord) = names(logpvs)
+   ord_all = order(logpvs_all)
+   ang1 = ang1[ord_all]
+   logpvs = logpvs[ord_all]
+   logpvs_all = logpvs_all[ord_all]
+   angles_ = angles_[ord_all]
+   if(!is.null(stop_y)){
+     gp1=grep(stop_y, names(logpvs))
+     gp=grep(stop_y, names(logpvs), inv=TRUE)
+     
+     
+     stop_random =  min(logpvs[gp1], na.rm=TRUE) < min(logpvs[gp], na.rm=TRUE) 
+     stop_random1= min(angles_[gp1]) < min(angles_[gp])
+     stop_random2= min(logpvs_all[gp1], na.rm=TRUE) < min(logpvs_all[gp], na.rm=TRUE)
+     
+     
+     # stop_random= min(gp1)<=min(gp)
+     
+     if(verbose){
+       print(paste(stop_random, stop_random1,stop_random2))
+       print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles))
+       print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
+       print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
+       print("cumulative ")
+       print(unlist(list(rand=min(logpvs_all[gp1]),nonrand= min(logpvs_all[gp]))))
+     }
+     if(!useAngles && verbose) {
+       print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
+       print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
+     }
+     
+   }
+   logpv =min(logpvs)
+   
+   
+   if(stop_random || stop_random2 || stop_random1){
+     if(verbose) print(paste("stopping due to random", exp(logpv), names(logpvs)[which.min(logpvs)]))
+   }
+   
+   ##ADD MORE RESTRICTIONS .. eg maxsize
+   #     while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! vars_l_todo$stop_random){
+   if((!stop_random && !stop_random2 && !stop_random1 && logpv<=logpvthresh  ) ){
+     if(verbose){
+       print(head(sort(logpvs_all[gp]),beam))
+       print(names(vars_l))
+     }
+     ##remove signatures which are same in different order
+     #non_rand = grep("rand", names(ang1),inv=TRUE)
+     #dupls = rep(FALSE, length(ang1))
+     
+     exclusion_in_beam = getOption("max_exclusion_in_beam",0)  ## can be a number of max
+     if(exclusion_in_beam=="max"){  ## excludes any overlapping signature
+       non_rand = grep("rand", names(ang1),inv=TRUE)
+       dupls1 = rep(FALSE, length(ang1))
+       vn_all = lapply(ang1[non_rand], function(a1) sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2], collapse="::")))))
+       dupls = rep(FALSE, length(vn_all));
+       for(kk in 2:length(vn_all)){
+         
+         mi1 = match(vn_all[[kk]], unlist(vn_all[1:(kk-1)]))
+         if(length(which(!is.na(mi1)))>0) dupls[[kk]] = TRUE
+       }
+       dupls1[non_rand] = dupls
+       ang1 = ang1[!dupls1]
+     }else if(is.numeric(exclusion_in_beam) && exclusion_in_beam>0){  ##KEEPS DIFFERENT N-1 signatures
+       len = length(ang1[[1]]$var_names)
+       exclusion_in_beam = min(len-1, exclusion_in_beam)
+       if(len>1){
+         if(verbose) print("thinning signature ")
+         non_rand = grep("rand", names(ang1),inv=TRUE)
+         dupls1 = 1:length(ang1)
+         toincl = 1:(len-exclusion_in_beam)
+         dupls1[non_rand]=(unlist(lapply(ang1[non_rand], function(a1) paste(sort(unlist(lapply(a1$var_names[toincl], function(vv1)paste(vv1[1:2],collapse="::")))), collapse=";;"))))
+         
+         ang1 = ang1[!duplicated(dupls1)]
+       }
+     }
+     last_non_rand = grep("rand", names(ang1))[1]-1
+     if(is.na(last_non_rand)) last_non_rand = beam;     
+     topn = .readFlag(flags,'topn', 20);
+     num_pvals = min(topn, 20)
+     
+     ang1 = ang1[1:min(length(ang1), last_non_rand,beam)]#beam
+     
+     
+     todo1 = vars_l_todo$todo1;
+     todo1[[1]]$incl$nvar = todo1[[1]]$incl$nvar+1;
+     if(todo1[[1]]$incl$nvar>= todo1[[1]]$incl$max){
+       todo1 = todo1[-1]
+     }
+     vars_l_todo = list(stop=FALSE, vars_l = ang1, todo1 = todo1, moveNext=TRUE)
+     if(length(grep("rand", names(vars_l_todo$vars_l)))>0) stop("!!");
+     
+     return(vars_l_todo)
+   }
+   todo1=vars_l_todo$todo1[-1]
+   vars_l_todo_new = list( stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1, jj = vars_l_todo$jj+1, moveNext=FALSE)
+   return(vars_l_todo_new)
+ },
  
  #' main function for variable selection
  #' @param datasH a list of dataH objects

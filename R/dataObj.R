@@ -570,7 +570,7 @@ mult = grep("multinomial",names(phens))
 },
 ####does regression just on orthogonal component
 calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,convert=TRUE, betas = list(), strict=FALSE,project=FALSE, 
-                                             useglm=getOption("useglmnet",TRUE), useoffset=FALSE){
+                                             useglm=getOption("useglmnet",FALSE), useoffset=FALSE){
   if(convert){
     b_i = self$convert(b_i)
     if(length(b_i)<2) {
@@ -627,7 +627,7 @@ getTransforms=function(vars1){
 },
 calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=FALSE, 
                     
-                      useglm=getOption("useglmnet",TRUE)){
+                      useglm=getOption("useglmnet",FALSE)){
   #b_i = b_i1
   if(length(prev_var)>0) stop("problem")
   data = self
@@ -938,7 +938,7 @@ testBetaProj=function(vars_all, transform_x){
 ## Wall1 is projection from previous
 calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,betas1, project=FALSE, strict=FALSE, 
                          CHECK=getOption("fspls.check",TRUE),
-                                              useoffset =FALSE,useglm=getOption("useglmnet",TRUE)){
+                                              useoffset =FALSE,useglm=getOption("useglmnet",FALSE)){
   data = self 
   if(!useoffset) project=FALSE
   nonNA = self$looc$incl[,k]
@@ -1306,7 +1306,7 @@ makeModels=function(phens1, vars2,k,
   data = self;
   len = length(vars2)
   models = vector("list", len)
-  useglm=getOption("useglmnet",TRUE)
+  useglm=getOption("useglmnet",FALSE)
   fams1 = lapply(names(phens1), function(st1)strsplit(st1,"\\.")[[1]][1])
   family = getOption("fspls.family",fams1) #ypred$family[[1]]
   if(family[[1]]=="multinomial") {

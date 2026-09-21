@@ -1,5 +1,24 @@
 #private = self[[".__enclos_env__"]]$private
 
+filter_comb<-function(comb2_new, nme_ang1){
+  #comb2_filtered = lapply(comb2_news, function(comb2_new){
+    #  nme_new = names(comb2_new); names(nme_new)=sub("empty","",nme_new);# nme_new=sub("empty","",nme_new)
+    lapply_filter(comb2_new, function(nme1){
+      lapply_filter(nme1, function(nme2){
+        lapply_filter(nme2, function(nme3){
+          lapply_filter(nme3, function(nme4){
+            varnames = nme4$varnames
+            if(paste(varnames,collapse=";") %in% nme_ang1) nme4 else NULL
+            #                  paste(nme1,nme2,nme3,nme4,sep=".")
+          })
+        })
+      })
+    })
+    
+  #})
+  #comb2_filtered
+}
+
 mergeAll = function(comb2_new, beam){
   comb1 = .merge1_new(lapply(comb2_new, function(c){
     .merge1_new(lapply(c$angles, function(c1){
@@ -492,7 +511,7 @@ dataH<-R6::R6Class("dataH",
      #  if(length(which(train_nme %in% names(private$datas)))==0)train_nme = names(private$datas)[[1]]
      verbose=.readFlag(flags,"verbose",FALSE)
      if(!is.null(flags[['useglm']])) stop("define useglmnet not useglm")
-     useglm=.readFlag(flags,"useglmnet",TRUE)
+     useglm=.readFlag(flags,"useglmnet",FALSE)
      inds1 = inds#[[nmes_inds1]]
      phens1 = phens#[[nmes_inds1]]
      #k=inds1[[1]]; d = datas[[1]]
@@ -526,9 +545,10 @@ dataH<-R6::R6Class("dataH",
    },
   
    select_k=function(analysis, k1,
-                     vars_l_todo, 
+                     
                      means_y_k = private$data$means_y(k1), force=FALSE
                    ){
+     vars_l_todo = analysis$getTodo(private$flags, private$phens)
      self$updateTrain(k1, means_y_k=means_y_k, force=force);
      verbose=getOption("verbose",FALSE)
      if(is.null(private$phens)){
@@ -537,7 +557,10 @@ dataH<-R6::R6Class("dataH",
      expt_id = super$expt_id();
      show_pvalue_plots=.readFlag(flags, "show_pvalue_plots",FALSE) 
      stop_y = .readFlag(flags, 'stop_y',"rand")
-    
+    topn = .readFlag(flags, 'topn',20)
+     
+     useAngles = .readFlag(flags,"angles_only", FALSE)
+     
      logpvthresh = log(.readFlag(flags,"pthresh",0.1))
      beam= .readFlag(flags,"beam",1)
      comb20 = NULL;
@@ -561,8 +584,30 @@ dataH<-R6::R6Class("dataH",
       
        data_nme=self$name();
 #       comb2_news1 = list(comb21); names(comb2_news1) = self$name()
-       comb2_new = list(comb21);
-       vars_l_todo_new=analysis$savePvalsAndNextVars(vars_l_todo,comb2_new,data_nme,  k1)
+       ang1=analysis$savePvalsAndNextVars(vars_l_todo,list(comb21),data_nme,  k1)
+       
+       if(!useAngles){
+         minv = min(length(ang1), topn, grep("rand", names(ang1)))
+         ang1 = ang1[1:minv]
+         nme_ang1 = names(ang1)
+         comb_filtered = filter_comb(comb21, nme_ang1)
+         comb_new=self$calcPvs(comb20,comb_filtered, k1, expt_id)
+         comb21 = lapply(comb_new, function(x) x$pvs)
+       
+        # ang1 = private$topAngles( vars_l_todo, k1,comb2_new=if(useDB) NULL else comb2_news, verbose=verbose );
+         #   cum_pvs = unlist(lapply(ang1, function(x) x$cum_pv))
+         #ang2 = ang2[order(cum_pvs)]
+         #  if(verbose)print(head(cum_pvs))
+         
+       }
+       # grep("rand", names(ang2))
+       
+       vars_l_todo_new= analysis$nextVars( vars_l_todo,  k1,logpvthresh,beam, 
+                                          comb2_news=list(comb21),  ## if we use DB?
+                                        
+                                          stop_y = stop_y, verbose=verbose, useAngles=useAngles)
+       
+       #vars_l_todo_new
       
        if(vars_l_todo_new$moveNext){
        
@@ -796,7 +841,7 @@ predefined=function(incl1,prev_signature, sumAngle){
    flags = private$flags; phens = private$phens;
      project=.readFlag(flags,"project",TRUE)
      useoffset=.readFlag(flags,"useoffset",TRUE)
-     useglm = .readFlag(flags,'useglmnet',TRUE)
+     useglm = .readFlag(flags,'useglmnet',FALSE)
      d = private$data
      family = strsplit(names(phens)[[1]],"\\.")[[1]][1]
      if(family=="multinomial") useoffset=FALSE
@@ -1195,11 +1240,10 @@ counts_y=function(){
      variables = super$loadVars()
      if(!is.null(variables)) return(variables)
    
-   vars_l_todo = analysis$getTodo(private$flags, private$phens)
    private$angle_plots = lapply(nreps, function(x) list())
    variables=lapply(nreps, function(k1){
      if(getOption("verbose",FALSE)) print(paste("cv",k1,"of",length(nreps)))
-     private$select_k(analysis, k1, vars_l_todo, means_y_k = means_y[[k1]], force=TRUE)
+     private$select_k(analysis, k1,  means_y_k = means_y[[k1]], force=TRUE)
                })
    attr(variables, "phens")=private$phens; attr(variables,"transform_x") = private$transform_x; attr(variables, "flags") = private$flags
    
