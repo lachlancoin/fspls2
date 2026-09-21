@@ -594,34 +594,57 @@ dataH<-R6::R6Class("dataH",
    updateLOOC=function( varn=c(),verbose=FALSE, force=FALSE){
      private$data$updateLOOC( private$phens,private$flags,varn=varn,force=force, verbose=verbose); ### update training object - updates all
    },
-   findPrev=function(comb20, expt_id, prev_i, k){
+   findPrev=function(comb20, expt_id, var_names, k){
+     if(length(var_names)==0){
+       ##initial 
+       empty=initialStateObj(private$phens)
+       return(empty)
+     }
      if(is.null(private$sigs)){
-       nmes= unlist(lapply(prev_i$var_names, function(x) paste(x,collapse=".")))
+       nmes= unlist(lapply(var_names, function(x) paste(x,collapse=".")))
        if(length(nmes)==0)nmes="empty"
+       nmes0 = nmes[[length(nmes)]]
        nme1 = strsplit(nmes[length(nmes)],"\\.")[[1]]
        if(length(nme1)>4){
          nme1[4] = paste(nme1[4:length(nme1)], collapse=".")
        }
        str = paste(nmes[-length(nmes)], collapse=";")
        if(str=="") str="empty"
-       prev_i2= comb20[[str]][[nme1[3]]][[nme1[4]]][[nme1[2]]]
+       comb20_1 = comb20[[str]][[nme1[3]]]
+       #lapply(comb20_1,)
+       #names(comb20_1)=NULL
+       ab = unlist(comb20_1,recursive=FALSE)
+      li3 = lapply(ab, function(ab1){
+        if(nmes0==names(ab1$var_names)[[length(ab1$var_names)]]) ab1 else NULL
+      })
+      li3=li3[unlist(lapply(li3, length))>0]
+      if(length(li3)!=1) stop("problem")
+      prev_i2 = li3[[1]]
+      # if(length(which(duplicated(names(ab))))>1) stop("wrong")
+      ## prev_i2= comb20_1[[nme1[4]]][[nme1[2]]]
+      
+      # prev_i2= ab[[nme1[[2]]]]
+       if(prev_i2$var_names[[length(prev_i2$var_names)]][[4]]!=nme1[[4]]){
+         stop("problem")
+       }
+       
      }else{
        
        prev_i2 =   private$sigs$loadPrev(expt_id, prev_i, k, data_nme = private$nme)
      }
      if(is.null(prev_i2)){ 
-     #  warning("could not find")
+       stop("could not find")
       # print(prev_i)
        
-       prev_i2 = prev_i
+     #  prev_i2 = prev_i
      }
      return(prev_i2);
    },
-   res_inner=function(comb_,prev_i2, k, expt_id){
+   res_inner=function(comb_,prev_i2, k, expt_id){  ##changes format
      phens = private$phens;
      flags = private$flags;
      nme_comb = names(comb_); names(nme_comb) = nme_comb
-     #nme_c1 = nme_comb[[2]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
+     #nme_c1 = nme_comb[[1]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
      #print("HHHHHHH")
      res_inner1=lapply(nme_comb, function(nme_c1){
        nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
@@ -635,7 +658,7 @@ dataH<-R6::R6Class("dataH",
           # print(ik)
            b_i_name = c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
            angle=comb$value[[ik]]
-           if(!is.null(flags$angles_only) && flags$angles_only || b_i_name[3]=="rand"){ ## no point calculating pvalue for random, use angles
+          # if(angles_only || b_i_name[3]=="rand"){ ## no point calculating pvalue for random, use angles
              b_i = private$data$convert(b_i_name)
              nv = list(angle = angle, var = c(prev_i2$var, list(b_i)), 
                        angles = c(prev_i2$angles, angle),
@@ -647,10 +670,7 @@ dataH<-R6::R6Class("dataH",
              #  print(nv)
              nv$sumAngle = sum(nv$angles);
              
-           }else{
-             nv= private$getPvsAll(prev_i2, b_i_name,k,  prev_i2$Wall, angle=angle)
-             if(is.na(nv$sumPv)) stop(paste(b_i_name, sep=","))
-            }
+           #}
            names(nv$var_names) = nv$varnames;
            if(inherits(nv,"try-error")) {
              warning(paste(nme_c1, "error"))
@@ -659,20 +679,61 @@ dataH<-R6::R6Class("dataH",
            nv
          })
          
-         if(FALSE){ ##checks correlation between angle and pvalue
-           df3 = t(data.frame(lapply(nxt_vars,function(nv){
-             c(nv$sumPv, nv$angle)
-           })))
-           colnames(df3) =c("pv", "angle")
-           cor(df3, method="spearman")
-         }
+        
          nxt_vars
              
        })
      })
      res_inner1
    },
-  
+res_inner2=function(comb_,prev_i2, k, expt_id){
+  phens = private$phens;
+  flags = private$flags;
+  nme_comb = names(comb_); names(nme_comb) = nme_comb
+  #nme_c1 = nme_comb[[3]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
+  #print("HHHHHHH")
+  res_inner1=lapply(nme_comb, function(nme_c1){
+    nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
+    lapply(nmesp1, function(nme_p1){
+      
+      #print(nme_p1)
+      comb = comb_[[nme_c1]][[nme_p1]]
+      phen_names = names(comb); names(phen_names) = phen_names
+      #if(length(comb)==0 || nrow(comb)==0) return(NULL)
+     # num_pvals1 = nrow(comb)
+      #inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
+      nxt_vars = lapply(phen_names, function(ik){
+        # print(ik)
+        #print(paste(nme_p1, nme_c1, ik))
+        var_names = comb[[ik]]$var_names
+        b_i_name = var_names[[length(var_names)]]
+          #c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
+        angle=comb[[ik]]$angle
+       
+          nv= private$getPvsAll(prev_i2, b_i_name,k,  prev_i2$Wall, angle=angle)
+          if(is.na(nv$sumPv)) stop(paste(b_i_name, sep=","))
+        
+        names(nv$var_names) = nv$varnames;
+        if(inherits(nv,"try-error")) {
+          warning(paste(nme_c1, "error"))
+          return(NULL)
+        }
+        nv
+      })
+      
+      if(FALSE){ ##checks correlation between angle and pvalue
+        df3 = t(data.frame(lapply(nxt_vars,function(nv){
+          c(nv$sumPv, nv$angle)
+        })))
+        colnames(df3) =c("pv", "angle")
+        cor(df3, method="spearman")
+      }
+      nxt_vars
+      
+    })
+  })
+  res_inner1
+},
    
    simplify = function(ri){
      ri_out=lapply(ri, function(ri1){
@@ -835,6 +896,33 @@ predefined=function(incl1,prev_signature, sumAngle){
                              force=force);
   },
   
+  calcPvs=function(comb20, comb_filtered, k1, expt_id, angles_only){
+    comb2_new = lapply(comb_filtered, function(comb2_new1){
+      var_names = comb2_new1[[1]][[1]][[1]]$var_names  
+      var_names = var_names[-length(var_names)]
+      prev_i2 = private$findPrev(comb20, expt_id, var_names, k1);
+      if(is.null(comb2_new1$angles)) {
+        comb_ = NULL;
+        ri = private$res_inner2(comb2_new1, prev_i2, k1, expt_id);
+      }else{
+             comb_ =  comb2_new1$angles;
+          ri = private$res_inner( comb_,prev_i2,k1, expt_id, angles_only)
+      }
+      super$savePvals( ri, prev_i2$var_names,k1,useCurrVarnames=TRUE)
+      list(angles=comb_, pvs = ri)
+    })
+    if( .readFlag(flags, "show_pvalue_plots",FALSE) && !angles_only){ ## just prints the plot to screen, or to pdf if pdf was specified before running this
+      
+      private$angle_plots[[k1]][[nvar]] = try(plot_angle_vs_pv(comb2_new,1, k1))
+      
+      
+      #  if(length(vars_l_todo$todo1)>0){
+      
+      # }
+    }
+    comb2_new
+  },
+  
   #' @description Calculate the angles and pv across multiple phenotypes.  This is an internal function and should not need to be called by user
   #' @param comb20 values from previous iteration
   #' @param phens1 phenotypes being used
@@ -847,8 +935,9 @@ predefined=function(incl1,prev_signature, sumAngle){
       flags = private$flags; 
 #      self$update(phens, flags, transform_x);
       show_pvalue_plots=.readFlag(flags, "show_pvalue_plots",FALSE) 
-      angles_only=.readFlag(flags, "angles_only",TRUE) 
-      
+  #    angles_only=is.null(ang1)
+        #.readFlag(flags, "angles_only",TRUE) 
+     # angles_only = is.null(ang1);
       verbose=.readFlag(flags,'verbose',FALSE)
     saveAngles=FALSE
     if(is.null(expt_id)) stop("expt_id is NULL")
@@ -860,7 +949,7 @@ predefined=function(incl1,prev_signature, sumAngle){
     nvar = length(vars_l_todo$vars_l[[1]]$var)+1
     
     comb2_new=invisible( lapply(vars_l, function(prev_i){
-      prev_i2 = private$findPrev(comb20, expt_id, prev_i, k1);
+      prev_i2 = private$findPrev(comb20, expt_id, prev_i$var_names, k1);
       varnames = prev_i2$var_names; 
       sumAngle =sum(prev_i2$angles)
       comb_=private$combinedAngles(varnames, incl, k1,  g_incl, qq_t, sumAngle,
@@ -870,21 +959,16 @@ predefined=function(incl1,prev_signature, sumAngle){
       
       if(saveAngles) return(comb_)
       #comb_ = private$anglesAndPv(phens, prev_i, incl, k1, g_incl, qq_t, flags,expt_id, saveAngles=saveAngles, verbose=verbose)
+      
       ri = private$res_inner( comb_,prev_i2,k1, expt_id)
-     super$savePvals( ri, varnames,k1,useCurrVarnames=TRUE)
+    
       
       
       list(angles = comb_, pvs = ri) ;#private$simplify(ri))
     }))
-     if( show_pvalue_plots && !angles_only){ ## just prints the plot to screen, or to pdf if pdf was specified before running this
-       
-        private$angle_plots[[k1]][[nvar]] = try(plot_angle_vs_pv(comb2_new,1, k1))
-        
-       
-      #  if(length(vars_l_todo$todo1)>0){
-       
-       # }
-     }
+   #comb2_new = self$calcPvs(comb20,comb2_new, k1, expt_id, angles_only)
+    
+    
     if(nvar==1){
       private$plot_results[[k1]] = list()
     }

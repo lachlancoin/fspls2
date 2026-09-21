@@ -18,7 +18,27 @@ extract_all_variables<-function(variables){
      }), addName = "nvar")
    }), addName="nrep")
    
- }
+}
+
+filter_comb<-function(comb2_news, nme_ang1){
+  comb2_filtered = lapply(comb2_news, function(comb2_new){
+    #  nme_new = names(comb2_new); names(nme_new)=sub("empty","",nme_new);# nme_new=sub("empty","",nme_new)
+    lapply_filter(comb2_new, function(nme1){
+      lapply_filter(nme1, function(nme2){
+        lapply_filter(nme2, function(nme3){
+          lapply_filter(nme3, function(nme4){
+            varnames = nme4$varnames
+            if(paste(varnames,collapse=";") %in% nme_ang1) nme4 else NULL
+            #                  paste(nme1,nme2,nme3,nme4,sep=".")
+          })
+        })
+      })
+    })
+    
+  })
+  comb2_filtered
+}
+
 plot_traj<-function(comb_plot, y="value"  ,facet="data~maxsig", keep_best=10, txtsize=5, step=2){ #y="cumulative";
   if(!is.null(comb_plot$nrep)){
     if(length(unique(comb_plot$nrep))>1) stop(" need to subset on nrep first")
@@ -285,13 +305,14 @@ analysisEnv<-R6::R6Class("analysisEnv",
       nreps = datasH[[1]]$nreps();
       nmes = names(means_y_all); names(nmes) = nmes
   # l1 = 1
-      lapply(1:2, function(jk){  ##iterates over means_y0 and means_y1
+      res=lapply(1:2, function(jk){  ##iterates over means_y0 and means_y1
+        #print(jk)
           means_y_comb = lapply(nreps, function(k){
-            
-            means_y = means_y_all[[jk]][[1]][[k]]
+          #  print(k)
+            means_y = means_y_all[[1]][[k]][[jk]]
             
            nmes1=names(means_y); names(nmes1)=nmes1;
-       #    nme1  = nmes1[[1]];  nmes2 = names(means_y[[nme1]]); nme2 = nmes2[[1]];  nmes3 = names(means_y[[nme1]][[nme2]]);  nme3 = nmes3[[1]]
+          # nme1  = nmes1[[1]];  nmes2 = names(means_y[[nme1]]); nme2 = nmes2[[1]];  nmes3 = names(means_y[[nme1]][[nme2]]);  nme3 = nmes3[[1]]
       
           lapply(nmes1, function(nme1){
              nmes2 = names(means_y[[nme1]]); names(nmes2) =nmes2
@@ -300,7 +321,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
                   nmes3 = names(means_y[[nme1]][[nme2]]); names(nmes3) = nmes3;
                   lapply(nmes3, function(nme3){
                   df_mean = data.frame(lapply(nmes, function(nme){
-                    means_y_all[[jk]][[nme]][[k]][[nme1]][[nme2]][[nme3]]
+                    means_y_all[[nme]][[k]][[jk]][[nme1]][[nme2]][[nme3]]
                     
                   })  )
                   df_counts = data.frame(lapply(nmes, function(nme){
@@ -315,26 +336,21 @@ analysisEnv<-R6::R6Class("analysisEnv",
          })
       })
      
-      means_y_comb
+      res
     },
-    nextVars=function(vars_l_todo,  k1,
-                                          logpvthresh,beam,  comb2_news = NULL,stop_y="rand", verbose=FALSE){
-      flags=private$flags; 
+    topAngles = function(vars_l_todo, k1, comb2_news = NULL, verbose=FALSE,stop_y="rand"){
       vars_l = vars_l_todo$vars_l
-      todo1 = vars_l_todo$todo1
-     # expt_id=super$getExpt(flags, phens, add_new=TRUE)
-
-      useAngles = !is.null(flags$angles_only) && flags$angles_only
+      
       nme_l = names(vars_l); names(nme_l) = nme_l
       angles_all = lapply(nme_l, function(nme_l1){
         vars_l1 = vars_l[[nme_l1]]
         varnames = vars_l1$var_names; 
         #if(!is.null(varnames) && is.null(names(varnames))) names(varnames) = lapply(varnames, paste, collapse=".")
         if(length(comb2_news)>0){
-         #  if(length(varnames)==0) varnames = "empty"
-           res_inner1 = lapply(comb2_news, function(c2n) c2n[[nme_l1]])
+          #  if(length(varnames)==0) varnames = "empty"
+          res_inner1 = lapply(comb2_news, function(c2n) c2n[[nme_l1]])
         }else{
-            res_inner1 = private$sigs$loadPvals(private$expt_id(), varnames,k1) ## reconstruct ri
+          res_inner1 = private$sigs$loadPvals(private$expt_id(), varnames,k1) ## reconstruct ri
         }
         nxt_vars1=.mergeResInner(res_inner1)
         nxt_vars1 =nxt_vars1[unlist(lapply(nxt_vars1, length))>0]
@@ -344,16 +360,44 @@ analysisEnv<-R6::R6Class("analysisEnv",
       
       angles_all = angles_all[unlist(lapply(angles_all, length))>0]
       if(length(angles_all)==0){
-       # length(vars_l_todo$todo1)==length(vars_l_todo_new$todo1)){ 
-    ## to account for continuing via shortening todo rather than adding variable
-        vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1[-1], moveNext=FALSE)
-        return(vars_l_todo)
+        return(list())
+        # length(vars_l_todo$todo1)==length(vars_l_todo_new$todo1)){ 
+        ## to account for continuing via shortening todo rather than adding variable
+      #  vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1[-1], moveNext=FALSE)
+      #  return(vars_l_todo)
       }
-      ang1 = unlist(unlist(unlist(angles_all, recursive=FALSE),recursive=FALSE),recursive=FALSE)
-      angles_ = unlist(lapply(ang1, function(a1)a1[["angle"]]))
-      
+      aa=unlist(angles_all, recursive=FALSE)
+      ab = unlist(aa,recursive=FALSE)
+      ang1 = unlist(ab,recursive=FALSE)
       vn = unlist(lapply(ang1, function(a1)paste(names(a1[["var_names"]]), collapse=";")), recursive=FALSE)
       names(ang1) = vn 
+      
+      logpvs_all =  unlist(lapply(ang1, function(a1)a1[["cum_angle"]])) 
+      ord_all = order(logpvs_all)
+      ang1 = ang1[ord_all]
+      
+      dupls=(unlist(lapply(ang1, function(a1) paste(sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:3],collapse="::")))), collapse=";;"))))
+      ang1 = ang1[!duplicated(dupls)]
+      return(ang1);
+     
+    },
+    nextVars=function(vars_l_todo,  k1,
+                                          logpvthresh,beam,  comb2_news = NULL,stop_y="rand", verbose=FALSE,
+                      ang1 = private$topAngles(vars_l_todo, k1, comb2_news, verbose=verbose), ###
+                      
+                      useAngles=FALSE){
+      
+      angles_ = unlist(lapply(ang1, function(a1)a1[["angle"]]))
+      
+      flags=private$flags; 
+      vars_l = vars_l_todo$vars_l
+      todo1 = vars_l_todo$todo1
+     # expt_id=super$getExpt(flags, phens, add_new=TRUE)
+
+     # useAngles = !is.null(flags$angles_only) && flags$angles_only
+    
+      
+    
       
       #logpvs_angles =angles_
       #logpvs_all_angles = unlist(lapply(ang1, function(a1)a1[["cum_angle"]]))
@@ -383,7 +427,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
         # stop_random= min(gp1)<=min(gp)
 
         if(verbose){
-          print(paste(stop_random, stop_random2))
+          print(paste(stop_random, stop_random1,stop_random2))
               print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles))
               print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))
               print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))
@@ -405,7 +449,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
       
       ##ADD MORE RESTRICTIONS .. eg maxsize
       #     while( (length(vars_l[[1]]$var_names) < minsize || logpv<logpvthresh) && length(vars_l[[1]]$var_names)<maxsize && ! vars_l_todo$stop_random){
-      if((!stop_random && !stop_random2 && logpv<=logpvthresh  ) ){
+      if((!stop_random && !stop_random2 && !stop_random1 && logpv<=logpvthresh  ) ){
         if(verbose){
           print(head(sort(logpvs_all[gp]),beam))
           print(names(vars_l))
@@ -413,8 +457,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
         ##remove signatures which are same in different order
         #non_rand = grep("rand", names(ang1),inv=TRUE)
         #dupls = rep(FALSE, length(ang1))
-        dupls=(unlist(lapply(ang1, function(a1) paste(sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:3],collapse="::")))), collapse=";;"))))
-        ang1 = ang1[!duplicated(dupls)]
+       
         exclusion_in_beam = getOption("max_exclusion_in_beam",0)  ## can be a number of max
         if(exclusion_in_beam=="max"){  ## excludes any overlapping signature
           non_rand = grep("rand", names(ang1),inv=TRUE)
@@ -422,9 +465,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
           vn_all = lapply(ang1[non_rand], function(a1) sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:2], collapse="::")))))
           dupls = rep(FALSE, length(vn_all));
           for(kk in 2:length(vn_all)){
-              
-              mi1 = match(vn_all[[kk]], unlist(vn_all[1:(kk-1)]))
-              if(length(which(!is.na(mi1)))>0) dupls[[kk]] = TRUE
+            
+            mi1 = match(vn_all[[kk]], unlist(vn_all[1:(kk-1)]))
+            if(length(which(!is.na(mi1)))>0) dupls[[kk]] = TRUE
           }
           dupls1[non_rand] = dupls
           ang1 = ang1[!dupls1]
@@ -443,9 +486,12 @@ analysisEnv<-R6::R6Class("analysisEnv",
         }
         last_non_rand = grep("rand", names(ang1))[1]-1
         if(is.na(last_non_rand)) last_non_rand = beam;     
+        topn = .readFlag(flags,'topn', 20);
+        num_pvals = min(topn, 20)
         
-        ang1 = ang1[1:min(length(ang1),beam, last_non_rand)]
-       
+        ang1 = ang1[1:min(length(ang1), last_non_rand,beam)]#beam
+        
+        
         todo1 = vars_l_todo$todo1;
         todo1[[1]]$incl$nvar = todo1[[1]]$incl$nvar+1;
         if(todo1[[1]]$incl$nvar>= todo1[[1]]$incl$max){
@@ -456,9 +502,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
         
         return(vars_l_todo)
       }
-
-      vars_l_todo = list( stop=length(todo1)==1, vars_l = vars_l, todo1 = vars_l_todo$todo1[-1], jj = vars_l_todo$jj+1, moveNext=FALSE)
-      return(vars_l_todo)
+     todo1=vars_l_todo$todo1[-1]
+      vars_l_todo_new = list( stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1, jj = vars_l_todo$jj+1, moveNext=FALSE)
+      return(vars_l_todo_new)
     },
     savePvals=function(k1, data_nme, vars_l, comb2){
       flags = private$flags;
@@ -512,9 +558,11 @@ analysisEnv<-R6::R6Class("analysisEnv",
   #' @param vars_l_todo an object representing what is left to do
   #' @returns vars_l_todo object
   select_k=function(datasH, k1,
-                    vars_l_todo, means_y_k = NULL
+                   means_y_k = NULL
                                  ){
     force=FALSE
+    vars_l_todo = self$getTodo(private$flags, private$phens);
+    
     invisible(lapply(datasH, function(dh){
       dh$updateTrain(k1,means_y_k = means_y_k, force=force);
     }))
@@ -527,6 +575,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     stop_y = .readFlag(flags, 'stop_y',"rand")
     logpvthresh = log(.readFlag(flags,"pthresh",0.1))
     beam= .readFlag(flags,"beam",1)
+    topn = .readFlag(flags,'topn',1000)
     
     saveAngles=FALSE
     #plot_results = list()
@@ -546,14 +595,40 @@ analysisEnv<-R6::R6Class("analysisEnv",
         comb20=comb2[[nmeh]]
         comb_new  = dh$multiAnglesAndPv(comb20 , k1,expt_id, vars_l_todo)
         comb21 =  lapply(comb_new, function(x) x$pvs)
-        private$savePvals(k1, dh$name(), vars_l_todo$vars_l,comb21)# no need to save here, just keep
+        #private$savePvals(k1, dh$name(), vars_l_todo$vars_l,comb21)# no need to save here, just keep
         comb21
       }))
       if(inherits(comb2_news,"try-error")) break;
+    
+      ang1 = private$topAngles( vars_l_todo, k1,comb2_news=if(useDB) NULL else comb2_news, verbose=verbose );
+     
+     # if(verbose) print(ang1)
+      useAngles = .readFlag(flags,"angles_only", FALSE)
+      if(!useAngles){
+          minv = min(length(ang1), topn, grep("rand", names(ang1)))
+          ang1 = ang1[1:minv]
+          nme_ang1 = names(ang1)
+          comb2_filtered = filter_comb(comb2_news, nme_ang1)
+          comb2_news =lapply(nmesH, function(nmeh){
+            comb20=comb2[[nmeh]]
+            dh = datasH[[nmeh]]
+            comb_filtered=comb2_filtered[[nmeh]];
+            
+            comb_new=dh$calcPvs(comb20,comb_filtered, k1, expt_id, angles_only=FALSE)
+            lapply(comb_new, function(x) x$pvs)
+          })
+          ang1 = private$topAngles( vars_l_todo, k1,comb2_new=if(useDB) NULL else comb2_news, verbose=verbose );
+          cum_pvs = unlist(lapply(ang2, function(x) x$cum_pv))
+          #ang2 = ang2[order(cum_pvs)]
+          if(verbose)print(head(cum_pvs))
+          
+      }
+    # grep("rand", names(ang2))
       
       vars_l_todo_new= private$nextVars( vars_l_todo,  k1,logpvthresh,beam, 
                                         comb2_news=if(useDB) NULL else comb2_news, 
-                                        stop_y = stop_y, verbose=verbose)
+                                        ang1=ang1,
+                                        stop_y = stop_y, verbose=verbose, useAngles=useAngles)
       if(vars_l_todo_new$moveNext){
         comb2 = comb2_news
       }
@@ -590,14 +665,16 @@ analysisEnv<-R6::R6Class("analysisEnv",
         })
       })
     }), recursive=FALSE), recursive=FALSE)
-    Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0))
+    
     # var_thresh = var_thresh[match(names(var_thresh), train_nme)]
+    empty=initialStateObj(phens)
+    
     vars_l_todo =
       list(
         todo1 = todo1,
         jj=0,
         logpv=logpv,
-        vars_l = list(empty=stateObj$new(phens, NULL,NULL,NULL,NULL, var=c(), varnames=c(), Wall =Wall0)),
+        vars_l = list(empty=empty),
         stop=FALSE)
       
     
@@ -671,13 +748,12 @@ analysisEnv<-R6::R6Class("analysisEnv",
      vars_all = super$loadVars()
      if(!is.null(vars_all)) return(vars_all)
   
-   vars_l_todo = self$getTodo(private$flags, private$phens);
-   means_y = private$means_y(datasH);
+    means_y = if(avg_mean_y) private$means_y(datasH) else NULL;
    
    variables1 <- lapply(nreps, function(k1) {  ## can use mclapply here
      
      means_y_k =if(avg_mean_y) means_y[[k1]] else NULL
-      self$select_k(datasH,k1,  vars_l_todo, means_y_k =means_y_k)
+      self$select_k(datasH,k1,   means_y_k =means_y_k)
      
    })
    

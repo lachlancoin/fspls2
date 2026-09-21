@@ -25,8 +25,9 @@ library(fspls2)
 ##set the types
   options("fspls.types"= jsonlite::fromJSON('{"gaussian":["correlation","rms"],"binomial":["AUC","AUPRC"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
 
-  ## set the y_transforms to explore  
-  transform_x=getTransform(pow = c(1),    ## transformations raise to the powers indicated here.  Default is 1 but can add others
+  ## set the y_transforms to explore 
+  pows = 1
+  transform_x=getTransform(pow = pows,    ## transformations raise to the powers indicated here.  Default is 1 but can add others
                             n_random=1,perm=FALSE ## number of random transformations, also used in stopping critera
                             )
   ## set the flags
@@ -73,6 +74,8 @@ library(fspls2)
     analysis =analysisEnv$new(flags=flags, dbDir=NULL)
      #flags$maintain_norm=TRUE
     data_types = dh$data_types();
+    phens = dh$pheno()$all
+    variables=analysis$select(datasH, phens, transform_x)
       dh$update(phens = dh$pheno()$all, flags = flags, transform_x = transform_x, data_types = data_types)
     variables = dh$select( analysis=analysis)
     allvar_table = extract_all_variables(variables)
@@ -83,7 +86,7 @@ library(fspls2)
   # print(selected_plot)
     #variables = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
-    all_models =dh$makeAllModels(variables, max_model_length=2)
+    all_models =dh$makeAllModels(variables, max_model_length=1000, max_beam=1)
     #dh$plot_angles()
     #optionally get predictions
     

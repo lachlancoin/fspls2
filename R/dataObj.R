@@ -30,17 +30,33 @@ lapply(str1, function(t_y){
 ## assumes Wall1 is upper diagonal
 ## uses data with mean subtracted
 ## does not add any constant term
-.eval1_<-function(x_,  Wall2, transf, params, family, CHECK=FALSE){
+
+.eval1_<-function(x_,  Wall2, transf,  family, CHECK=FALSE){
   if(ncol(Wall2) > 1){
     if( max(abs(Wall2[lower.tri(Wall2)]))>0) stop("!!")
   }
   #if(is.null(dim(beta_new2))) beta_new2 =as.matrix(beta_new2, nrow = ncol(x_), ncol = 1)
  # print(dim(x_)); print(dim(Wall2));
   if(ncol(x_)==0) return(x_);
-  t2 = data.frame(vapply(1:ncol(x_), function(jj){
-    t1 = transf[[jj]]$func(x_[,1:jj] %*% Wall2[1:jj,jj,drop=FALSE], transf[[jj]]$param) 
-   as.vector(t1)
-  }, rep(0, nrow(x_))))
+  if(getOption("projectAfterTransform",FALSE)){ ## PRETTY SURE THIS IS WRONG
+    
+    x2 = data.frame(vapply(1:ncol(x_), function(jj){
+      t1 = transf[[jj]]$func(x_[,jj], transf[[jj]]$param)
+     # t1 = transf[[jj]]$func(x_[,1:jj] %*% Wall2[1:jj,jj,drop=FALSE], transf[[jj]]$param) 
+      as.vector(t1)
+    }, rep(0, nrow(x_))))
+    t2 = data.frame(vapply(1:ncol(x_), function(jj){
+
+       t1 = as.matrix(x2[,1:jj,drop=FALSE]) %*% Wall2[1:jj,jj,drop=FALSE]
+      as.vector(t1)
+    }, rep(0, nrow(x_))))
+   
+  }else{
+    t2 = data.frame(vapply(1:ncol(x_), function(jj){
+      t1 = transf[[jj]]$func(x_[,1:jj] %*% Wall2[1:jj,jj,drop=FALSE], transf[[jj]]$param) 
+     as.vector(t1)
+    }, rep(0, nrow(x_))))
+  }
   names(t2) = names(transf)
   as.matrix(t2)
   ##t2 %*% beta_new2
@@ -1111,7 +1127,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
             list(const_term = const_term, beta_new1 = beta_new1)
           }, error=function(errw) {
             warning("reverting to glmnet")
-                m1=glm(y~as.matrix(x), family=family, weights=w, standardize=FALSE) ## including weights lead to non-convergence
+                m1=glm(y~as.matrix(x), family=family, weights=w) ## including weights lead to non-convergence
             sm  = summary(m1)
         
             if(nrow(sm$coeff)<1+ncol(x)){
@@ -1415,9 +1431,10 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,verbose=FALSE, useglm=TRUE){
        print(b_i_name);
          print("exploring params");
       }
-      nmes_t1 = names(transform_x); names(nmes_t1) = nmes_t1;
-      nmes_t1 = nmes_t1[nmes_t1!="rand"]
-      b_new_proj_all = lapply(nmes_t1, function(nme_t1){
+     # nmes_t1 = names(transform_x); names(nmes_t1) = nmes_t1;
+     # nmes_t1 = nmes_t1[nmes_t1!="rand"]
+      #b_new_proj_all = lapply(nmes_t1, function(nme_t1){
+      nme_t1 = b_i_name[[3]]
         b_new_proj1 = lapply(transform_x[[nme_t1]]$params, function(p){
           b_i_name1 = b_i_name; b_i_name1[3] = nme_t1;          b_i_name1[4] = p
          
@@ -1438,11 +1455,11 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,verbose=FALSE, useglm=TRUE){
         pvl=unlist(lapply(b_new_proj1, function(x) .sumChisq(x$pvs)))
         if(verbose)print(pvl);
         best_ind = which.min(pvl)
-        b_new_proj1[[best_ind]]
-      })
-      pvl=unlist(lapply(b_new_proj_all, function(x) .sumChisq(x$pvs)))
-      best_ind = which.min(pvl)
-      b_new_proj= b_new_proj_all[[best_ind]]
+        b_new_proj=b_new_proj1[[best_ind]]
+    
+     # pvl=unlist(lapply(b_new_proj_all, function(x) .sumChisq(x$pvs)))
+    #  best_ind = which.min(pvl)
+    #  b_new_proj= b_new_proj_all[[best_ind]]
    
     }else{
           b_new_proj <- withCallingHandlers(

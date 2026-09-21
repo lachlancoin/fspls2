@@ -617,14 +617,16 @@ auprc_boot <- function(data, indices) {
 #' Get object for transforming the x variables
 #'
 #' @param pows power to raise to
-#' @param offset offset to subtract 
+#' @param offset offset add to x
+#' @param log_pows base to use for log of x
+#' @param exp_pows base to use for exp of x (note this means y should be positive).
 #' @param n_random how many random variables
 #' @param perm  whether random is permutation
 #' @param norm rescaling factor
 #' @param CHECK check whether inverse function works
 #' @return transformation object
 #' @export
-getTransform<-function(pows = c(1),offset=0,  n_random=1,perm=FALSE, norm=1,CHECK=FALSE){
+getTransform<-function(pows = c(1),offset=0.001, log_pows=c(),exp_pows = c(),   n_random=1,perm=FALSE, norm=1,CHECK=FALSE){
   if(n_random <1) warning(" recommended to have at least one random permutation");
   if(!( 1 %in% pows)) warning("recommended to have a pow of 1, which is the untransformed y ")
   funcs = list()
@@ -638,6 +640,12 @@ getTransform<-function(pows = c(1),offset=0,  n_random=1,perm=FALSE, norm=1,CHEC
       
     }
   }
+  if(length(log_pows)>0){
+    funcs = c(funcs, list(exp =getExpFunc(log_pows, logx=TRUE, norm = norm, offset=offset) ))
+  }
+  if(length(exp_pows)>0){
+    funcs = c(funcs, list(exp =getExpFunc(exp_pows, logx=FALSE, norm = norm, offset=offset) ))
+  }
  
   funcs
 }
@@ -647,16 +655,16 @@ getXTransform<-function(pows= c(1),offset=1e-10){
 
 ##exp is problematic because of neg numbers, particularly after centralisation
 ##could work with adding back in mean values?? may not generalise to unseen datasets
-getExpFunc<-function(pows, rev=FALSE,offset=0.1, CHECK=FALSE){  
+getExpFunc<-function(pows, logx=TRUE,offset=0.1, norm = 1, CHECK=FALSE){  
   if(length(which(pows<=0))>0) stop("not possible")
   if(length(pows)==0) return (list())
   names(pows)=pows
  
  
                  
-  if(rev){
-    warning("probably not going to work because x gets centralised before transform")
-    warning("this assumes that x+offset is strictly positive")
+  if(logx){
+  #  warning("probably not going to work because x gets centralised before transform")
+    warning("this assumes that x+offset is strictly positive, good to check if this is true")
     
     transf=list(invfunc =  paste0("function(y,pow,norm=",norm,",offset=",offset,") expfunc(y,pow,norm,offset)"),
                 func=paste0("function(x,pow,norm=",norm,",offset=",offset,") logfunc(x,pow,norm,offset)"), params = as.list(pows))
@@ -944,7 +952,10 @@ isbigmatrix<-function(x){
     .merge1_new(lapply(ri, .merge_all, nmes[-1], func), addName = nmes[1])
   }
 }
-
+lapply_filter = function(y, FUN){
+  l = lapply(y, FUN);
+  l[unlist(lapply(l, length))>0]
+}
 .lapply_nme=function(y,FUN){
   
   res = lapply(names(y),FUN)
