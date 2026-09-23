@@ -1415,13 +1415,14 @@ extractPredictions=function(all_modelsh,
 #' @param assoc use association
 #' @param update whether to use attributes from bariables to update this object, default is FALSE
 #' @param max_model_length the maximum model length to consider
+#' @param order allows for a reordering of variables
 #' @returns  a table with results
-plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=FALSE, max_model_length=1000, max_beam = 1){
+plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=FALSE, max_model_length=1000, max_beam = 1, order=NULL){
   
   attrs = attributes(variables)
   if(update) self$update(attrs$phens, attrs$flags, transform_x =  attrs$transform_x)
   
-  vars_all=super$integrate(variables, max_model_length=max_model_length, max_beam = max_beam)
+  vars_all=super$integrate(variables, max_model_length=max_model_length, max_beam = max_beam, order=order)
 
   df4= #.merge1_new( 
    # lapply(private$datas, function(d) 
@@ -1587,14 +1588,15 @@ getVariance=function(varnames){
 #' @param variables list of variables selected by select method
 #' @param update whether to automatically update phens, transform_x and flags , default TRUE
 #' @param max_model_length the maximum model length to include
+#' @param order allows for re-ordering of variables
 #' @returns fitted models
 makeAllModels=function(variables,
-                       update=FALSE, max_model_length=1000, max_beam = 1000
+                       update=FALSE, max_model_length=1000, max_beam = 1000, order=NULL
                        ){
   attrs = attributes(variables)
   if(update) self$update(attrs$phens, attrs$flags, transform_x =  attrs$transform_x)
   
-  vars_all=super$integrate(variables, max_model_length = max_model_length, max_beam = max_beam)
+  vars_all=super$integrate(variables, max_model_length = max_model_length, max_beam = max_beam, order=order)
 #  phens=vars_all[[1]]$phens, flags=vars_all[[1]]$flags, 
   useDB = super$useDB;
   flags = private$flags;phens = private$phens;

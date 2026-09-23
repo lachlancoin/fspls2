@@ -168,7 +168,8 @@ analysisBase<-R6::R6Class("analysisBase",
                    #' @description integrates variables from different CV runs
                    #' @param max_model_length length maximum model length
                    #' @param variables a variables object
-                   integrate=function(variables, max_model_length=1000, max_beam = 1000){
+                   #' @param order a new ordering
+                   integrate=function(variables, max_model_length=1000, max_beam = 1000, order=NULL){
                     # if(names(variables[['full']][[1]]=="nvar_1")) {
                        ##if variables is all variables, we take the last of each
                       
@@ -176,8 +177,17 @@ analysisBase<-R6::R6Class("analysisBase",
                      flags = private$flags;
                   #   keepAll = .readFlag(flags,"keep_all", TRUE);
                    #  if(keepAll){
-                         variables = lapply(variables, function(x) x[[min(length(x), max_model_length)]])
-                       
+                         variables2 = lapply(variables, function(x) {
+                           x1=x[[min(length(x), max_model_length)]]
+                          
+                           lapply(x1, function(x2){
+                             if(length(order)==length(x2$var_names)) x2$var_names = x2$var_names[order]
+                             x2
+                           })
+                           
+                         
+                         })
+                      variables = variables2
                     # }
                      phens = private$phens;
                     useDB=private$useDB;
