@@ -737,7 +737,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
    flags = private$flags;
    flags = super$updateExpt( phens, flags, transform_x, data_types)
    verbose=.readFlag(flags,'verbose',FALSE);
-   if(flags$topn<flags$beam) stop("beam should be less than topn")
+   #if(flags$topn<flags$beam) stop("beam should be less than topn")
    
    nreps_all = lapply(datasH, function(dh){
      dh$update(phens=phens, flags=flags, transform_x=transform_x, data_types=data_types);

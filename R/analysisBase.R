@@ -1,7 +1,7 @@
 
 
 check_flags<-function(flags){
-  if(flags$topn<flags$beam) stop("beam should be less than topn")
+  if(flags$topn<flags$beam && !flags$angles_only) stop("beam should be less than topn")
  
   if(!is.null(.readFlag(flags,"nrep",NULL))){
     flags[['nfold']] = flags[['nrep']]
@@ -12,7 +12,6 @@ check_flags<-function(flags){
     
     warning("replace batch with batchsize")
   }
-  if(flags$topn<flags$beam) stop("beam should be less than topn")
   
   invisible(flags)
 }

@@ -44,9 +44,10 @@
   measure = rmsv$measure[[1]]
   subpheno = rmsv$subpheno[[1]]
   cv = rmsv$cv[[1]]
-  rmsv_ = subset(rmsv, submeasure=="mid"& cv==cv & measure==measure & subpheno == subpheno) |> pivot_wider(names_from="pheno", values_from="value")
-  rmsv2_ = subset(rmsv2, submeasure=="mid"& cv==cv & measure==measure & subpheno == subpheno) |> pivot_wider(names_from="pheno", values_from="value")
-a1 = rbind(rmsv_[1,-(1:6)], rmsv2_[1,-(1:6)])
+  rmsv_ = subset(rmsv, cv==cv & measure==measure & subpheno == subpheno) |> pivot_wider(names_from="pheno", values_from="mid")
+  ncol1 = ncol(rmsv)-2
+  rmsv2_ = subset(rmsv2, cv==cv & measure==measure & subpheno == subpheno) |> pivot_wider(names_from="pheno", values_from="mid")
+a1 = rbind(rmsv_[1,-(1:ncol1)], rmsv2_[1,-(1:ncol1)])
 
 a2 = cbind(c("bef","aft"),a1)
 names(a2)[1] = "nme"
@@ -1405,8 +1406,12 @@ makeModels=function(phens1, vars2,k,
    
       }
       rmsv = rmsv2
-      if(verbose && !is.null(rmsv))print(quantile(rmsv$value))
-      
+      if(verbose && !is.null(rmsv)){
+        ncol1 = ncol(rmsv)-2
+        ab=pivot_wider(rmsv[,c(1,4,8)], names_from="measure", values_from="mid")
+        print(ab)
+        #print(apply(ab, 2, quantile, na.rm=T))
+      }
     }
    
     prev_i = prev_i1
@@ -1452,7 +1457,7 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,verbose=FALSE, useglm=TRUE){
    data=self
   ypred$updateYP(data, prev_i1, nonNA, flip=FALSE, liab=FALSE)
   rmsv=(ypred$calcRMSV(self$y, nonNA,     flip=FALSE))
-   subset( rmsv, submeasure=="mid")
+  rmsv
 },
  makeNextModel=function(prev_i2, b_i_name, phens, k, family, ypred=NULL, project=TRUE, useglm=TRUE,    logpthresh = -5,
                         useoffset=TRUE,
