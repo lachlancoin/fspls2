@@ -194,6 +194,7 @@ length(unique(eval1$`data:family`))
 
 .modify<-function(eval3, shape_color,
                   shape_color_nme,collapse=" " ){
+  #print(paste("HHHH",shape_color_nme));
   if(length(shape_color)==0) return(eval3)
   if(!(shape_color_nme %in% names(eval3))){
     eval3_sub=eval3[,names(eval3) %in% shape_color,drop=FALSE]
@@ -202,7 +203,7 @@ length(unique(eval1$`data:family`))
       x2 = eval3_sub[[jk]]
       if(!is.factor(x2)){
         levs = unique(x2)
-        if(length(grep("|", levs))==length(levs)){
+        if(length(grep("\\|", levs))==length(levs)){
           levs = levs[order(as.numeric(unlist(lapply(levs, function(x) strsplit(x,"\\|")[[1]][1]))))]
         }
         eval3_sub[[jk]]=factor(x2, levels = levs)
@@ -369,7 +370,7 @@ plotEval<-function(eval3,
   color_nme = paste(color,collapse="_")
   text_nme = paste(text,collapse="_")
   
-  sep_by_nme = "sep_by"
+ # sep_by_nme = "sep_by"
   subphens = table(eval3$subpheno)
   subphens = subphens[order(as.numeric(unlist(lapply(names(subphens), function(str)strsplit(str,"\\|")[[1]][1]))))]
   eval3$subpheno = factor(eval3$subpheno, levels = names(subphens))
@@ -379,7 +380,7 @@ plotEval<-function(eval3,
   eval3 = .modify(eval3, text, text_nme)
   
   eval3 = .modify(eval3, linetype, linetype_nme)
-  eval3 = .modify(eval3, sep_by, sep_by_nme)
+#  eval3 = .modify(eval3, sep_by, sep_by_nme)
   eval3 = .modify(eval3,grid0, grid0_nme,collapse="\n")
   if(length(grid1)>0){
   eval3 = .modify(eval3,grid1, grid1_nme, collapse="\n")
@@ -393,14 +394,26 @@ plotEval<-function(eval3,
   
  
   eval2$numvars = as.numeric(eval2$numvars)
+  eval2 = subset(eval2, !is.na(mid))
 # eval2$isfull = (eval2$isfull+1)/2.0
-  ggps=lapply(phenos, function(ph){ 
-    eval5 = subset(eval2, sep_by==ph & !is.na(mid))
-    ph3 = paste(sort(unique(apply(eval5[,names(eval5) %in% title1, drop=FALSE],1,paste,collapse=","))), collapse=" ")
+ 
+ 
+   ggps =  plotInternal(eval2, sep_by, title1, point, dotsize, shape_nme, color_nme,
+                 linetype_nme, text_nme, labelsize, showranges,
+                 grid0_nme, grid1_nme, scales, txtsize, line, logy, showtext, legend);
+ ggps
+}
+
+plotInternal<-function(eval5,sep_by,  title1, point, dotsize, shape_nme, color_nme, 
+             linetype_nme, text_nme,  labelsize, showranges,
+             grid0_nme, grid1_nme, scales, txtsize,  line, logy, showtext, legend){
+  
+  if(length(sep_by)==0){
+ # ph3 = paste(sort(unique(apply(eval5[,names(eval5) %in% title1, drop=FALSE],1,paste,collapse=","))), collapse=" ")
   ggp<-ggplot(eval5);
   if(point) {
     if(dotsize %in% names(eval5)){
-    ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_nme,size=dotsize, color=color_nme))
+      ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_nme,size=dotsize, color=color_nme))
     }else{
       ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_nme, color=color_nme),size=dotsize)
       
@@ -411,11 +424,11 @@ plotEval<-function(eval3,
   
   if(showranges){ ## geom_ribbon vs geom_errorbar
     
-   ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype_nme,color=color_nme, fill = color_nme ), alpha = 0.1)
+    ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype_nme,color=color_nme, fill = color_nme ), alpha = 0.1)
   }
   if(nchar(grid0_nme)>0){
     if(nchar(grid1_nme)>0){
-       ggp<-ggp+facet_grid(paste(grid0_nme, grid1_nme,sep="~"),scales=scales)
+      ggp<-ggp+facet_grid(paste(grid0_nme, grid1_nme,sep="~"),scales=scales)
     }else{
       ggp<-ggp+facet_wrap(grid0_nme, scales=scales)
     }
@@ -423,9 +436,28 @@ plotEval<-function(eval3,
   legend_position=if(legend) "bottom" else "none";
   ggp<- ggp+ theme(legend.position = legend_position,legend.title = element_text(size = txtsize));#+theme(,    legend.text = element_text(size = 3))
   if(logy)ggp<-ggp+ scale_y_log10() 
-  ggp+ggtitle(ph)
+  return(ggp+ggtitle(title1))
+  
+}
+  #print(sep_by)
+  levs1 = unique(eval5[[sep_by[[1]]]]); names(levs1) = levs1;
+  final_res=lapply(levs1,function(ph){
+    subinds1 = eval5[[sep_by[[1]]]]==ph
+    
+    if(length(sep_by)>0){
+      res =plotInternal(eval5[subinds1,,drop=F], sep_by[-1], 
+                        paste(title1,paste(sep_by[[1]],ph, sep="=")), 
+                        point, dotsize, shape_nme, color_nme,
+                   linetype_nme, text_nme, labelsize, showranges,
+                   grid0_nme, grid1_nme, scales, txtsize, line, logy, showtext, legend);
+      return(res);
+    }
+   
+  
+  
+  
   })
-  ggps
+  final_res
 }
 
 rotate <- function(x, n) {
@@ -980,10 +1012,18 @@ lapply_filter = function(y, FUN){
   if(length(t)==0) return(NULL)
   
   if(checkNames && length(t)>0){
+     
      nmes0 = names(t[[1]])
+     for(kkj in 1:length(t)){
+       nmes0 = nmes0[nmes0 %in% names(t[[kkj]])]
+     }
      t_new = lapply(t, function(t1){
        mi1 = match(nmes0,names(t1))
-       if(length(which(is.na(mi1)))>0) stop(" colnames mismatch")
+       if(length(which(is.na(mi1)))>0) {
+         print(nmes0);
+         print(names(t1))
+         stop(" colnames mismatch")
+       }
        
        t1[mi1]
      })

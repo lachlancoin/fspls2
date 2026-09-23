@@ -436,20 +436,21 @@ dataH<-R6::R6Class("dataH",
     })
     rocs
   },
-  combineAngles1=function(angleH, incl, sumAngle, prev_signature){ 
+  combineAngles1=function(angleH, incl, sumAngle, prev_signature, topn = 1e6){ 
     #$types
     flags = private$flags;
     angles_only = .readFlag(flags,'angles_only', TRUE)
     #if(angles_only) topn = 1000;
-    topn_default = if(angles_only)1000 else 20
-    topn =.readFlag(flags,'topn', topn_default)
-    
+   # topn_default = if(angles_only)1000 else 20
+  
+  #  topn =.readFlag(flags,'topn', topn_default)
+   
     onlyAll = .readFlag(flags,'only_all',FALSE)
     angles1=angleH$angles;cols_incl1=angleH$cols_incl 
     nme_trans = names(angles1[[1]][[1]]); names(nme_trans) = nme_trans
     types = incl$types; names(types) = types
     excl = incl$excl
-    # nmes_angs1 = names(angles1); names(nmes_angs1)=nmes_angs1
+     #nmes_angs1 = names(angles1); names(nmes_angs1)=nmes_angs1
     #nme_t1 = nme_trans[[1]]; nme_p1 = names(angles1[[1]][[1]][[nme_t1]])[[1]]; inc1 = types[[1]]; jk=1
     comb_all2=lapply(nme_trans, function(nme_t1){
       nme_pow = names(angles1[[1]][[1]][[nme_t1]]); names(nme_pow)=nme_pow
@@ -457,14 +458,17 @@ dataH<-R6::R6Class("dataH",
         comb_all=lapply(types, function(inc1){
           ang1 = angles1[[inc1]]
           if(is.null(ang1)) return(NULL)
-          col_incl = cols_incl1[[inc1]]
-          ang2=ang1[[1]][[nme_t1]][[nme_p1]]
-          cs = Matrix::colSums(ang2)
-          if(length(ang1)>1){
-            for(jk in 1:length(ang1)){
-              cs = cs+Matrix::colSums(ang1[[jk]][[nme_t1]][[nme_p1]])
-            }
+         # ang2=ang1[[1]][[nme_t1]][[nme_p1]]
+          ab = lapply(ang1, function(a2){
+            Matrix::colSums(a2[[nme_t1]][[nme_p1]], na.rm=T)
+          })
+          if(length(ab)==1){
+            cs = ab[[1]]
+          }else{
+            cs = apply(data.frame(ab),1,sum, na.rm=T)
           }
+          col_incl = cols_incl1[[inc1]]
+          
           #   excl1 = excl[unlist(lapply(excl, function(ex) ex[3]==nme_t1 && ex[1] == inc1 && ex[4] ==nme_p1))]
           if(length(excl)>0){
             mi2 = match(excl, names(col_incl))
@@ -663,13 +667,14 @@ dataH<-R6::R6Class("dataH",
         if(nmes0==names(ab1$var_names)[[length(ab1$var_names)]]) ab1 else NULL
       })
       li3=li3[unlist(lapply(li3, length))>0]
-      if(length(li3)!=1) stop("problem")
-      prev_i2 = li3[[1]]
+      if(length(li3)>1) stop("problem")
+     
+      prev_i2 = if(length(li3)==0) NULL else li3[[1]]
       # if(length(which(duplicated(names(ab))))>1) stop("wrong")
       ## prev_i2= comb20_1[[nme1[4]]][[nme1[2]]]
       
       # prev_i2= ab[[nme1[[2]]]]
-       if(prev_i2$var_names[[length(prev_i2$var_names)]][[4]]!=nme1[[4]]){
+       if(!is.null(prev_i2) && prev_i2$var_names[[length(prev_i2$var_names)]][[4]]!=nme1[[4]]){
          stop("problem")
        }
        
@@ -677,12 +682,7 @@ dataH<-R6::R6Class("dataH",
        
        prev_i2 =   private$sigs$loadPrev(expt_id, prev_i, k, data_nme = private$nme)
      }
-     if(is.null(prev_i2)){ 
-       stop("could not find")
-      # print(prev_i)
-       
-     #  prev_i2 = prev_i
-     }
+    
      return(prev_i2);
    },
    res_inner=function(comb_,prev_i2, k, expt_id){  ##changes format
@@ -810,7 +810,7 @@ predefined=function(incl1,prev_signature, sumAngle){
   })
   
 },
-   combinedAngles=function( varnames, incl, k, g_incl, qq_t, sumAngle,  addPlot=FALSE){ #phens, varnames, incl=incl, k=k, type=type
+   combinedAngles=function( varnames, incl, k, g_incl, qq_t, sumAngle,  addPlot=FALSE, topn = 1e6){ #phens, varnames, incl=incl, k=k, type=type
       type=private$type
       phens = private$phens;
       flags = private$flags; 
@@ -827,7 +827,7 @@ predefined=function(incl1,prev_signature, sumAngle){
          angles =angles[ unlist(lapply(angles, length))>0]
          angleH=list(angles=angles,
                      cols_incl = private$data$cols_incl(var_t,incl$types, g_incl,excl=varnames)) ### fix 
-         comb_angle1 =  private$combineAngles1(angleH, incl,  sumAngle, prev_signature)
+         comb_angle1 =  private$combineAngles1(angleH, incl,  sumAngle, prev_signature, topn = topn)
          if(addPlot){
            all_angles = .extrAngles(angleH,comb_angle1, incl$types)
             attr(comb_angle1,"all")=all_angles;
@@ -999,10 +999,14 @@ predefined=function(incl1,prev_signature, sumAngle){
     
     comb2_new=invisible( lapply(vars_l, function(prev_i){
       prev_i2 = private$findPrev(comb20, expt_id, prev_i$var_names, k1);
+      if(is.null(prev_i2)){
+        warning("is null");
+        return(prev_i2);
+      }
       varnames = prev_i2$var_names; 
       sumAngle =sum(prev_i2$angles)
       comb_=private$combinedAngles(varnames, incl, k1,  g_incl, qq_t, sumAngle,
-                                   addPlot=show_pvalue_plots) ;
+                                   addPlot=show_pvalue_plots, topn = 1e6) ;
       if(length(comb_)==0) stop("length zero")
       # return(list(comb_angle1, all_angles));
       
@@ -1194,11 +1198,12 @@ predefined=function(incl1,prev_signature, sumAngle){
  #' @param flags list of options
  #' @param transform_x transformation object 
 #' @param data_types a data_type object
+#' @param force whether to force update
  update=function(phens=self$pheno()$all, flags=private$flags, transform_x=fromJSON(flags$transform_x), 
-                 data_types = self$data_types()){
+                 data_types = self$data_types(), force=FALSE){
    flags = super$updateExpt(phens, flags, transform_x, data_types);
     verbose=.readFlag(flags,'verbose',FALSE)
-    force=.readFlag(flags,'force',FALSE);
+   # force=.readFlag(flags,'force',FALSE);
     #flags$transform_x = transform_x;
   #  super$updateExpt(phens, flags)
      private$updateLOOC(verbose=verbose,force=force)
@@ -1722,8 +1727,8 @@ evaluateAllModels=function(all_modelsh, update=TRUE){ ## different folds with sa
  
   all_models_y0 = all_modelsh$models#[[mod_nme]]
      d = private$data
-    # all_models_y=all_models_y0[[1]]
-    eval1 =   .merge1_new(lapply(all_models_y0, function(all_models_y){
+    #all_models_y=all_models_y0[[1]]
+    eval2 =   .merge1_new(lapply(all_models_y0, function(all_models_y){
    d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
   }), addName="beam")  #if(inherits(resd,"try-error")) {
     #  print(resd)
@@ -1734,18 +1739,19 @@ evaluateAllModels=function(all_modelsh, update=TRUE){ ## different folds with sa
 #    resd
 #  }),addName="data")
   #}),addName="transform_x")
-  if(is.null(eval1)) return(NULL)
+  if(is.null(eval2)) return(NULL)
   #  eval1 = subset(eval1, model!="avg")
 
-  eval2 = eval1|> pivot_wider(names_from="submeasure") #|> tibble::add_column(transform_x=strsplit(transform_x[[1]]," ")[[1]][2])
+  #eval2 = eval1|> pivot_wider(names_from="submeasure") #|> tibble::add_column(transform_x=strsplit(transform_x[[1]]," ")[[1]][2])
   
   #  isfull=eval2$model %in% full_model_nmes
   #  eval2|>tibble::add_column(isfull=isfull)
   
   #print("HH")
   #  if(TRUE) return(eval2)
-  eval3 = .calcEval1(eval2, rename=FALSE)
-  eval4 = eval3 |> tibble::add_column(variable= unlist(lapply(eval3$model, function(x){
+  #eval3 = .calcEval1(eval2, rename=FALSE)
+    #eval3 = eval2
+  eval4 = eval2 |> tibble::add_column(variable= unlist(lapply(eval2$model, function(x){
     if(x=="cv" || x=="") return("");
     x1 =rev(strsplit(x,";")[[1]])[1]
     x1
