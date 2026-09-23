@@ -200,6 +200,7 @@ fspls.select<-function(datasH, flags,
         nv = lapply(res_inner1, function(ri){
           ri[[nme_c1]][[nme_p1]][[vn]]
         })
+        nv=nv[unlist(lapply(nv, length))>0]
         nv1 = list(var_names =nv[[1]]$var_names,
                  angle = sum(unlist(lapply(nv, function(nv1) unlist(nv1$angle)))),
               cum_angle =sum(unlist(lapply(nv, function(nv1) unlist(nv1$angles)))),
@@ -434,7 +435,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     stop_y = .readFlag(flags, 'stop_y',"rand")
     logpvthresh = log(.readFlag(flags,"pthresh",0.1))
     beam= .readFlag(flags,"beam",1)
-    topn = .readFlag(flags,'topn',1000)
+    topn = .readFlag(flags,'topn',20) ## number to calculat pvals for
     useAngles = .readFlag(flags,"angles_only", FALSE)
     
     saveAngles=FALSE
@@ -451,6 +452,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     vars_all = list();
     while(length(vars_l_todo$todo1)>0 ){
       comb2_news =try(lapply(nmesH, function(nmeh){
+        #print(nmeh)
         dh = datasH[[nmeh]]
         comb20=comb2[[nmeh]]
         comb_new  = dh$multiAnglesAndPv(comb20 , k1,expt_id, vars_l_todo)
@@ -460,10 +462,11 @@ analysisEnv<-R6::R6Class("analysisEnv",
       }))
       if(inherits(comb2_news,"try-error")) break;
     
-      ang1 = private$topAngles( vars_l_todo, k1,comb2_news=if(useDB) NULL else comb2_news, verbose=verbose );
      
      # if(verbose) print(ang1)
       if(!useAngles){
+        ang1 = private$topAngles( vars_l_todo, k1,comb2_news=if(useDB) NULL else comb2_news, verbose=verbose );
+        
           minv = min(length(ang1), topn, grep("rand", names(ang1)))
           ang1 = ang1[1:minv]
           nme_ang1 = names(ang1)
@@ -489,15 +492,19 @@ analysisEnv<-R6::R6Class("analysisEnv",
                                       #  ang1=ang1,
                                         stop_y = stop_y, verbose=verbose, useAngles=useAngles)
       if(vars_l_todo_new$moveNext){
+       
         comb2 = comb2_news
+        
       }
       vars_l_todo = vars_l_todo_new
       
       nvar = length(vars_l_todo$vars_l[[1]]$var)
-      if(verbose) print(names(vars_l_todo$vars_l))
-      vars_all[[nvar]] = vars_l_todo$vars_l
       
-      if(length(vars_l_todo$vars_l[[1]]$var_names)>=flags$max  ) break;
+      
+      if(verbose) print(names(vars_l_todo$vars_l))
+      if(nvar>0) vars_all[[nvar]] = vars_l_todo$vars_l
+
+      if(nvar>=flags$max  ) break;
     }
     if(length(vars_all)>0) names(vars_all) = paste("nvar",1:length(vars_all),sep="_")
      return(vars_all)  ## this keeps the vars from each stage of iteration

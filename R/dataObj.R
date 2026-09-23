@@ -1,4 +1,45 @@
 
+
+.averageResults<-function(res4){
+  if(length(res4)==0) return(NULL)
+  if(length(res4)==1)return(res4[[1]])
+  joins = lapply(res4, function(a){
+    a1=a|> unite("join", subpheno,pheno, family,measure,cv,isfull, sep="_")
+    a1$join
+  })
+  join1 = joins[[1]];
+  if(length(which(duplicated(join1)))>0) stop("duplicated elements not supposed to occur")
+  for(join in joins[-1]){
+    join1 = join1[join1 %in% join]
+  }
+  
+  res_final = res4[[1]][match(join1,joins[[1]]),,drop=F]
+  if(nrow(res_final)==0) return(res_final)
+  error_high = (res_final$high-res_final$mid)^2
+  error_low = (res_final$mid-res_final$mid)^2
+  
+  for(j  in 2:length(res4)){
+    indsi2 = match(join1,joins[[j]])
+    error_high = error_high +( res4[[j]]$high[indsi2] -  res4[[j]]$mid[indsi2])^2
+    error_low = error_low +( res4[[j]]$low[indsi2] -  res4[[j]]$mid[indsi2])^2
+    
+    res_final$mid =  res_final$mid + res4[[j]]$mid[indsi2]
+    
+    
+    
+  }
+  error_low = sqrt(error_low) / length(res4);
+  error_high = sqrt(error_high) / length(res4);
+  
+  res_final$mid = res_final$mid/length(res4)
+  res_final$low = res_final$mid - error_low;
+  res_final$high = res_final$mid +error_high
+  
+  #res_final$cv_index = rep("avg", nrow(res_final))
+  res_final
+  
+}
+
 .better1<-function(rmsv, rmsv2){
   measure = rmsv$measure[[1]]
   subpheno = rmsv$subpheno[[1]]
@@ -56,7 +97,9 @@ lapply(str1, function(t_y){
       t1 = transf[[jj]]$func(x_[,1:jj] %*% Wall2[1:jj,jj,drop=FALSE], transf[[jj]]$param) 
      as.vector(t1)
     }, rep(0, nrow(x_))))
+   
   }
+  if(nrow(x_)==1) t2 = t(t2)
   names(t2) = names(transf)
   as.matrix(t2)
   ##t2 %*% beta_new2
@@ -809,8 +852,8 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
           m1=glm(y~x, family=family, weights=w) ## including weights lead to non-convergence
           sm  = summary(m1)
           #print(var(x))
-          if(nrow(sm$coeff)<2){
-            coeff = rep(0,4)
+          if(nrow(sm$coeff)<2 || sm$coeff[2,2]> abs(sm$coeff[2,1])){
+            coeff = c(0,0,0,1)
             const_term=sm$coefficients[1,1]
             pv1=1
             beta_new1 = 0
@@ -838,7 +881,7 @@ calcBetaProj=function(nme,phensi_,family, k,b_i,b_i_name, prev_var,Wall, strict=
             }
             # anything else falls through and propagates up to tryCatch's handler
           })
-        }, warning=function(errw) {
+        }, err =function(errw) {
          # print(errw)
        #   message("using glmnet 810")
           ones = rep(1, length(x))
@@ -1157,10 +1200,10 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
              m1=glm(y~as.matrix(x), family=family, weights=w) ## including weights lead to non-convergence
             sm  = summary(m1)
             #print(var(x))
-            if(nrow(sm$coeff)<1+ncol(x)){
+            if(nrow(sm$coeff)<1+ncol(x) || sm$coefficients[3,2] > abs(sm$coefficients[3,1])){
               coeff = rep(0,4)
               const_term=0
-              beta_new1 = rep(0, ncol(x))
+              beta_new1 = c(1,0) #rep(0, ncol(x))
             }else{
               #coeff = sm$coeff[2,]
               
@@ -1172,12 +1215,13 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,bet
             
             list(const_term = const_term, beta_new1 = beta_new1)
             }, warning = function(w) {
+              print(w)
               if(grepl("fitted probabilities numerically 0 or 1", conditionMessage(w))){
                 invokeRestart("muffleWarning")   # ignore this one, keep going
               }
               # anything else falls through and propagates up to tryCatch's handler
             })
-          }, warning=function(errw) {
+          }, err=function(errw) { ## was warning
          #   print(errw)
           #  warning("using glmnet 1132")
             #ones = rep(1, nrow(x))
@@ -1294,7 +1338,7 @@ makeModels=function(phens1, vars2,k,
                   
                   ){
     nonNA = self$looc$incl[,k]
-    if(verbose) print("making models")
+   # if(verbose) print("making models")
   if(is.null(self$looc)){
     self$updateLOOC( phens1,flags,varn=c(),force=FALSE, verbose=FALSE)
   }
@@ -1785,7 +1829,6 @@ evaluateAllModels=function(all_models_y,phens,flags,
                            ypred = self$ypred(phens), #lapply(phens, function(phens1) self$ypred(phens1)),
                            verbose=FALSE
                          ){
-
   d = self
   incl_cv_models = .readFlag(flags, "incl_cv_models",FALSE);
   self$updateLOOC(phens,flags)
@@ -1798,7 +1841,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
   #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
   if(length(all_models_y)==0) return(NULL)
   
-  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
+#nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)cat(paste("numvar",numvar))
           if(is.null(ypred)) stop("ypred is null")
@@ -1819,7 +1862,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
               nmesm_full = grep("full",names(all_models3_full),inv=TRUE,value=TRUE);
               inds=as.numeric(nmesm); 
               inds_full = as.numeric(nmesm_full)
-              res1 = NULL; res2 = NULL; res3 = NULL; res5 = NULL;
+              res1 = NULL; res2 = NULL; res3 = NULL; res5 = NULL;res6 = NULL
               if(!is.null(full_model)){
                 #ypredObj$updateYP(self, phens, )#= self$looc$incl[,k2]
                 nonNA =self$looc$incl[,self$nreps()]
@@ -1842,6 +1885,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
                 res4= vector('list', length(nmesm)) ## need angle object
                 
                 for(j in 1:length(nmesm)){
+                #  print(j)
                   nonNA =self$looc$incl[,inds[[j]]]
                   prev_i1 = all_models3[[j]]
                #   transf = c(transf,prev_i1$transf)
@@ -1851,9 +1895,13 @@ evaluateAllModels=function(all_models_y,phens,flags,
                     res4[[j]] = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=FALSE,model=cv_model_nme, beta=NA, sign = NA, cv_index=j)
                   
                   }
-                  res5 = .merge1_new(res4)
                   #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
+                res5 = .merge1_new(res4)
+                res6 =.averageResults(res4)
+                res6$cv_index = rep("avg", nrow(res6))
+                
+              ##  aa=res5 |>pivot_wider(names_from=c(pheno, subpheno),values_from=value)
                 nonNA=self$getNonNAInds(inds)
               
                 res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=FALSE,model="cv", beta=NA, sign = NA, cv_index="all")
@@ -1871,7 +1919,7 @@ evaluateAllModels=function(all_models_y,phens,flags,
                 res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=TRUE,model=full_model_nme, beta=NA, sign = NA, cv_index="all_full")
               }
             
-              rbind(res1,res2,res3, res5)
+              rbind(res1,res2,res3, res5, res6)
 #        }),addName="model")
 #     }),addName="trainedOn")
    # }),addName="pheno_group")
@@ -2139,6 +2187,7 @@ getAngleInnerOld=function(phensi,ik,k,var,type="slow", direction=NULL,var_thresh
         P = self$UDVP$P #depends on x only and var
         #ii = names(phensi)[[1]]; nmes_prod = names(products)[[1]]; nmes_prod1 = names(products[[nmes_prod]])[[1]]
         angles1 = lapply(names(phensi), function(ii){
+          
                  nme_i = ii
           phensi1 = phensi[[ii]]
           products =self$train[[k]]$product(ik,ii,phensi1);
@@ -2159,7 +2208,7 @@ getAngleInnerOld=function(phensi,ik,k,var,type="slow", direction=NULL,var_thresh
               PY = yTr1[phensi1,,drop=FALSE] %*% P
               #diff1 = PY %*% W
               product=product-  PY %*% W  #[,self$cols_incl[[ik]],drop=FALSE]
-              if(length(to_rem1)>0 && max(abs(apply(product[,to_rem1,drop=F],2,sum)))>var_thresh){
+              if(length(to_rem1)>0 && max(abs(apply(product[,to_rem1,drop=F],2,sum, na.rm=TRUE)))>var_thresh){
                 warning("may not be projecting properly")
               }
              # dimnames(product) = dimnames(self$train$products[[ik]][[ii]])  
@@ -2291,6 +2340,8 @@ getAngles1=function(subphens,varnames,incl, k=1,type="slow1"){
     #incl$direction
     for(ik in 1:length(self$norm)){
     #  (ik)
+     # print(ik)
+      
       if(names(self$norm)[[ik]] %in% incl$types){
           angles_d[[ik]] =  tryCatch({
             self$getAngleInnerOld(phensi,ik, k,var,type, incl$direction)

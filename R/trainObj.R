@@ -12,8 +12,8 @@ trainObj<-R6::R6Class("trainObj",
                     yTr="list",
                     k="numeric",
                     means_y0 = "list", ## before transform
-                    means_y1 = "list", ## before transform
-                    
+                    means_y1 = "list", ## after transform
+                    vars_y0="list",vars_y1="list",
                     counts_y="list",
                     y1="list",
                     #nonNA="list",
@@ -36,7 +36,7 @@ trainObj<-R6::R6Class("trainObj",
                     #  types_ =     getOption("fspls.types", fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC"}'))
                       self$family=family
                       self$transforms = transforms
-                      self$means_y0 = NULL;  self$means_y1 = NULL;
+                      self$means_y0 = NULL;  self$means_y1 = NULL; self$vars_y1 = NULL;  self$vars_y0 = NULL
                       self$counts_y = NULL;
                      # self$looc_incl_k_ij=  self$looc_incl[,k]
                       self$looc_incl_k_ij=looc;
@@ -53,6 +53,7 @@ trainObj<-R6::R6Class("trainObj",
                       self$k=NA
                       self$incl = incl
                       self$calcMeans(weights)
+                      
                     },
                     diffTransforms=function(transforms){
                       toJSON(names(transforms))!= toJSON(names(self$transforms))
@@ -65,6 +66,54 @@ trainObj<-R6::R6Class("trainObj",
                      })
                      produ
                     },
+                  ##variance with respect to global mean
+                  calcVars=function(weights, means_y0 = self$means_y0, means_y1 = self$means_y1){
+                    funcst=self$transforms
+                    y1 = self$y1
+                    looc_incl_k_ij = self$looc_incl_k_ij;
+                    vars_y0 =  lapply(y1, function(y1_) lapply(funcst, function(fst) lapply(fst$params,function(f3) rep(0, ncol(y1_)))));
+                    
+                    vars_y1 =  lapply(y1, function(y1_) lapply(funcst, function(fst) lapply(fst$params,function(f3) rep(0, ncol(y1_)))));
+                    for(colk in 1:length(self$y1)){
+                      ncols=ncol(y1[[colk]])
+                      inds_to_do_1 = 1:ncol(y1[[colk]])
+                      for(f_k in 1:length(funcst)){
+                        funcs =  funcst[[f_k]]$invfunc #could also be invfunc?
+                        params = funcst[[f_k]][[3]]; names(params)=params
+                        for(g_k in 1:length(params)){
+                          pow1 = params[[g_k]]
+                          meansy = means_y0[[colk]][[f_k]][[g_k]]
+                          meansy1 = means_y1[[colk]][[f_k]][[g_k]]
+                          varsy0 = rep(0,ncols)
+                          varsy1 = rep(0,ncols)
+                          for(j in inds_to_do_1){
+                            nonNA1 =  looc_incl_k_ij
+                            # if(getOption("mean_before_transf",TRUE)){
+                            v = y1[[colk]][nonNA1,j] 
+                            nonNA2 = !is.na(v)
+                            d_w = weights[nonNA1][nonNA2]
+                            diff = (v[nonNA2] -meansy[[j]])
+                            var0 = (diff %*% (diff *d_w))/sum(d_w)
+                            var0 =(diff %*% diff) /length(diff)
+                            
+                            varsy0[j] = var0[1,1]
+                            v = funcs(y1[[colk]][nonNA1,j]-meansy[[j]], pow1) 
+                            nonNA2 = !is.na(v)
+                            diff = (v[nonNA2] -meansy1[[j]])
+                            #var1 = (diff %*% (diff *d_w))/sum(d_w)
+                            var1 =(diff %*% diff) /length(diff)
+                            varsy1[j] = var1[1,1]
+                        
+                          }
+                          vars_y0[[colk]][[f_k]][[g_k]] = varsy0
+                          vars_y1[[colk]][[f_k]][[g_k]] = varsy1
+                        }
+                      }
+                    }
+                    self$vars_y0 = vars_y0
+                    self$vars_y1 = vars_y1
+                    
+                  },
                   calcMeans=function(weights){  ## has same patter as transform but split out so that we can average across datasets
                     #print("calc means")
                     funcst=self$transforms
@@ -73,7 +122,7 @@ trainObj<-R6::R6Class("trainObj",
                   
                     means_y0 = lapply(y1, function(y1_) lapply(funcst, function(fst) lapply(fst$params,function(f3) rep(0, ncol(y1_)))));
                     means_y1 = lapply(y1, function(y1_) lapply(funcst, function(fst) lapply(fst$params,function(f3) rep(0, ncol(y1_)))));
-                    
+                 
                     counts_y = lapply(y1, function(y1_) lapply(funcst, function(fst) lapply(fst$params,function(f3) rep(0, ncol(y1_)))))
                  #   inds_to_do =1:length(self$y1);## which(names(self$y1) %in% names(phens1))
                   #  if(length(inds_to_do)==0) stop("inds_to_do is empty")
@@ -91,14 +140,15 @@ trainObj<-R6::R6Class("trainObj",
                           meansy = rep(0, ncols)
                           meansy1 = rep(0, ncols)
                           county = rep(0, ncols)
+                        
                           for(j in inds_to_do_1){
                             nonNA1 =  looc_incl_k_ij
-                            if(getOption("mean_before_transf",TRUE)){
+                           # if(getOption("mean_before_transf",TRUE)){
                               v = y1[[colk]][nonNA1,j] 
                               nonNA2 = !is.na(v)
                               d_w = weights[nonNA1][nonNA2]
                               meansy[[j]] = (v[nonNA2]%*% d_w)/sum(d_w) 
-                            }
+                            #}
                               v = funcs(y1[[colk]][nonNA1,j]-meansy[[j]], pow1) 
                               nonNA2 = !is.na(v)
                               d_w = weights[nonNA1][nonNA2]
@@ -143,6 +193,7 @@ trainObj<-R6::R6Class("trainObj",
                               meansy1 = means_y1[[colk]][[f_k]][[g_k]]
                               
                               for(j in inds_to_do_1){
+                                #print(paste(colk,f_k, g_k, j))
                                 nonNA1 =  looc_incl_k_ij
                                
                                     v = funcs(y1[[colk]][nonNA1,j]-meansy0[[j]], pow1)  ## should we subtract mean before transformation  
@@ -151,8 +202,9 @@ trainObj<-R6::R6Class("trainObj",
                                 
                                    #  d_w = weights[nonNA1][nonNA2]
                                     # meansy[[j]] = (v[nonNA2]%*% d_w)/sum(d_w) 
-                                    
-                                     v2 = v2/sd(v2,na.rm=TRUE)
+                                    if(length(g_k)>1){ ## only need to normalise if more than 1 parameter.  This does assume a single parameteried family.  Randomising shouldnt affect variance
+                                       v2 = v2/sd(v2,na.rm=TRUE)
+                                    }
                                  ### new line to avoid giving advantage to transformations 
                                  self$yTr[[colk]][[f_k]][[g_k]][j,nonNA1] =v2 #y[,j]  - mean_y[j]
                                     if(length(which(!nonNA1))>0){
@@ -163,7 +215,7 @@ trainObj<-R6::R6Class("trainObj",
                                    self$yTr[[colk]][[f_k]][[g_k]][j,which(nonNA1)[!nonNA2]] =0
                                  }
                                  vars1 = apply(self$yTr[[colk]][[f_k]][[g_k]][j,,drop=FALSE],1,var, na.rm=TRUE)
-                                 if(min(vars1)==0) {
+                                 if(min(vars1, na.rm=T)==0) {
                                    if(min(apply(self$y1[[colk]][,j,drop=FALSE],2,var,na.rm=TRUE))>0){
                                      if(getOption("verbose",FALSE))print(self$y1[[colk]][,j])
                                      warning(paste(" transformations gave raise to zero variance, choose diff transformations",toJSON(funcs),pow1,
@@ -191,10 +243,13 @@ trainObj<-R6::R6Class("trainObj",
                   
                     update=function(data,subphens, means_y = list(y0=self$means_y0, y1=self$means_y1), force=FALSE){
                       
+                      self$calcVars(data$weights, means_y0 = means_y[[1]], means_y1 =means_y[[1]])
                       if(!force && toJSON(subphens)==toJSON(self$subphens)){
+                        if(self$products!="list"){
                         if(length(which(unlist(lapply(self$products, is.null))))==0){
                         ##print("not updating"); 
                           return(NULL)
+                        }
                         }
                       }
                       self$subphens = subphens

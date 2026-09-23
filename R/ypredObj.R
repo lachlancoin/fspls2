@@ -708,7 +708,7 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
   w1= if(is.null(ind_1)) self$weights else self$weights[ind_1]
   nsamps = length(which(ind_1))
   #nme_p1 = nme_phens[[1]]
-  aa=lapply(nme_phens, function(nme_p1){
+  res_phens=lapply(nme_phens, function(nme_p1){
     family=  getOption("fspls.family",strsplit(nme_p1,"\\.")[[1]][1])
     fam = family
     mtype = match(family,names(types_))
@@ -726,6 +726,7 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
     yp2 = if(is.null(ind_1))ypreds1 else  ypreds1[ind_1,,drop=FALSE] 
     names(ycol_inds) = dimnames(y2)[[2]][ycols]
     rms_1=lapply(ycol_inds, function(ycol_ind){
+      #print(ycol_ind)
       ycol = ycols[ycol_ind]
       y1 =  y2[,ycol]
       yp =if(fam=="ordinal") yp2 else yp2[,ycol_ind,drop=FALSE] 
@@ -734,10 +735,18 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
       nonNA = nonNA & !is.na(yp[,1]) 
       .merge1_new(
         lapply(types_i, function(type_i1){
+          #print(type_i1)
           type_i1s = strsplit(type_i1,"\\.")[[1]]
           type_i= type_i1s[[1]]
           thresh = if(length(type_i1s)>1) type_i1s[2] else NA
-          rms =.scoreInternal(yp[nonNA,,drop=FALSE], y1[nonNA],w1[nonNA], type_i, fam,thresh)
+          rms =tryCatch({
+            .scoreInternal(yp[nonNA,,drop=FALSE], y1[nonNA],w1[nonNA], type_i, fam,thresh)
+          },error=function(w){
+            r1 = c(NA,NA,NA);   names(r1) = c("low", "mid","high")
+            return(r1)
+          })
+         #  print("HERE");
+        #   print(rms)
           if(is.null(rms)) stop(paste(type_i,"rms NULL"))
           if(is.null(names(rms))) names(rms) = 1:length(rms)
           if(typeof(rms)=="list"){
@@ -762,9 +771,9 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
 #  aa_new = lapply(aa, function(aa1){
 #     aa1[,match(nme_aa,names(aa1))]
 #  })
-  res_aa = .merge1_new(aa,addName="family")
-  lapply(aa, function(x)names(x))
-  res_aa
+  res_aa = .merge1_new(res_phens,addName="family")
+  #lapply(aa, function(x)names(x))
+  res_aa |> pivot_wider(names_from="submeasure", values_from="value")
   #.merge1_new(rms_3, num_cols = "value", addName="beam")
   # dimnames(res_df)[[1]] = names(rms_3)
   # as.matrix(res_df)
