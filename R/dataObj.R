@@ -36,6 +36,7 @@
   res_final$high = res_final$mid +error_high
   
   #res_final$cv_index = rep("avg", nrow(res_final))
+  res_final$cv_index = rep("avg", nrow(res_final))
   res_final
   
 }
@@ -1332,6 +1333,106 @@ extractData=function(var, adjust=TRUE,convert=FALSE){
   Dall
 },
 
+
+fitEnsemble=function(preds, phens, CHECK=FALSE){
+  nvars = 1:length(preds);names(nvars) = names(preds)
+  #nvars = 1:length(preds[[1]]); 
+  nmes_phens = names(phens); names(nmes_phens) =nmes_phens;
+  
+ nreps = 1:self$nreps();names(nreps) = nreps; names(nreps)[[length(nreps)]]="full";
+ # nme_p = nmes_phens[[1]];yname = names(phens[[nme_p]])[[1]]; i=1; k=1;yname = phens[[nme_p]][[1]];
+
+coeffs =  
+  lapply(nvars, function(i){
+  lapply(nreps, function(k){
+    k_name = names(nreps)[[k]]
+    if(is.null(preds[[i]][[k_name]])) return(NULL)
+      lapply(nmes_phens, function(nme_p){
+        family = strsplit(nme_p,"\\.")[[1]][1]
+        y = self$y[[nme_p]]
+        ncoly = phens[[nme_p]]; names(ncoly) = ncoly
+        data.frame(lapply(ncoly, function(yname){
+          #print(paste(i,k, nme_p, yname))
+          ik = which(colnames(y)==yname)
+          preds1 =  (lapply(preds[[i]][[k_name]], function(predi){
+                  predi[[nme_p]][,ik]
+          }))
+          include = !(unlist(lapply(preds1,is.null)))
+          include_ind = which(include)
+          nonNAy = self$looc$incl[,k] & !is.na(y[,ik])
+          weights = self$weights[nonNAy]
+          if(length(include_ind)==0){
+            res0 = 1; names(res0)="(Intercept)"
+            return(res0)
+          }
+          if(i==1 ){
+            res0 = rep(0, 1+length(include_ind)); res0[2]=1; ## default all weight on first
+            names(res0)[1] = "(Intercept)";names(res0)[-1] =names(preds1)[include_ind]
+            return(res0)
+          }
+           df1 = data.frame(preds1[include_ind])[nonNAy,,drop=F]
+          if(length(include_ind)==1){
+            summ = summary(glm(y[nonNAy,ik]~df1[[1]], family=family, weights = weights))
+            rbeta = summ$coefficients[,1]
+            names(rbeta) = c("(Intercept)",names(df1)[[1]])
+            return(rbeta);
+          
+          }else{
+             
+            #  rbeta = rep(0, 1+ncol(df1)); 
+            #  names(rbeta)[1] = "(Intercept)";names(rbeta)[-1] =colnames(df1)
+              
+              ridge=glmnet(df1,y[nonNAy, ik] ,family=family, alpha = 0,
+                           standardize=FALSE,
+                           weights =self$weights[nonNAy],lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
+          
+              rbets <- coef(ridge) #,s=min(ridge$lambda))
+              # mins = apply(rbets[-1,],2,min)
+              #max_ind = which.max(mins)
+              aa = predict(ridge,as.matrix(df1), family=family)
+              
+              if(family=="binomial"){
+                aucs_new = apply(aa,2, function(aa2) roc(y[nonNAy, ik], aa2, quiet=TRUE)$auc)
+              }else if(family=="gaussian"){
+                aucs_new = apply(aa,2, function(aa2) cor(y[nonNAy,ik], aa2))
+                
+              }      
+              max_ind =   which.max(aucs_new)
+              rbeta = rbets[,max_ind] ## all contributions should be non-negative
+                   # rbeta[1] = rbeta2[1]
+                  #  rbeta[include_ind+1]= rbeta2[-1]
+          }
+          if(CHECK && family %in% c("binomial","gaussian")){
+            lambda = ridge$lambda[max_ind]
+            
+            if(family=="binomial"){
+              aucs1 = apply(df1, 2, function(aa) roc(y[nonNAy,ik], aa, quiet=TRUE)$auc)
+              aa = predict(ridge,as.matrix(df1), s=lambda,family=family)
+              aucs_new = apply(aa,2, function(aa2) roc(y[nonNAy, ik], aa2, quiet=TRUE)$auc)
+            }else if(family=="gaussian"){
+              aucs1 = apply(df1, 2, function(aa) cor(y[nonNAy,ik], aa))
+              aa = predict(ridge,as.matrix(df1), s=lambda,family=family)
+              aucs_new = apply(aa,2, function(aa2) cor(y[nonNAy,ik], aa2))
+              
+            }    
+            
+            
+            #print(paste(max(aucs1), max(aucs_new)))
+            if(max(aucs1)> max(aucs_new)) {
+              
+              warning(paste("refitting did not improve auc",i,k,nme_p, yname,max_ind,nme_p, yname, max(aucs1), max(aucs_new)))
+            }
+          }
+          rbeta
+          }))
+        })
+      })
+     
+  })
+  coeffs
+},
+
+
 #vars2 = vars_all[[1]]$variables[[1]];phens1 = phens[[1]]; k=1; useoffset=TRUE
 makeModels=function(phens1, vars2,k, 
                     project=TRUE,logpthresh = -5,useglm=TRUE,useoffset=TRUE,
@@ -1723,48 +1824,119 @@ ypred=function(phens1){
 },# inverse_func_strs = jsonlite::fromJSON(.readFlag(flags,"transform_x_inverse",'{"y":"function(y) y"}'))
 #all_models_y = all_models$y; inverse_func_str = jsonlite::fromJSON(flags1$transform_x_inverse)[[1]]; self = datasAll$datas[[1]]
 
-extractPredictions=function(all_models_y,phens, flags, 
+extractPredictions=function(all_models_full,phens, flags, 
                             transform_x = jsonlite::fromJSON(flags$transform_x),
-                            ypred = self$ypred(phens), liab=TRUE, cv_index = NA
+                            liab=FALSE,
+                            coeffs = NULL,
+                            merge_cv=FALSE
                                    ){
-  
-  self$updateTransforms(transform_x   )      
-  d = self
+  all_models_y0 = all_models_full
+  if(!is.null(transform_x))self$updateTransforms(transform_x   )      
+  d1 = self
   self$updateLOOC(phens,flags)
     ## whether to evaluate with liability , default is true
   #  ypred = self$ypred(phens)
   minv = .readFlag(flags,"min",0)
   maxv = .readFlag(flags,"max",1e6)
   verbose=.readFlag(flags, "verbose",FALSE)
-  full_models = lapply(all_models_y, function(am)am[['full']])
-  full_models = full_models[unlist(lapply(full_models, length))>0]
-  numvars1 = sort(unlist(lapply(full_models, function(am)length(am$var_names))))
+  numvars1 = sort(unique(unlist(lapply(all_models_y0[[1]], function(x) length(x[[1]]$var_names))))); names(numvars1) = numvars1
+  numvars1 = as.character(numvars1[numvars1>=minv & numvars1<=maxv])
   
-  #numvars1 = sort(numvars1)
-  
-  group_names= names(all_models_y); names(group_names)=group_names
-  numvars = unlist(lapply(group_names, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]])))
- # numvars1 = sort(unique(numvars))
-#  names(numvars1) = numvars1
-  numvars1 = numvars1[numvars1>=minv & numvars1<=maxv]
   #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
-  if(length(all_models_y)==0) return(NULL)
-  #
-  #
-  #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  
-  #group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
-  evals_all =lapply(numvars1, function(numvar){
+  if(length(all_models_y0)==0) return(NULL)
+  numvar_inds=1:length(numvars1); names(numvar_inds) = numvars1
+  lapply(numvar_inds, function(numvar_ind){
+    numvar = numvars1[[numvar_ind]]
     if(verbose)cat(paste("numvar",numvar))
-    #.merge1_new(lapply(pheno_nmes, function(pheno_nme){
-    #ypred = ypreds[[pheno_nme]]; 
-    if(is.null(ypred)) stop("ypred is null")
-    # .merge1_new(lapply(nmes_models, function(nmes1){
-    group_names2 = group_names[numvars==numvar]
-    # evals = .merge1_new(lapply(group_names2, function(group_name){
-    #    if(verbose) cat(paste(numvar,nmes1,group_name))
-    all_models1 = all_models_y[names(all_models_y) %in% group_names2]#[[pheno_nme]]   
-    all_models2 = lapply(all_models1, function(am) lapply(am, function(am1) am1))
+    all_models3 = self$getAllModels(all_models_y0, numvar);
+    self$getPredictions(all_models3, phens, numvar,numvar_ind,  liab =liab,coeffs = coeffs, merge_cv=merge_cv)
+    
+  })
+   
+   
+
+},
+getPredictions=function(all_models3, phens, numvar, numvar_ind,
+                        ypreds=lapply(all_models3, function(x) self$ypred(phens)),
+                        liab=FALSE,
+                       
+                        coeffs= NULL,
+                        ypred_all =if(is.null(coeffs)) NULL else self$ypred(phens),
+                        merge_cv=FALSE
+){
+len=length(all_models3)
+nmesm_all = lapply(all_models3, function(x) names(x))
+nmesm = nmesm_all[[1]]; names(nmesm) = nmesm;
+nmesm_inds = 1:length(nmesm); names(nmesm_inds) = nmesm
+mod_inds = 1:len; names(mod_inds) = mod_inds
+nonNA =rep(TRUE, self$nrow)## predict everything
+flip=FALSE; ##predict everything
+res1 =  lapply(nmesm_inds, function(nmem_ind){
+  nmem = nmesm[nmem_ind]
+  #print(nmem)
+  
+  if(merge_cv){
+    nonNA = self$looc$incl[,nmem_ind]
+    flip=nmem!="full" 
+
+  }
+  
+  res_mods = lapply(mod_inds, function(ij){
+   # print(ij)
+    full_model=  all_models3[[ij]][[nmem]]
+    if(is.null(full_model)){
+     #warning(paste("no model", "beam:",ij,"fold:" ,nmem, "numvar: ", numvar))
+    return(NULL);
+    }
+    ypreds[[ij]]$updateYP(self, full_model, nonNA,  flip=flip, liab=liab)
+    r1 =  ypreds[[ij]]$predictions(nonNA, flip=flip)
+    attr(r1,"betas") = full_model$betas
+    
+    attr(r1,"variable") = if(numvar=="0") rep("",4) else full_model$var_names[[as.numeric(numvar)]]
+    
+    r1
+    #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
+  })
+  if(!is.null(coeffs)){
+     coeff = coeffs[[numvar]][[nmem]]
+     nonNull2 = which(unlist(lapply(nmesm_all, function(x) nmem %in% x )))
+     
+    ypred_all$updateEnsemble(ypreds[nonNull2], coeff, nonNA, flip=flip);
+    res_mods[['combined']]= ypred_all$predictions(nonNA, flip=flip)
+  }
+  res_mods;
+})
+if(merge_cv){ ## merges across CV
+  mod_inds = 1:length(res1[[1]]); names(mod_inds) = names(res1[[1]])
+  nmesm1 = nmesm[nmesm!="full"]
+  nmesp = names(phens); names(nmesp)=nmesp
+  res_merged= lapply(mod_inds, function(mi){
+    lapply(nmesp, function(nmep){
+      ynames=1:length(phens[[nmep]]); names(ynames)=phens[[nmep]]
+      data.frame(lapply(ynames, function(yind){
+        df0=(lapply(nmesm1,function(nmem){
+          
+          res1[[nmem]][[mi]][[nmep]][,yind]
+        }))
+        df=data.frame(df0[lapply(df0, length)>0 ])
+        v2=apply(df,1,max,na.rm=T)
+        v2[is.infinite(v2)]=NA
+        v2
+      }))
+    })
+  })
+  res1[['merged']] = res_merged
+}
+res1
+},
+#rearranges to extract models for different replicates at fixed numvar
+getAllModels=function(all_models_y0, numvar){
+  all_models2_all = lapply(all_models_y0, function(all_models_y){
+    varlens = unlist(lapply(all_models_y, function(x) length(x[[1]]$var_names)))
+    all_models1 =  all_models_y[varlens==numvar]#[[pheno_nme]]   
+    all_models2 =  lapply(all_models1, function(am) lapply(am, function(am1) am1))
     all_models2_full = all_models2[unlist(lapply(all_models2, function(am)"full" %in% names(am) ))]
+    
     if(length(all_models2)>0){
       all_models2 = all_models2[!unlist(lapply(all_models2, is.null))]
     }
@@ -1772,166 +1944,175 @@ extractPredictions=function(all_models_y,phens, flags,
     names(all_models2_full) = NULL
     all_models3 = unlist(all_models2,recursive=FALSE)
     all_models3_full = unlist(all_models2_full,recursive=FALSE)
+    
     full_model = all_models3[["full"]]
-    full_model_nme=paste(names(full_model$var_names), collapse=";")
-    nmesm = grep("full",names(all_models3),inv=TRUE,value=TRUE);
-    if(!is.na(cv_index)) nmesm = nmesm[nmesm %in% cv_index]
+    
+    nmesm = names(all_models3)
+    all_models3 = all_models3[order(as.numeric(nmesm))]
     nmesm_full = grep("full",names(all_models3_full),inv=TRUE,value=TRUE);
-    inds=as.numeric(nmesm); 
-    inds_full = as.numeric(nmesm_full)
-    res1 = list(); #res2 = list(); res3 = list()
-    if(!is.null(full_model)){
-      #ypredObj$updateYP(self, phens, )#= self$looc$incl[,k2]
-      nonNA =self$looc$incl[,self$nreps()]
-      ypred$updateYP(d, full_model, nonNA, flip=FALSE, liab=liab)
-      #res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)
-      # print(res1);
-      res1 [["full"]] =  ypred$predictions(nonNA, flip=FALSE)
-      for(lk in 1:length(res1[['full']])){
-        attr(res1[['full']][[lk]],"betas") = full_model$betas[[lk]][numvar,]
-      }
-      #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
-    }
-    if(length(nmesm)>0){
-      #transf=c()
-      for(j in 1:length(nmesm)){
-        nonNA =self$looc$incl[,inds[[j]]]
-        prev_i1 = all_models3[[j]]
-        #   transf = c(transf,prev_i1$transf)
-        ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
-        #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
-      }
-      nonNA=self$getNonNAInds(inds)
-      #res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=FALSE,model="cv")
-      res1[["cv"]] =  ypred$predictions(nonNA, flip=TRUE)
-    }
-    if(length(nmesm_full)>0){
-      #transf=c()
-      for(j in 1:length(nmesm_full)){
-        nonNA =self$looc$incl[,inds_full[[j]]]
-        prev_i1 = all_models3_full[[j]]
-        #   transf = c(transf,prev_i1$transf)
-        ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
-        #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
-      }
-      nonNA=self$getNonNAInds(inds_full)
-     # res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=TRUE,model=full_model_nme)
-      res1[['cv_full']] = ypred$predictions(nonNA, flip=TRUE)
-    }
-    res1
-  #  rbind(res1,res2,res3)
-    #        }),addName="model")
-    #     }),addName="trainedOn")
-    # }),addName="pheno_group")
+    #inds=as.numeric(nmesm); 
+    #inds_full = as.numeric(nmesm_full);
+    if(!is.null(all_models3))attr(all_models3,"nmes_full")=nmesm_full
+    all_models3;
   })
-  #if(!is.null(evals_all$numvars)){
-  #  evals_all$numvars = as.numeric(evals_all$numvars)
-  #}
-  evals_all
-
+  #nmesm_all = lapply(all_models2_all, function(x) names(x))
+  #nmesm_all = lapply(nmesm_all, function(nme1) {
+  #  nme1[match(nme1, nmesm_all[[1]])]
+  #  if(length(which(is.na(nme1)))) stop("!!");
+  #})
+  
+  all_models2_all 
 },
-evaluateAllModels=function(all_models_y,phens,flags,
-                           ypred = self$ypred(phens), #lapply(phens, function(phens1) self$ypred(phens1)),
+
+evaluateAllModels=function(all_models_y0,phens,flags,
+                          ypreds=lapply(all_models_y0, function(x) self$ypred(phens)),
+                           ypred_all = self$ypred(phens),coeffs=NULL,
+                          incl_cv_models =TRUE,
                            verbose=FALSE
                          ){
   d = self
-  incl_cv_models = .readFlag(flags, "incl_cv_models",FALSE);
   self$updateLOOC(phens,flags)
   liab = .readFlag(flags,"liab",TRUE)  ## whether to evaluate with liability , default is true
-#  ypred = self$ypred(phens)
-  group_names= names(all_models_y); names(group_names)=group_names
-  numvars = unlist(lapply(group_names, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]])))
-  numvars1 = sort(unique(numvars))
-  names(numvars1) = numvars1
-  #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
-  if(length(all_models_y)==0) return(NULL)
+  numvars1 = sort(unique(unlist(lapply(all_models_y0[[1]], function(x) length(x[[1]]$var_names))))); 
+  numvars1 = as.character(numvars1);names(numvars1) = numvars1
   
+#  numvar = numvars1[[2]]
 #nmes_models = names(all_models_y[[1]]);names(nmes_models) = nmes_models;  numvar = numvars1[[3]]; nmes1 = nmes_models[[1]];  group_names2 = group_names[numvars==numvar]; group_name = group_names2[[1]]
   evals_all = .merge1_new(lapply(numvars1, function(numvar){
     if(verbose)cat(paste("numvar",numvar))
-          if(is.null(ypred)) stop("ypred is null")
-            group_names2 = group_names[numvars==numvar]
-              all_models1 = all_models_y[names(all_models_y) %in% group_names2]#[[pheno_nme]]   
-              all_models2 = lapply(all_models1, function(am) lapply(am, function(am1) am1))
-              all_models2_full = all_models2[unlist(lapply(all_models2, function(am)"full" %in% names(am) ))]
-              if(length(all_models2)>0){
-                all_models2 = all_models2[!unlist(lapply(all_models2, is.null))]
-              }
-              names(all_models2) = NULL
-              names(all_models2_full) = NULL
-              all_models3 = unlist(all_models2,recursive=FALSE)
-              all_models3_full = unlist(all_models2_full,recursive=FALSE)
-              full_model = all_models3[["full"]]
+          if(length(ypreds)==0) stop("ypred is null")
+           # group_names2 = group_names[numvars==numvar]
+              all_models3 = self$getAllModels(all_models_y0, numvar);
+              nonNull1 = which(unlist(lapply(all_models3, length))>0)
+             # predictions = self$getPredictions(all_models3, phens, ypred = ypred)
+              leninds=1:(length(all_models3)+1); names(leninds) = 1:length(leninds)
+              names(leninds)[[length(leninds)]] = "combined"
+              nmesm_all = lapply(all_models3, function(x) names(x)[names(x)!='full'])
+              nmesm_full = lapply(all_models3, function(x) attr(x,"nmes_full"))
+              res1 = lapply(leninds, function(x) NULL);
+              res2 = lapply(leninds, function(x) NULL);
+              res3 = lapply(leninds, function(x) NULL);
+              res5 = lapply(leninds, function(x) NULL);
+              res6 = lapply(leninds, function(x) NULL);
+              
+            #  res4 = lapply(nmesm, function(x10)lapply(leninds, function(x) NULL))
+              
+              full_models = lapply(all_models3, function(x) x[['full']])
+              
+              nonNull = which(!unlist(lapply(full_models, is.null)))
+              if(length(nonNull)>0){
+             for(ij  in nonNull){
+               
+               ypred = ypreds[[ij]]
+               full_model = full_models[[ij]]
                full_model_nme=paste(names(full_model$var_names), collapse=";")
-              nmesm = grep("full",names(all_models3),inv=TRUE,value=TRUE);
-              nmesm_full = grep("full",names(all_models3_full),inv=TRUE,value=TRUE);
-              inds=as.numeric(nmesm); 
-              inds_full = as.numeric(nmesm_full)
-              res1 = NULL; res2 = NULL; res3 = NULL; res5 = NULL;res6 = NULL
-              if(!is.null(full_model)){
-                #ypredObj$updateYP(self, phens, )#= self$looc$incl[,k2]
-                nonNA =self$looc$incl[,self$nreps()]
+               nonNA =self$looc$incl[,self$nreps()]
                 ypred$updateYP(d, full_model, nonNA,  flip=FALSE, liab=liab)
-                res1 = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)
+                res1_ij = ypred$calcRMSV(self$y, nonNA,      flip=FALSE)
                
-                beta = unlist(lapply(1:nrow(res1), function(ii){
+                beta = unlist(lapply(1:nrow(res1_ij), function(ii){
                
-                  b1 = full_model$betas[[res1$family[ii]]]
-                  ik2 = which(colnames(b1)==res1$pheno[[ii]])
+                  b1 = full_model$betas[[res1_ij$family[ii]]]
+                  ik2 = which(colnames(b1)==res1_ij$pheno[[ii]])
                   if(length(ik2)==0)ik2 = 1
                   b1[nrow(b1),ik2]
                 }))
                 
-                res1 = res1 |> tibble::add_column(isfull=TRUE, model=full_model_nme, beta, sign = sign(beta), cv_index="NA")
+                res1[[ij]]=res1_ij |> tibble::add_column(isfull=TRUE, model=full_model_nme, beta, sign = sign(beta), cv_index="NA")
                 #res1 = self$getRMSVInds(phens, d$nreps(), ypred)  
-              }
-              if(length(nmesm)>0){
-                #transf=c()
-                res4= vector('list', length(nmesm)) ## need angle object
                 
-                for(j in 1:length(nmesm)){
-                #  print(j)
-                  nonNA =self$looc$incl[,inds[[j]]]
-                  prev_i1 = all_models3[[j]]
+             }
+              if(!is.null(coeffs)){
+                coeff = coeffs[[numvar]][['full']]
+                nonNA =self$looc$incl[,self$nreps()]
+                ypred_all$updateEnsemble(ypreds, coeff, nonNA, flip=FALSE);
+                res1[[length(full_models)+1]] = 
+                  ypred_all$calcRMSV(self$y, nonNA, flip=FALSE) |>
+                       tibble::add_column(isfull=TRUE, model=full_model_nme, beta, sign = sign(beta), cv_index="NA")
+              }
+              }
+             for(ij  in nonNull1){
+                ypred = ypreds[[ij]]
+               
+                #nmesm = nmesm[nmesm!='full']
+                nmesm =nmesm_all[[ij]]; names(nmesm) = nmesm; ## for cv
+                nmesm=nmesm[order(as.numeric(nmesm))]
+                
+              if(length(nmesm)>0){
+                res4= vector('list', length(nmesm)) ## need angle object
+                names(res4) = nmesm
+                for(j2 in 1:length(nmesm)){
+                  j1 = nmesm[j2]
+                  j = as.numeric(j1)
+                  
+                  nonNA =self$looc$incl[,j]
+                  prev_i1 = all_models3[[ij]][[j1]]
                #   transf = c(transf,prev_i1$transf)
                   ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
                   if(incl_cv_models){
                     cv_model_nme=paste(names(prev_i1$var_names), collapse=";")
-                    res4[[j]] = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=FALSE,model=cv_model_nme, beta=NA, sign = NA, cv_index=j)
+                    res4[[j1]] = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|>
+                      tibble::add_column(isfull=FALSE,model=cv_model_nme, beta=NA, sign = NA, cv_index=j)
                   
                   }
-                  #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
                 }
-                res5 = .merge1_new(res4)
-                res6 =.averageResults(res4)
-                res6$cv_index = rep("avg", nrow(res6))
+                res5[[ij]] = .merge1_new(res4)
+                if(incl_cv_models) res6[[ij]] =.averageResults(res4)
+                
                 
               ##  aa=res5 |>pivot_wider(names_from=c(pheno, subpheno),values_from=value)
-                nonNA=self$getNonNAInds(inds)
+                nonNA=self$getNonNAInds(as.numeric(nmesm))
               
-                res2 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=FALSE,model="cv", beta=NA, sign = NA, cv_index="all")
+                res2[[ij]] = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> 
+                  tibble::add_column(isfull=FALSE,model="cv", beta=NA, sign = NA, cv_index="all")
               }
-              if(length(nmesm_full)>0){
-                #transf=c()
-                for(j in 1:length(nmesm_full)){
-                  nonNA =self$looc$incl[,inds_full[[j]]]
-                  prev_i1 = all_models3_full[[j]]
-                  #   transf = c(transf,prev_i1$transf)
-                  ypred$updateYP(d, prev_i1, nonNA, flip=TRUE)
-                  #          self$updateYpredsInds(phens,all_models1[[j]][[nmes1]], inds[[j]], ypred)
+              
+              if(length(nmesm_full[[ij]])>0){ 
+                nonNA=self$getNonNAInds(as.numeric(nmesm_full[[ij]]))
+                res3[[ij]] = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|>
+                  tibble::add_column(isfull=TRUE,model=full_model_nme, beta=NA, sign = NA, cv_index="all_full")
+              }
+             }
+              if(!is.null(coeffs)){
+               
+                nmesm = unique(unlist(nmesm_all))
+                nmesm=nmesm[order(as.numeric(nmesm))]
+                
+                if(length(nmesm)>0){
+                  res4= vector('list', length(nmesm)) ## need angle object
+                  for(j1 in nmesm){
+                    j = as.numeric(j1)
+                    nonNull2 = which(unlist(lapply(nmesm_all, function(x) j1 %in% x )))
+                     coeff = coeffs[[numvar]][[j1]]
+                     nonNA =self$looc$incl[,j]
+                     cv_model_nme="combined"
+                      ypred_all$updateEnsemble(ypreds[nonNull2], coeff, nonNA, flip=TRUE);
+                      if(incl_cv_models){
+                      res4[[j]] = ypred_all$calcRMSV(self$y, nonNA,      flip=TRUE) |>
+                        tibble::add_column(isfull=FALSE,model=cv_model_nme, beta=NA, sign = NA, cv_index=j)
+                      
+                      }
+                  }
+                  res5[[length(full_models)+1]] = .merge1_new(res4)
+                  if(incl_cv_models) res6[[length(full_models)+1]] =.averageResults(res4[unlist(lapply(res4,length))>0])
+                  
+                  nonNA=self$getNonNAInds(as.numeric(nmesm))
+                  
+                  res2[[length(full_models)+1]] = ypred_all$calcRMSV(self$y,nonNA, flip=TRUE)|> 
+                      tibble::add_column(isfull=FALSE,model="cv", beta=NA, sign = NA, cv_index="all")
+                  
+                  
+                #  res1[[length(full_models)+1]] = ypred_all$calcRMSV(self$y, nonNA,      flip=FALSE)
                 }
-                nonNA=self$getNonNAInds(inds_full)
-                res3 = ypred$calcRMSV(self$y,nonNA, flip=TRUE)|> tibble::add_column(isfull=TRUE,model=full_model_nme, beta=NA, sign = NA, cv_index="all_full")
               }
-            
-              rbind(res1,res2,res3, res5, res6)
+             aa= .merge1_new(lapply(list(res1,res2,res3,res5,res6), .merge1_new, addName="beam"))
 #        }),addName="model")
 #     }),addName="trainedOn")
    # }),addName="pheno_group")
   }),addName="numvars")
-  if(!is.null(evals_all$numvars)){
-  evals_all$numvars = as.numeric(evals_all$numvars)
-  }
+  #if(!is.null(evals_all$numvars)){
+      evals_all$numvars = as.numeric(evals_all$numvars)
+  #}
   evals_all
 },
 

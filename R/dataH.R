@@ -436,6 +436,16 @@ dataH<-R6::R6Class("dataH",
     })
     rocs
   },
+  
+  fitEnsemble=function(all_models_full ){
+    phens = private$phens;
+    transform_x = private$transform_x; liab=FALSE;
+    d1 = private$data
+    preds=  d1$extractPredictions(all_models_full, phens, flags, transform_x = transform_x, liab= liab) #, cv_index = cv_index
+    #})
+    coeffs = d1$fitEnsemble(preds, phens);
+    coeffs
+  },
   combineAngles1=function(angleH, incl, sumAngle, prev_signature, topn = 1e6){ 
     #$types
     flags = private$flags;
@@ -1286,29 +1296,32 @@ plotPredictions=function(all_modelsh,
                          update=FALSE,
                          liab=TRUE){
   if(update) self$update(all_modelsh$phens, all_modelsh$flags, transform_x =  fromJSON(all_modelsh$flags$transform_x))
-  
  y = self$y(phens)
- preds= self$extractPredictions(all_modelsh, liab=liab)
+ preds= self$extractPredictions(all_modelsh, liab=liab, merge_cv=TRUE)
  
  families = names(y); names(families) = families;
  plot_results=lapply(families, function(fam){
       y1 = y[[fam]]; 
    if(ncol(y1)==0) return(NULL)
    coln = 1:ncol(y1); names(coln) =colnames(y1) 
+   #nvar = names(preds)[[1]]; cv=names(preds[[1]])[[1]]; beam = names(preds[[1]][[2]])[1]
    toplot=
-   .merge_lapply_nme(preds, "beam", function(beam){
+   .merge_lapply_nme(preds, "modelname", function(nvar){
        #print(beam)
-       p1 = preds[[beam]]
+       p1 = preds[[nvar]]
       
-      .merge_lapply_nme(p1, "modelname",function(nvar){
+      .merge_lapply_nme(p1, "cv",function(cv){
         #nvars = names(p1); names(nvars) = nvars;
        #l1 = lapply(nvars, function(nvar){ 
         #print(paste(beam,nvar))
-        p2 = p1[[nvar]]
-        .merge_lapply_nme(p2, "cv",function(cv){
-   #       print(paste(beam, nvar, cv, fam))
-         p3 = p2[[cv]]
+        p2 = p1[[cv]]
+        p2 = p2[lapply(p2, length)>0]
+        .merge_lapply_nme(p2, "beam",function(beam){
+       #   print(paste(nvar, cv, beam,fam))
+         p3 = p2[[beam]]
            p4 = p3[[fam]]
+        varname=attr(p3,"variable");  ## also attr(p3,"betas)
+        if(is.null(varname))varname = c("",nvar,"","")
          coln1 = 1:ncol(p4); 
          if(is.null(names(coln1))){
          names(coln1)=if(ncol(p4) == ncol(y1) && !is.null(colnames(y1))) colnames(y1) else 1:ncol(p4) 
@@ -1343,7 +1356,12 @@ plotPredictions=function(all_modelsh,
            }), addName = "pheno")
           
          }
-         df
+         if(is.null(df)|| nrow(df)==0) return(NULL)
+       # varname
+         df1=df |> 
+           tibble::add_column(datatype=varname[1],varname=varname[2], transf=varname[3], pow = varname[4] )
+       # print(names(df1))
+           return(df1)
        })
      })
    })
@@ -1359,7 +1377,7 @@ plotPredictions=function(all_modelsh,
    if(length(grep("gaussian",fam))>0){
      plots_all = lapply(levs,function(lev){
        ss1 = subset(toplot1, cv==lev)
-       ggp2 = ggplot(subset(ss1, text=="") , aes(x =value, y=prediction,color=pheno, shape=beam ))+facet_grid("pheno~variables")+geom_point()
+       ggp2 = ggplot(subset(ss1, text=="") , aes(x =value, y=prediction,color=pheno, shape=beam ))+facet_grid("pheno~modelname")+geom_point()
        ggp2+ggplot2::geom_label(data=subset(ss1,text!=""), aes(x=value, y=prediction, color=pheno, label=text))
        })
   
@@ -1367,14 +1385,29 @@ plotPredictions=function(all_modelsh,
    }else{
    #toplot$subpheno
   # pheno = as.numeric(toplot$pheno)
-  
-   toplot1$subpheno = factor(toplot1$subpheno, levels = sort(unique(toplot1$subpheno)));
+     beams = unique(toplot1$beam)
+     toplot1$beam  = factor(toplot1$beam, levels= beams, labels = sub("combined","C",beams))
+     combined_inds = which(toplot1$beam=="C")
+     levs_s = sort(unique(toplot1$subpheno))
+     if(length(combined_inds)>0 && length(unique(toplot1$subpheno))==2){
+      labels_s = levs_s 
+       toplot1$subpheno[combined_inds]=-1* toplot1$subpheno[combined_inds]
+       toplot1$subpheno = factor(toplot1$subpheno, levels = sort(unique(toplot1$subpheno)));
+       labels_s = c(paste("combined", levs_s), levs_s)
+       
+       levs_s = c(-levs_s, levs_s)
+       toplot1$subpheno = factor(toplot1$subpheno, levels = levs_s, labels=labels_s);
+     }else{
+     
+   toplot1$subpheno = factor(toplot1$subpheno, levels = levs_s);
+     }
    pheno_levs = unique(toplot$pheno);
   
    toplot1$pheno = factor(toplot1$pheno, levels = pheno_levs)
+   
   
    #toplot1 = toplot |> tidyr::unite("cv_pheno",cv,pheno,sep="_", remove=FALSE)
-   plots_all = lapply(levs,function(lev)   ggplot(subset(toplot1, cv==lev), aes(x =knots, y=value,color=subpheno, shape=beam, size=counts ))+facet_grid("pheno~variables")+geom_point())
+   plots_all = lapply(levs,function(lev)   ggplot(subset(toplot1, cv==lev), aes(x =knots, y=value,color=subpheno, label=beam, size=counts ))+facet_grid("pheno~modelname")+geom_text(size = 1, family = "sans"))
    }
     plots_all
    })
@@ -1395,19 +1428,18 @@ plot_results
 #' @returns  a table with results
 extractPredictions=function(all_modelsh,
                             phens = private$phens,
-                            cv_index = NA,
-                            liab=TRUE){
+                            liab=TRUE, merge_cv=FALSE){
   flags = private$flags; transform_x = private$transform_x;
   private$updateLOOC()
-    all_models_y0 = all_modelsh$models#[[mod_nme]]
+    all_models_full = all_modelsh$models#[[mod_nme]]
   # eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
   #print(nme1)
   d = private$data
   #all_models_y = all_models_y0[[1]]
-  predictions0 = lapply(all_models_y0, function(all_models_y){
-    d$extractPredictions(all_models_y, phens, flags, transform_x = transform_x, liab= liab, cv_index = cv_index)
-  ##  d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
-  })
+  coeffs = all_modelsh$coeffs
+  predictions0= d$extractPredictions(all_models_full, phens, flags, transform_x = transform_x, liab= liab,coeffs= coeffs, merge_cv=merge_cv)
+  ###  d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
+  
  
 #  predictions0=res3[unlist(lapply(res3, function(x) length(x[[1]])))>0]
   predictions0 # 
@@ -1589,6 +1621,7 @@ getVariance=function(varnames){
     d$getVariance();      
 },
 
+
 #' @description fit models based on variables
 #' @param variables list of variables selected by select method
 #' @param update whether to automatically update phens, transform_x and flags , default TRUE
@@ -1612,7 +1645,8 @@ makeAllModels=function(variables,
   private$updateLOOC()
   logpthresh= log(.readFlag(flags,"pthresh",1e-3))
   project=.readFlag(flags,"project",TRUE)
-  beams = names(vars_all); names(beams)=beams
+  beams = names(vars_all); names(beams)=beams; 
+  beams = beams[1:min(max_beam, length(beams))]
   all_models_full=lapply(beams, function(beam){
     vars_all0 = vars_all[[beam]]
     vars = vars_all0#[[nme_v_all]]
@@ -1684,28 +1718,31 @@ makeAllModels=function(variables,
       
     }
   }
- 
   all_models
 
   })
- 
   pres= .merge1_new(lapply(beams, function(beam){
     varl = 1:length(variables); names(varl) = varl; names(varl)[[length(varl)]]="full"
     .merge1_new( lapply(varl, function(k){
-    pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cum_pv))
-    cum_pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cumpv_all))
+    pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$pvs))
+    cum_pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cum_pv))
+    cum_pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cum_pv))
+    cumpv_all = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cumpv_all))
+    
     length=(unlist(lapply(all_models_full[[beam]], function(am) length(am$full$var_names))))
     model_names=names(pvs)
+    nvars=unlist(lapply(model_names, function(x)length(strsplit(x,";")[[1]])))
     #names(length)=NULL
-    df = data.frame(cbind(pvs, cum_pvs)) |> tibble::add_column(model_names)
+    df = data.frame(cbind(pvs, cum_pvs)) |> tibble::add_column(model_names, nvars)
     
       df
   }), addName="cv")
    
     }), addName="beam")
   
-
-  all_models_=list(models=all_models_full, flags = flags, phens = phens, trainedOn=private$nme, pres = pres)
+  coeffs = private$fitEnsemble(all_models_full)
+  
+  all_models_=list(models=all_models_full, flags = flags, phens = phens, coeffs = coeffs, trainedOn=private$nme, pres = pres)
   super$saveModels(all_models_);
   #combined_models
   all_models_
@@ -1726,13 +1763,16 @@ evaluateAllModels=function(all_modelsh, update=TRUE){ ## different folds with sa
   inv_transform_x=FALSE
   private$updateLOOC()
   if(length(all_modelsh$models)==0) return(NULL)
- 
+  coeffs = all_modelsh$coeffs
   all_models_y0 = all_modelsh$models#[[mod_nme]]
      d = private$data
+   
+  eval2 =  d$evaluateAllModels(all_models_y0, phens,flags, verbose=verbose, coeffs=coeffs) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
+    
+  
+   
     #all_models_y=all_models_y0[[1]]
-    eval2 =   .merge1_new(lapply(all_models_y0, function(all_models_y){
-   d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
-  }), addName="beam")  #if(inherits(resd,"try-error")) {
+  
     #  print(resd)
     #  print(paste("problem", nme1))
     #  stop("!!")
@@ -1759,7 +1799,8 @@ evaluateAllModels=function(all_modelsh, update=TRUE){ ## different folds with sa
     x1
   })))
   eval4$variable[is.na(eval4$variable)]=""
-  eval5 = eval4 |> tidyr::separate("variable", sep="\\.", into=c("type","variable","func","param"),remove=TRUE)
+  eval5 = eval4 |> tidyr::separate("variable", sep="\\.", into=c("type","variable","func","param"),remove=TRUE)|>
+               tibble::add_column(combined = eval4$beam=="combined")
   super$saveEval(eval5);
   eval5
 }

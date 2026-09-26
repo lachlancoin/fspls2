@@ -340,7 +340,7 @@ plotEval2<-function(eval1,...){
 plotEval<-function(eval3,
           shape_color=c("pheno","subpheno"),
           shape=shape_color,
-          text ="variable",
+          text =c(), ## variable
           dotsize="nsamps",
            color=shape_color,
           linetype=shape,
@@ -351,8 +351,9 @@ plotEval<-function(eval3,
           ){
   
   grid0= grid0[grid0 %in% names(eval3)];  grid1= grid1[grid1 %in% names(eval3)]
+  beam_levs = c(sort(unique(as.numeric(as.character(eval3$beam)))),"combined"); 
   
-  eval3$beam = factor(eval3$beam, levels =  sort(unique(as.numeric(eval3$beam))))
+  eval3$beam = factor(eval3$beam, levels =beam_levs  )
   
   eval3$sign = as.character(eval3$sign)
   eval3$sign = factor(eval3$sign, levels = c(-1,0,1), labels=c("-","","+"))

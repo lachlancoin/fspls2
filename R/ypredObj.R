@@ -559,6 +559,27 @@ ypredObj<-R6::R6Class("ypredObj", public = list(
 #  ypred$updateYP(data, prev, nonNA, !within)  
 #},
 ## use inv_transform on y  
+updateEnsemble=function(ypreds, coeff, nonNA, flip=TRUE){
+  nmes = names(coeff); names(nmes)=nmes
+  if(is.null(nonNA)){
+    ind_1 = if(flip) rep(TRUE, self$nrow) else rep(FALSE,self$nrow)
+  }else{
+    ind_1 = if(flip) !nonNA else nonNA
+  }
+  for(nme in nmes){
+    indy = 1:ncol(coeff[[nme]]); names(indy) = names(coeff[[nme]])
+    ab=as.matrix(data.frame(lapply(indy, function(i){
+      mat=as.matrix(data.frame(lapply(ypreds, function(yp){
+        yp$ypreds[[nme]][ind_1,1]
+      })))
+      coeff1=coeff[[nme]][[i]]
+      coeff1[1] + mat %*% coeff1[-1] 
+    })))
+    self$ypreds[[nme]][ind_1,] = ab
+    
+  }
+  
+},
 updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
   prev_i1=full_model
   ypred = self
@@ -569,6 +590,11 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
   #kk1 = names(phensi)[[1]]
 #  inv_func = NULL
   len = length(prev_kj$var)
+  if(is.null(nonNA)){
+    ind_1 = if(flip) rep(TRUE, self$nrow) else rep(FALSE,self$nrow)
+  }else{
+    ind_1 = if(flip) !nonNA else nonNA
+  }
  # if(inv_transform_x && len>0){
 #    t_i=prev_kj$var[[len]][[3]]
 #    inv_func =  d$transforms[[t_i]][[2]]
@@ -577,11 +603,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
   for(kk1 in names(phensi)){ #} 1:length( ypred$ypreds)){
    # print(kk1)
     kk = phensi[[kk1]]
-    if(is.null(nonNA)){
-      ind_1 = if(flip) rep(TRUE, self$nrow) else rep(FALSE,self$nrow)
-    }else{
-      ind_1 = if(flip) !nonNA else nonNA
-    }
+   
     levs1 = NULL
     family =getOption("fspls.family",strsplit(kk1,"\\.")[[1]][1])
     # if(family=="multinomial") levs1=dimnames(self$y[[kk1]])[[2]]
