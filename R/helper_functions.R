@@ -991,6 +991,11 @@ lapply_filter = function(y, FUN){
   l = lapply(y, FUN);
   l[unlist(lapply(l, length))>0]
 }
+
+#' @param y a named list of objects
+#' @param FUN the function to apply
+#' @returns a list of results 
+#' @export
 .lapply_nme=function(y,FUN){
   
   res = lapply(names(y),FUN)
@@ -1008,6 +1013,12 @@ lapply_filter = function(y, FUN){
   
 }
 
+#' @param t a named list of data-frames, each of which have same names 
+#' @param num_cols indices of numeric columns in each matrix
+#' @param addName  the name of the new column to add
+#' @param checkNames whether to check the headers of the data frames.
+#' @returns a merged dataframe
+#' @export
 .merge1_new<-function(t,num_cols = c(), addName=NULL, checkNames=TRUE){
   if(length(t)==0) return(NULL)
   

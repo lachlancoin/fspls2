@@ -1,20 +1,36 @@
 
 #' extracts the full model variables from a cross validation run
 #' @param leng length of dataset
-#' @param nrep number of reps
-#' @param batch batch size (one of batch or nrep is non NA)
+#' @param nfold number of reps
+#' @param batch batch size (one of batch or nfold is non NA)
 #' @param randomize whether to randomize
 #' @export
-getFolds<-function(leng, nrep=NA, batch=NA, randomize=TRUE){
+getFolds<-function(leng, nfold=NA, batch=NA, randomize=TRUE, balance = NULL){
+  if(!is.null(balance)){
+    if(is.na(nfold)) stop("need to specify fold")
+    levs = levels(balance);names(levs) = levs
+    folds_sep = lapply(levs, function(lev){
+       inds1 = which(balance==lev)
+       folds = getFolds(length(inds1), nfold = nfold, batch = batch)
+       folds1 = lapply(folds, function(fold){
+         inds1[fold]
+       })
+    })
+    fols_ = 1:nfold; names(fols_) = fols_;
+    return(lapply(fols_,function(fol){
+      v = unlist(lapply(folds_sep, function(fs)fs[[fol]])); names(v) = NULL;
+      v
+    }))
+  }
   len_y1 = leng
-  if(is.na(nrep) && is.na(batch))stop("either batch or NA needs to be numeric")
+  if(is.na(nfold) && is.na(batch))stop("either batch or NA needs to be numeric")
   inds = if(randomize) sample.int(len_y1, len_y1) else 1:len_y1
-  if(!is.na(nrep) && nrep>0){
-      left_over=len_y1 %% nrep
-      batch = (len_y1-left_over)/nrep
+  if(!is.na(nfold) && nfold>0){
+      left_over=len_y1 %% nfold
+      batch = (len_y1-left_over)/nfold
   }else{
-      nrep  = floor(len_y1 / batch)
-      left_over=len_y1 %% nrep
+      nfold  = floor(len_y1 / batch)
+      left_over=len_y1 %% nfold
     
   }
       len_y2 = len_y1 -left_over
@@ -45,7 +61,7 @@ getFolds<-function(leng, nrep=NA, batch=NA, randomize=TRUE){
 
 loocObj<-R6::R6Class("loocObj", public = list(
   useAll="vector",
-  nrep="numeric",
+  nfold="numeric",
   batch="numeric",
   incl="matrix",
   seed="numeric",
@@ -57,26 +73,26 @@ loocObj<-R6::R6Class("loocObj", public = list(
                       nrows = nrow(data$data[[1]]),
                       folds = c(),
                        ## randomisation
-                      nrep=getOption("nfold",1), 
+                      nfold=getOption("nfold",1), 
                       batch=getOption("batchsize",NA),
                       seed = 42,
                       pheno_balance=NULL
                       ){
     
-    self$nrep=nrep
+    self$nfold=nfold
     self$batch=batch
     self$seed = seed
     self$nrows = nrows;
     rand = sample(nrows)
     len_y = nrows #length(data$y[,1])
     if(length(folds)==0){
-      folds = getFolds(nrows, nrep=nrep, batch = batch, randomize=TRUE);
+      folds = getFolds(nrows, nfold=nfold, batch = batch, randomize=TRUE);
     }
 
     useAll = rep(TRUE, len_y)
     len_y1 = len_y #length(non_na_inds)
   
-      self$nrep = length(folds);
+      self$nfold = length(folds);
       self$batch=0;
       incl = matrix(T, nrow = len_y, ncol =length(folds) )
       for(jk in 1:length(folds)){

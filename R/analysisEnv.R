@@ -1,3 +1,5 @@
+random_identifier = "\\.rand\\."  ## this identifies random variables;
+
 
 #' Extracts all the variables selected from the variables object. Useful when using beam>1 
 #' @param variables a variables object
@@ -319,7 +321,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
      
       res
     },
-    topAngles = function(vars_l_todo, k1, comb2_news = NULL, verbose=FALSE,stop_y="rand"){
+    topAngles = function(vars_l_todo, k1, comb2_news = NULL, verbose=FALSE,stop_y=random_identifier,minvars =0){
       vars_l = vars_l_todo$vars_l
       
       nme_l = names(vars_l); names(nme_l) = nme_l
@@ -428,8 +430,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
     verbose = .readFlag(flags,"verbose",FALSE);
     if(verbose)print(paste("fold",k1))
     expt_id = private$expt_id();
-  
-    stop_y = .readFlag(flags, 'stop_y',"rand")
+    maxvars = .readFlag(flags,"max",1e6)
+    minvars = .readFlag(flags,"min",0)
+    stop_y = random_identifier
     logpvthresh = log(.readFlag(flags,"pthresh",0.5))
     beam= .readFlag(flags,"beam",1)
     topn = .readFlag(flags,'topn',20) ## number to calculat pvals for
@@ -467,8 +470,16 @@ analysisEnv<-R6::R6Class("analysisEnv",
      # if(verbose) print(ang1)
       if(!useAngles){
         ang1 = private$topAngles( vars_l_todo, k1,comb2_news=if(useDB) NULL else comb2_news, verbose=verbose );
-        
-          minv = min(length(ang1), topn, grep("rand", names(ang1)))
+        rand_ind=grep(random_identifier, names(ang1))
+        non_rand_ind = grep(random_identifier, names(ang1), inv=TRUE)
+        if(length(non_rand_ind)==0){
+          if(nvar <minvars) warning("no non-random indices, breaking. You can try to increase topn or useAngles=TRUE")
+          break;
+        }
+        if(nvar < minvars && min(rand_ind)==1){
+          rand_ind = rand_ind[rand_ind>min(non_rand_ind)]
+        }
+          minv = min(length(ang1), topn, rand_ind)
           ang1 = ang1[1:minv]
           nme_ang1 = names(ang1)
           comb2_filtered = lapply(comb2_news, filter_comb, nme_ang1)
@@ -486,18 +497,22 @@ analysisEnv<-R6::R6Class("analysisEnv",
         #  if(verbose)print(head(cum_pvs))
           
       }
-    # grep("rand", names(ang2))
+    # grep(random_identifier, names(ang2))
       
       vars_l_todo_new= self$nextVars( vars_l_todo,  k1,logpvthresh,beam, 
                                         comb2_news=if(useDB) NULL else comb2_news, 
                                       #  ang1=ang1,
-                                        stop_y = stop_y, verbose=verbose, useAngles=useAngles)
+                                        
+                                        stop_y = if(nvar<minvars) NULL else stop_y, 
+                                      verbose=verbose, 
+                                      useAngles=useAngles)
       if(verbose) print(paste("stop",vars_l_todo_new$stop, "todo",length(vars_l_todo_new$todo1), "nvar",length(vars_l_todo_new$vars_l[[1]]$var)))
       if(vars_l_todo_new$moveNext){
        
         comb2 = comb2_news
         
       }
+     
       vars_l_todo = vars_l_todo_new
       
       nvar = length(vars_l_todo$vars_l[[1]]$var)
@@ -506,7 +521,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
       if(verbose) print(names(vars_l_todo$vars_l))
       if(nvar>0) vars_all[[nvar]] = vars_l_todo$vars_l
 
-      if(nvar>=flags$max  ) break;
+      if(nvar>=maxvars ) break;
     }
     if(length(vars_all)>0) names(vars_all) = paste("nvar",1:length(vars_all),sep="_")
      return(vars_all)  ## this keeps the vars from each stage of iteration
@@ -580,7 +595,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
    flags = private$flags;
  #  phens = private$phens;
    beam=.readFlag(flags,'beam',1);
-   stop_y=.readFlag(flags,"stop_y","rand")
+   stop_y=random_identifier #.readFlag(flags,"stop_y",random_identifier)
    verbose=.readFlag(flags,"verbose",FALSE);
    logpvthresh = log(.readFlag(flags,'pthresh',0.05));
    angles_only = .readFlag(flags,'angles_only',TRUE);
@@ -604,10 +619,10 @@ analysisEnv<-R6::R6Class("analysisEnv",
  #' @param comb2_news results
  #' @param data_nme name of dataset
  #' @param k1 which repetition
- #' @param stop_y should be "rand"
+ #' @param stop_y should be random_identifier
  #' @return object outlining what is left to do
  nextVars=function(vars_l_todo,  k1,
-                   logpvthresh,beam,  comb2_news = NULL,stop_y="rand", verbose=FALSE,
+                   logpvthresh,beam,  comb2_news = NULL,stop_y=random_identifier, verbose=FALSE,
                                    useAngles=FALSE){
    ang1 = private$topAngles(vars_l_todo, k1, comb2_news, verbose=verbose)
    angles_ = unlist(lapply(ang1, function(a1)a1[["angle"]]))
@@ -623,6 +638,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
    #logpvs = logpvs[ord_all]
    logpvs_all = logpvs_all[ord_all]
    angles_ = angles_[ord_all]
+   stop_random1 = FALSE; stop_random2 = FALSE;
    if(!is.null(stop_y)){
      gp1=grep(stop_y, names(logpvs_all))
      gp=grep(stop_y, names(logpvs_all), inv=TRUE)
@@ -670,7 +686,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
      #  print(names(vars_l))
     # }
      ##remove signatures which are same in different order
-     #non_rand = grep("rand", names(ang1),inv=TRUE)
+     #non_rand = grep(random_identifier, names(ang1),inv=TRUE)
      #dupls = rep(FALSE, length(ang1))
      
      exclusion_in_beam = strsplit(getOption("exclusion_in_beam","0"),":")[[1]]  ## can be a number of max
@@ -720,7 +736,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
        exclusion_in_beam = min(len-1, as.numeric(exclusion_in_beam[1]))
        if(len>1){
          if(verbose) print("thinning signature ")
-         non_rand = grep("rand", names(ang1),inv=TRUE)
+         non_rand = grep(random_identifier, names(ang1),inv=TRUE)
          dupls1 = 1:length(ang1)
          toincl = 1:(len-exclusion_in_beam)
          dupls1[non_rand]=(unlist(lapply(ang1[non_rand], function(a1) paste(sort(unlist(lapply(a1$var_names[toincl], function(vv1)paste(vv1[1:2],collapse="::")))), collapse=";;"))))
@@ -728,10 +744,11 @@ analysisEnv<-R6::R6Class("analysisEnv",
          ang1 = ang1[!duplicated(dupls1)]
        }
      }
-    # last_non_rand = grep("rand", names(ang1))[1]-1
+    # last_non_rand = grep(random_identifier, names(ang1))[1]-1
     # if(is.na(last_non_rand)) last_non_rand = beam;     
   #   topn = .readFlag(flags,'topn', 20);
    #  num_pvals = min(topn, 20)
+     ang1 = ang1[grep(random_identifier, names(ang1), inv=T)]
      tokeep=1:min(length(ang1), beam)
      ang1 = ang1[tokeep]#last_non_rand,
      
@@ -742,7 +759,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
        todo1 = todo1[-1]
      }
      vars_l_todo = list(stop=FALSE, vars_l = ang1, todo1 = todo1, moveNext=TRUE)
-     #if(length(grep("rand", names(vars_l_todo$vars_l)))>0) stop("!!");
+     #if(length(grep(random_identifier, names(vars_l_todo$vars_l)))>0) stop("!!");
      
      return(vars_l_todo)
    }

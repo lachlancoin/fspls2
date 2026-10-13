@@ -582,6 +582,7 @@ multinom_ridge<-function(x,y,w,lambda=getOption("lambda")){
 dataObj<-R6::R6Class("dataObj", public = list(
   dist="environment",
   data="list",
+  folds="list",
   db_name="character",
   dataNA="list",
   types="vector",
@@ -1733,6 +1734,7 @@ extractPredictions=function(all_models_full,phens, flags,
   verbose=.readFlag(flags, "verbose",FALSE)
   lens = unlist(lapply(all_models_full, length))
   numvars1 = 0:(max(lens)-1)
+  minv = min(max(numvars1), minv)
   numvars1 = as.character(numvars1[numvars1>=minv & numvars1<=maxv])
   
   #pheno_nmes = names(phens); names(pheno_nmes)=pheno_nmes
@@ -2499,17 +2501,17 @@ updateLOOC=function(phens,flags,varn=c(), force=FALSE, verbose=FALSE){
   seed=.readFlag(flags,"seed",42)
   #incl = incls_all
   batch=.readFlag(flags, "batchsize",0)
-  folds = .readFlag(flags, "folds",c())
+
   nrep = .readFlag(flags,"nfold",if(batch>0) 0 else 1)
   if(batch>0 && nrep>0) warning("only one of batch or nrep greater than zero")
   nrows=nrow(self$data[[1]])
-  if(!force && !is.null(self$looc) && nrep ==self$looc$nrep && batch == self$looc$batch && seed == self$looc$seed && nrows ==self$looc$nrows){
+  if(!force && !is.null(self$looc) && nrep ==self$looc$nfold && batch == self$looc$batch && seed == self$looc$seed && nrows ==self$looc$nrows){
     if(verbose)cat("no need to update, although we should probably check if the phens changed")
     return(NULL)
   }
   pheno_balance = if(.readFlag(flags,"pheno_balance",FALSE)) unlist(phens) else NULL
-  self$looc=loocObj$new(self, nrep = nrep, batch = batch,
-                        folds = folds, 
+  self$looc=loocObj$new(self, nfold = nrep, batch = batch,
+                        folds = self$folds, 
                         incl_full =TRUE,
                         seed = seed,
                         nrow = nrows,
@@ -2720,11 +2722,12 @@ updateTransforms=function(transform_x){
   self$transforms =.convertToTransform(transform_x)
 },
 
-  initialize=function( cohort,  db_name,dbDir,flags,
+  initialize=function( cohort,  db_name,dbDir,flags,folds = NULL,
                       incl_full=TRUE,seed = 42, memDir = NULL) { ## mem_dirp is for saving scores
   
     #self$direction = .readFlag(flags,'direction','none');
     self$db_name=db_name;
+    self$folds = folds; 
     if(!is.null(memDir)){
       mem_dirp = memDir
       mem_dirp = paste(memDir,nrow(cohort$rna$matrix),sep="/")  #getOption("fspls.mem_dir", NULL)

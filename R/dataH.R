@@ -1,4 +1,6 @@
 #private = self[[".__enclos_env__"]]$private
+random_identifier = "\\.rand\\."  ## this identifies random variables;
+
 
 filter_comb<-function(comb2_new, nme_ang1){
   #comb2_filtered = lapply(comb2_news, function(comb2_new){
@@ -552,7 +554,6 @@ dataH<-R6::R6Class("dataH",
                      
                      means_y_k = private$data$means_y(k1), force=FALSE
                    ){
-     vars_l_todo = analysis$getTodo(private$flags, private$phens)
      self$updateTrain(k1, means_y_k=means_y_k, force=force);
      verbose=getOption("verbose",FALSE)
      if(is.null(private$phens)){
@@ -560,9 +561,11 @@ dataH<-R6::R6Class("dataH",
      }
      expt_id = super$expt_id();
      show_pvalue_plots=.readFlag(flags, "show_pvalue_plots",FALSE) 
-     stop_y = .readFlag(flags, 'stop_y',"rand")
+     stop_y = random_identifier
     topn = .readFlag(flags, 'topn',20)
      maxvars = .readFlag(flags,"max",1e6)
+     minvars = .readFlag(flags,"min",0)
+     
      useAngles = .readFlag(flags,"angles_only", TRUE)
      
      logpvthresh = log(.readFlag(flags,"pthresh",0.1))
@@ -571,6 +574,7 @@ dataH<-R6::R6Class("dataH",
      private$plot_results[[k1]] = list()
      # vars_l = analysis$nextVars(expt_id, flags)
      nvar=0;
+     vars_l_todo = analysis$getTodo(private$flags, private$phens)
      vars_all = list();
      while(length(vars_l_todo$todo1)>0 ){
       # direct = direction[[min(nvar+1, length(direction))]]
@@ -591,7 +595,14 @@ dataH<-R6::R6Class("dataH",
        ang1=analysis$savePvalsAndNextVars(vars_l_todo,list(comb21),data_nme,  k1)
        
        if(!useAngles){
-         minv = min(length(ang1), topn, grep("rand", names(ang1)))
+         rand_ind=grep(random_identifier, names(ang1))
+         non_rand_ind = grep(random_identifier, names(ang1), inv=TRUE)
+         if(nvar < minvars && min(rand_ind)==1){
+           rand_ind = rand_ind[rand_ind>min(non_rand_ind)]
+         }
+         minv = min(length(ang1), topn, rand_ind)
+         
+       #  minv = min(length(ang1), topn, grep(random_identifier, names(ang1)))
          ang1 = ang1[1:minv]
          nme_ang1 = names(ang1)
          comb_filtered = filter_comb(comb21, nme_ang1)
@@ -604,12 +615,13 @@ dataH<-R6::R6Class("dataH",
          #  if(verbose)print(head(cum_pvs))
          
        }
-       # grep("rand", names(ang2))
+       # grep(random_identifier, names(ang2))
        
        vars_l_todo_new= analysis$nextVars( vars_l_todo,  k1,logpvthresh,beam, 
                                           comb2_news=list(comb21),  ## if we use DB?
-                                        
-                                          stop_y = stop_y, verbose=verbose, useAngles=useAngles)
+                                      
+                                          stop_y = if(nvar<minvars) NULL else stop_y, 
+                                          verbose=verbose, useAngles=useAngles)
        
        #vars_l_todo_new
       
@@ -703,7 +715,7 @@ dataH<-R6::R6Class("dataH",
           #print(ik)
            b_i_name = c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
            angle=comb$value[[ik]]
-          # if(angles_only || b_i_name[3]=="rand"){ ## no point calculating pvalue for random, use angles
+          # if(angles_only || b_i_name[3]==random_identifier){ ## no point calculating pvalue for random, use angles
              b_i = private$data$convert(b_i_name)
              nv = list(angle = angle, var = c(prev_i2$var, list(b_i)), 
                        angles = c(prev_i2$angles, angle),
@@ -863,6 +875,7 @@ predefined=function(incl1,prev_signature, sumAngle){
     certainty = rep(1, nrow(y)),
     nme,
     flags ,
+    folds = NULL,
     family= getFamily(y),
          dbDir=NULL
    ){
@@ -896,7 +909,7 @@ predefined=function(incl1,prev_signature, sumAngle){
     private$dbDir = dbDir
     
     private$data = 
-      dataObj$new(mat, private$nme,dbDir,flags, 
+      dataObj$new(mat, private$nme,dbDir,flags, folds = folds,
                   incl_full=TRUE,seed = getOption("seed",42), memDir=if(is.null(memDir)) NULL else paste(memDir, private$nme,sep="/"))
     private$type="slow1"
     types_all = getOption("types_all",names(private$data$data))
@@ -1061,7 +1074,7 @@ predefined=function(incl1,prev_signature, sumAngle){
         names(pr) = 1:length(pr)
         pr[[1]]$prev=""
         comb_plot = .merge1_new(pr, addName="nvar");
-        comb_plot = comb_plot[comb_plot$func!="rand",,drop=FALSE]
+        comb_plot = comb_plot[comb_plot$func!=random_identifier,,drop=FALSE]
         cumulative=comb_plot$value + comb_plot$sumAngle
         
         sigs = comb_plot$signature; 
@@ -1232,7 +1245,7 @@ counts_y=function(){
                  analysis =analysisEnv$new(flags=private$flags, dbDir=NULL),
                  means_y = self$means_y()
                               ){#c(y="function(y) y","function(y) y")
-   if(is.null(private$phens)) stop("need to update first");
+   if(is.null(private$phens)) stop("need to update first, use dh$update");
     nreps =self$nreps();
      variables = super$loadVars()
      if(!is.null(variables)) return(variables)
@@ -1460,7 +1473,7 @@ extractPredictions=function(all_modelsh,
   coeffs = all_modelsh$coeffs
   if(is.null(phens)) stop("need to update")
   predictions0= d$extractPredictions(all_models_full, phens, flags,
-                                     transform_x = transform_x, liab= liab,coeffs= coeffs,
+                                     transform_x = transform_x, liab= liab,coeffs= coeffs,minv=0, maxv=1e6,
                                      merge=TRUE)
  attr(predictions0,"trainedOn")=all_modelsh$trainedOn
      predictions0 # 
@@ -1678,7 +1691,7 @@ makeAllModels=function(variables,
       for(beam in 1:length(vars_n[[nvar]])){
         v_beam = vars_n[[nvar]][[beam]]
         vars2 = v_beam$var_names
-        if(length(grep("rand", names(vars2)))==0){ ## should not have random variables
+        if(length(grep(random_identifier, names(vars2)))==0){ ## should not have random variables
         if(verbose) print(paste(k,nvar,beam, paste(names(vars2), collapse=";")))
           
         d$makeModels(models,phens, vars2,k,beam,  flags=flags)
