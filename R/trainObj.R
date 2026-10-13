@@ -35,6 +35,7 @@ trainObj<-R6::R6Class("trainObj",
                       
                     #  types_ =     getOption("fspls.types", fromJSON('{"gaussian": "rank_correlation","binomial" : "AUC"}'))
                       self$family=family
+                      self$products = NULL;
                       self$transforms = transforms
                       self$means_y0 = NULL;  self$means_y1 = NULL; self$vars_y1 = NULL;  self$vars_y0 = NULL
                       self$counts_y = NULL;
@@ -245,7 +246,7 @@ trainObj<-R6::R6Class("trainObj",
                       
                       self$calcVars(data$weights, means_y0 = means_y[[1]], means_y1 =means_y[[1]])
                       if(!force && toJSON(subphens)==toJSON(self$subphens)){
-                        if(self$products!="list"){
+                        if(!is.null(self$products)){
                         if(length(which(unlist(lapply(self$products, is.null))))==0){
                         ##print("not updating"); 
                           return(NULL)

@@ -1,7 +1,7 @@
 
 initialStateObj<-function(phens){
   Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0))
-  stateObj$new(phens, NULL,NULL,NULL,NULL, var=c(), varnames=c(), Wall =Wall0)
+  stateObj$new(phens,NULL,  NULL,NULL,NULL,NULL,NULL, NULL,NULL, var=c(), varnames=c(), Wall =Wall0)
 }
 
 #.calcWall_2<-function(data,  var){
@@ -15,28 +15,6 @@ initialStateObj<-function(phens){
 #colk is family col
 
 
-mStateObj<-R6::R6Class("mStateObj",
-                   public = list(
-                     var="list",
-                     logpvs="vector",
-                     logpv="double",
-                     cumpv="double",
-                     nme="character",
-                     initialize = function(var1, logpv1, prev_i = NULL   ){
-                       if(!is.null(prev_i)){
-                         self$var = c(prev_i$var, var1)
-                         self$logpvs = c(prev_i$logpvs, logpv1)
-                       }else{
-                         self$var = var1
-                         self$logpvs = logpv1
-                       }
-                       self$logpv = logpv1
-                       self$cumpv = .sumChisq(self$logpvs)
-                       self$nme = paste(sort(names(self$var)))
-                     }
-                  
-                   )
-)
 
 stateObj<-R6::R6Class("stateObj",##represents a state of the model
                   public = list(
@@ -45,6 +23,11 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                     name="character",
                     angle="double",
                     angles="list",
+                    logLiks ="list",
+                    degsf="list",
+                    degsf0="list",
+                    lambdas="list",
+                    logLiks0="list", ## logLiks of nested model
                     sumAngle="numeric",
                     name_prev="character",
                     betas_proj="vector", #list of vector
@@ -55,42 +38,46 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                     #nonNA="logical",
                     mean_x="numeric",
                    tbls="list",
-                   pvs="list",pvs_sep="list",
-                   pvs_all ="list",
-                   sumPv="numeric",
+                  # pvs="list",pvs_sep="list",
+                  # pvs_all ="list",
+                  # sumPv="numeric",
                   
                     initialize = function(phensi,data,
                                           betas_proj, 
+                                          betas,
                                           constants_proj,
                                           tbls,
+                                          logLiks,degsf,
+                                          lambdas,
                                       #   k, #mean_y,
                                           prev_i = NULL,
                                           b_i = NULL,b_i_name=NULL,
                                           var = list(), varnames = list(),
                                           Wall = matrix(nrow=0, ncol=0),
-                                         mean_x = NULL, pvs = c(),pvs_sep=c(), 
+                                         mean_x = NULL, 
                                       
                                          useoffset=TRUE
                                          ){
                       self$angle=NULL;
                       self$sumAngle=0;
                       self$angles = c();
-                      self$pvs = pvs
-                      self$pvs_sep=pvs_sep
-                      self$pvs_all = unlist(pvs)
-                      if(!is.null(prev_i)) self$pvs_all = c(self$pvs_all, prev_i$pvs_all)
-                      self$sumPv = .sumChisq(unlist(pvs))
+                      #self$pvs = pvs
+                      self$logLiks = logLiks;
+                      self$degsf=degsf;
                       self$constants_proj=constants_proj
                       self$constants = NULL
-                    
+                    self$lambdas = lambdas
                       train = data$train
                       self$tbls = tbls
                       self$Wall = Wall
-                      #if(length(phensi)>1) stop("!!")
-                      family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
+                                       family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
                       names(family)=names(phensi)
                       self$betas_proj=betas_proj
+                      self$betas = betas;
+               #       print("HHHHH");print(self$betas)
                       if(is.null(prev_i)){
+                        self$logLiks0 = NULL
+                        self$degsf0=NULL
                         self$var = var
                         self$var_names = var
                         self$varnames=var
@@ -98,9 +85,11 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                         self$name=""
                    #     self$cum_pvs_proj = list()
                     #    self$betas_proj= betas_proj #if(length(var)==0) c() else lapply(data$y, function(yy)(matrix(0,nrow=1, ncol= length(var)))) #lapply(datas, function(x) return(c()))
-                        self$betas = if(length(var)==0) NULL else lapply(data$y, function(yy)(matrix(0,ncol=1, nrow= length(var)))) 
+                      #  self$betas = if(length(var)==0) NULL else lapply(data$y, function(yy)(matrix(0,ncol=1, nrow= length(var)))) 
                         self$name=if(length(var)==0) "" else paste(unlist(lapply(var, paste, collapse=".")),collapse="-")
                       }else{
+                        self$logLiks0=prev_i$logLiks;
+                        self$degsf0=prev_i$degsf;
                         self$name_prev=prev_i$name
                         var = prev_i$var
                         self$mean_x = c(prev_i$mean_x, mean_x)
@@ -111,52 +100,36 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                           warning(paste(" duplicated variable")) #,names(todoInds[[b_i[1]]])[b_i[2]]))
                           return(NULL)
                         }
-                        vars = c(var,list(b_i))
+                        varnames=paste(b_i_name, collapse=".")
                         
+                        vars = c(var,list(b_i))
+                        names(vars)[length(vars)] = varnames
                         self$name=paste(unlist(lapply(vars, paste, collapse=".")),collapse="-")
                         vars0=vars
-                        varnames=paste(b_i_name, collapse=".")
                         self$var = vars
                         self$var_names = c(prev_i$var_names, list(b_i_name))
                         self$varnames=c(prev_i$varnames, varnames)
-                       
-                        if(FALSE){
-                        beta_nme = names(betas_new)
-                        names(self$var) = names(self$var_names)
-                        nme_betas_new = names(betas_new); names(nme_betas_new) = nme_betas_new
-                       
-                        self$betas_proj=lapply(nme_betas_new, function(b_n){
-                          b_n1 = betas_new[[b_n]]
-                          if(family[[b_n]]=="multinomial"){
-                            b_n1 = b_n1[[1]]
-                            if(!is.matrix(b_n1)){
-                              b_n1 =t(as.matrix(b_n1))
-                            }
-                            #print(b_n1)
-                          }else{
-                            b_n1 = as.matrix(data.frame(b_n1)) #, nrow = 1)
-                          }
-                          if(!useoffset) return(b_n1)
-                          if(nrow(b_n1)==1){ 
-                            return( rbind(prev_i$betas_proj[[b_n]], b_n1))
-                          }
-                          rescale =   b_n1[1,]
-                          b_n1 = b_n1[-1,,drop=FALSE]
-                          bet_n = prev_i$betas_proj[[b_n]]
-                          for(jj in 1:nrow(bet_n)){
-                            bet_n[jj,] = bet_n[jj,]*rescale
-                          }
-                          rbind(bet_n, b_n1)
-                         
-                        })
-                        }
-                        #self$betas=self$betas_proj  ## now these are the same
+                        names(self$var_names)[[length(self$var_names)]] = varnames
+                        names(self$varnames)[[length(self$varnames)]] = varnames
                         
-#                          self$betas=lapply(self$betas_proj, function(bp){
- #                           b2 = self$Wall %*% bp
-  #                        } )
+                     
+
                       }
+#print(self$betas)
                     },
+                  calcPvalue=function(log.p=TRUE){
+                    if(is.null(self$logLiks0)) return(NULL);
+                    .lapply_nme(self$logLiks, function(nme){
+                      .lapply_nme(self$logLiks[[nme]], function(nme1){
+                        ll = self$logLiks[[nme]][[nme1]];
+                        ll0 = self$logLiks0[[nme]][[nme1]];
+                        df = self$degsf[[nme]][[nme1]];
+                        df0 = self$degsf0[[nme]][[nme1]]
+                        .lrt(ll,ll0,df,df0, log.p=log.p)
+                      })
+                    })
+                  },
+    
                   setOffset=function(){
                     nme_betas_new = names(self$betas_proj)
                     self$constants = self$constants_proj
@@ -172,20 +145,20 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                    #    Wall_new %*% bp
                    #  })
 ##simplifies and translates into original space
-                  simplify=function(useoffset){
-                    nmebp= names(self$betas_proj); names(nmebp)=nmebp
-                  
-                      self$betas=lapply(nmebp, function(bp){
-                        self$Wall[[bp]] %*% self$betas_proj[[bp]]
-                      })
-                    
+                  simplify=function(){
+                     
                    # self$setOffset() 
                     names(self$var_names)=self$varnames
                     list(betas=self$betas, constants_proj = self$constants_proj,
                          constants = self$constants,
-                         pvs = self$pvs, pvs_all=self$pvs_all,pvs_sep = self$pvs_sep,
-                         cum_pv= .sumChisq(unlist(self$pvs)),
-                         cumpv_all= .sumChisq(unlist(self$pvs_all)),
+                         logLiks = self$logLiks, 
+                         logLiks0 = self$logLiks0,
+                         degsf = self$degsf,
+                         degsf0 = self$degsf0,
+                         lambdas = self$lambdas,
+                         #pvs = self$pvs, pvs_all=self$pvs_all,pvs_sep = self$pvs_sep,
+                      #   cum_pv= .sumChisq(unlist(self$pvs)),
+                       #  cumpv_all= .sumChisq(unlist(self$pvs_all)),
                          betas_proj = self$betas_proj,
                          Wall = self$Wall,
                          mean_x = self$mean_x,tbls = self$tbls,

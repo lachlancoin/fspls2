@@ -399,6 +399,7 @@ dataH<-R6::R6Class("dataH",
                    inherit = analysisBase,
  private = list(
    data ="environment",
+   models="list",
     type="character",  
   plot_results="list",
   angle_plots="list",
@@ -437,15 +438,7 @@ dataH<-R6::R6Class("dataH",
     rocs
   },
   
-  fitEnsemble=function(all_models_full ){
-    phens = private$phens;
-    transform_x = private$transform_x; liab=FALSE;
-    d1 = private$data
-    preds=  d1$extractPredictions(all_models_full, phens, flags, transform_x = transform_x, liab= liab) #, cv_index = cv_index
-    #})
-    coeffs = d1$fitEnsemble(preds, phens);
-    coeffs
-  },
+ 
   combineAngles1=function(angleH, incl, sumAngle, prev_signature, topn = 1e6){ 
     #$types
     flags = private$flags;
@@ -512,18 +505,15 @@ dataH<-R6::R6Class("dataH",
     comb_all2
   },
   
-   makeModels=function(vars2, inds){
+   makeModels=function(vars2, inds1){
+     stop("not used?")
      phens = private$phens; flags = private$flags
      checkRMSV = .readFlag(flags,"checkRMSV",FALSE)
      d = private$data
      logpthresh= log(.readFlag(flags,"pthresh",1e-3))
      project=.readFlag(flags,"project",TRUE)
      useoffset=.readFlag(flags,"useoffset",TRUE)
-#     private$transform_x$pow
-     
-     #  train_nme = .readFlag(flags,'train', names(datas)[1])
-     #  if(length(which(train_nme %in% names(private$datas)))==0)train_nme = names(private$datas)[[1]]
-     verbose=.readFlag(flags,"verbose",FALSE)
+  verbose=.readFlag(flags,"verbose",FALSE)
      if(!is.null(flags[['useglm']])) stop("define useglmnet not useglm")
      useglm=.readFlag(flags,"useglmnet",FALSE)
      inds1 = inds#[[nmes_inds1]]
@@ -533,9 +523,9 @@ dataH<-R6::R6Class("dataH",
        # print(k)
       # if(verbose)print(k)
        # lapply(datas[names(datas) %in% train_nme], function(d){
-       mods = d$makeModels(phens, vars2,k,logpthresh = logpthresh,project=project,
-                           flags=flags,checkRMSV=checkRMSV,verbose=verbose,
-                           useglm=useglm, useoffset=useoffset)
+       mods = d$makeModels(models,phens, vars2,k,beam,  flags=flags)
+       
+     
        mods
        #})
        #})
@@ -572,8 +562,8 @@ dataH<-R6::R6Class("dataH",
      show_pvalue_plots=.readFlag(flags, "show_pvalue_plots",FALSE) 
      stop_y = .readFlag(flags, 'stop_y',"rand")
     topn = .readFlag(flags, 'topn',20)
-     
-     useAngles = .readFlag(flags,"angles_only", FALSE)
+     maxvars = .readFlag(flags,"max",1e6)
+     useAngles = .readFlag(flags,"angles_only", TRUE)
      
      logpvthresh = log(.readFlag(flags,"pthresh",0.1))
      beam= .readFlag(flags,"beam",1)
@@ -631,7 +621,7 @@ dataH<-R6::R6Class("dataH",
        nvar = length(vars_l_todo$vars_l[[1]]$var_names)
        if(verbose) print(names(vars_l_todo$vars_l))
        vars_all[[nvar]] = vars_l_todo$vars_l
-       if(length(vars_l_todo$vars_l[[1]]$var_names)>=flags$max) break;
+       if(length(vars_l_todo$vars_l[[1]]$var_names)>=maxvars) break;
       
       
      }
@@ -710,7 +700,7 @@ dataH<-R6::R6Class("dataH",
          num_pvals1 = nrow(comb)
          inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
          nxt_vars = lapply(inds1p, function(ik){
-          # print(ik)
+          #print(ik)
            b_i_name = c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
            angle=comb$value[[ik]]
           # if(angles_only || b_i_name[3]=="rand"){ ## no point calculating pvalue for random, use angles
@@ -750,24 +740,15 @@ res_inner2=function(comb_,prev_i2, k, expt_id){
   res_inner1=lapply(nme_comb, function(nme_c1){
     nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
     lapply(nmesp1, function(nme_p1){
-      
-      #print(nme_p1)
       comb = comb_[[nme_c1]][[nme_p1]]
       phen_names = names(comb); names(phen_names) = phen_names
-      #if(length(comb)==0 || nrow(comb)==0) return(NULL)
-     # num_pvals1 = nrow(comb)
-      #inds1p = 1:num_pvals1; names(inds1p) = comb$names[1:length(inds1p)]
       nxt_vars = lapply(phen_names, function(ik){
-        # print(ik)
-        #print(paste(nme_p1, nme_c1, ik))
         var_names = comb[[ik]]$var_names
         if(is.null(var_names)) stop("should not be null")
         b_i_name = var_names[[length(var_names)]]
-          #c(comb$data_type[[ik]], comb$names[[ik]], nme_c1,nme_p1)
         angle=comb[[ik]]$angle
-       
-          nv= private$getPvsAll(prev_i2, b_i_name,k,  prev_i2$Wall, angle=angle)
-          if(is.na(nv$sumPv)) stop(paste(b_i_name, sep=","))
+          nv= private$getPvsAll( prev_i2, b_i_name,k,  prev_i2$Wall, angle=angle)
+         # if(is.na(nv$sumPv)) stop(paste(b_i_name, sep=","))
         
         names(nv$var_names) = nv$varnames;
         if(inherits(nv,"try-error")) {
@@ -848,16 +829,15 @@ predefined=function(incl1,prev_signature, sumAngle){
    getPvsAll=function( prev_i2, b_i_name,k, #   prev_i = vars_l1[[nmed]]
                       Wall, # =lapply(subphens, function(f) matrix(nrow=0,ncol=0)),
                       angle=0){
-   flags = private$flags; phens = private$phens;
+     flags = private$flags; phens = private$phens;
      project=.readFlag(flags,"project",TRUE)
      useoffset=.readFlag(flags,"useoffset",TRUE)
      useglm = .readFlag(flags,'useglmnet',FALSE)
      d = private$data
-     family = strsplit(names(phens)[[1]],"\\.")[[1]][1]
-     if(family=="multinomial") useoffset=FALSE
      
-     prev_i1 = d$makeNextModel(prev_i2,b_i_name,phens,k, family, ypred=NULL, 
-                               project=project, useglm=useglm, logpthresh =0, useoffset=useoffset)
+     beam=0
+     prev_i1 = d$makeNextModel(private$models[[k]], prev_i2,b_i_name,phens,k,beam, ypred=NULL, 
+                               project=project, logpthresh =0)
      prev_i1$angle= angle
      prev_i1$angles = c(prev_i2$angle, angle)
      prev_i1$sumAngle = sum(prev_i1$angles);
@@ -1219,6 +1199,8 @@ predefined=function(incl1,prev_signature, sumAngle){
      private$updateLOOC(verbose=verbose,force=force)
      private$initTrain(verbose=verbose, force=force)
    
+  private$models =lapply(1:private$data$nreps(), function(i) modelObj$new(i))
+   
    ##updated after updateLOOC
   # nreps1 =self$nreps()
   # nreps = 1:nreps1
@@ -1291,32 +1273,39 @@ y=function(phens = self$pheno()[[1]]){
 #' @param update whether to update
 #' @param liab return liability score, or probability (for binomial, ordinal multinomial)
 #' @returns  a ggplot
-plotPredictions=function(all_modelsh,
-                         phens = private$phens,
-                         update=FALSE,
-                         liab=TRUE){
-  if(update) self$update(all_modelsh$phens, all_modelsh$flags, transform_x =  fromJSON(all_modelsh$flags$transform_x))
- y = self$y(phens)
- preds= self$extractPredictions(all_modelsh, liab=liab, merge_cv=TRUE)
- 
+plotPredictions=function(predictions,
+                         phens = private$phens,keep_cv = FALSE, 
+                         merge_beam = FALSE
+                         ){
+   y = self$y(phens)
+ preds= predictions
  families = names(y); names(families) = families;
  plot_results=lapply(families, function(fam){
       y1 = y[[fam]]; 
    if(ncol(y1)==0) return(NULL)
    coln = 1:ncol(y1); names(coln) =colnames(y1) 
-   #nvar = names(preds)[[1]]; cv=names(preds[[1]])[[1]]; beam = names(preds[[1]][[2]])[1]
+   chars =  c(strsplit(intToUtf8(47+1:26),"")[[1]],
+     strsplit(intToUtf8(96+1:26),"")[[1]],
+              strsplit(intToUtf8(64+1:26),"")[[1]])
+  
+   #nvar = "1"; cv="full"; beam = names(preds[[1]][[2]])[1]
    toplot=
-   .merge_lapply_nme(preds, "modelname", function(nvar){
+   .merge_lapply_nme(preds, "nvar", function(nvar){
        #print(beam)
        p1 = preds[[nvar]]
-      
+      if(!keep_cv){
+        p1 = p1[names(p1) %in% c("full","merged","avg")]
+      }
       .merge_lapply_nme(p1, "cv",function(cv){
         #nvars = names(p1); names(nvars) = nvars;
        #l1 = lapply(nvars, function(nvar){ 
         #print(paste(beam,nvar))
         p2 = p1[[cv]]
         p2 = p2[lapply(p2, length)>0]
-        .merge_lapply_nme(p2, "beam",function(beam){
+        beam_inds = 1:length(p2);names(beam_inds) = beam_inds;
+        .merge_lapply(beam_inds, "beam",function(beam){
+          modelname=names(p2)[beam]
+          if(modelname=="combined") modelname = paste("combined",nvar, sep=":")
        #   print(paste(nvar, cv, beam,fam))
          p3 = p2[[beam]]
            p4 = p3[[fam]]
@@ -1330,7 +1319,7 @@ plotPredictions=function(all_modelsh,
            df = .merge1_new(lapply(coln, function(cn1){
              df1=data.frame(list(prediction=p4[,cn1], value=y1[,cn1], text=""))
              text_df = round(cor(df1$prediction, df1$value,use="pairwise.complete.obs"),2)
-            rbind(df1,data.frame( list(prediction = mean(df1$prediction, na.rm=T), value = mean(df1$value, na.rm=T),text=text_df)))
+            rbind(df1,data.frame( list(prediction = mean(df1$prediction, na.rm=T), value = mean(df1$value, na.rm=T),text=text_df))) 
            }), addName="pheno")
            
          }else if(ncol(y1)==1){
@@ -1359,25 +1348,32 @@ plotPredictions=function(all_modelsh,
          if(is.null(df)|| nrow(df)==0) return(NULL)
        # varname
          df1=df |> 
-           tibble::add_column(datatype=varname[1],varname=varname[2], transf=varname[3], pow = varname[4] )
+           tibble::add_column(datatype=varname[1],varname=varname[2], modelname = modelname, transf=varname[3], pow = varname[4] )
        # print(names(df1))
            return(df1)
        })
      })
    })
+   toplot$nvar = as.numeric(toplot$nvar)
+   toplot$varname = factor(toplot$varname)
+   toplot$modelname=gsub(";","\n",toplot$modelname);
+   toplot$modelname = factor(toplot$modelname, levels = toplot$modelname[!duplicated(toplot$modelname)])
+   #head(toplot)
    toplot$cv = factor(toplot$cv); levs = levels(toplot$cv); names(levs) =levs
-   modnames = unique(toplot$modelname); names(modnames) = modnames
-   modvars = unlist( lapply(modnames, function(x) rev(strsplit(x,";")[[1]])[1]))
-   modlens =  unlist( lapply(modnames, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]])))
-   o = order(modlens)
-   modnames = modnames[o]; modvars = modvars[o]; modlens =modlens[o]
-   
-   toplot1 =  toplot |> tibble::add_column(variables= factor(toplot$modelname, levels=modnames, labels = modvars), 
-                                           nvar =as.numeric(as.character(factor(toplot$modelname, levels=modnames, labels = modlens ))))
+   #table(toplot$modelname)
+   #nvars = unique(toplot$nvar); names(nvars) = nvars
+  # modvars = unlist( lapply(modnames, function(x) rev(strsplit(x,";")[[1]])[1]))
+  # modlens =  unlist( lapply(modnames, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]])))
+  # o = order(modlens)
+   #modnames = modnames[o]; modvars = modvars[o]; modlens =modlens[o]
+   combined = rep("", nrow(toplot)); combined[grep("combined", toplot$modelname)] = "combined"
+   toplot1 = toplot|> tibble::add_column(combined  )
+  # toplot1 =  toplot |> tibble::add_column(variables= factor(toplot$modelname, levels=modnames, labels = modvars), 
+  #                                         nvar =as.numeric(as.character(factor(toplot$modelname, levels=modnames, labels = modlens ))))
    if(length(grep("gaussian",fam))>0){
      plots_all = lapply(levs,function(lev){
        ss1 = subset(toplot1, cv==lev)
-       ggp2 = ggplot(subset(ss1, text=="") , aes(x =value, y=prediction,color=pheno, shape=beam ))+facet_grid("pheno~modelname")+geom_point()
+       ggp2 = ggplot(subset(ss1, text=="") , aes(x =value, y=prediction,color=pheno, shape=beam ))+facet_grid("pheno~nvar")+geom_point()
        ggp2+ggplot2::geom_label(data=subset(ss1,text!=""), aes(x=value, y=prediction, color=pheno, label=text))
        })
   
@@ -1385,9 +1381,10 @@ plotPredictions=function(all_modelsh,
    }else{
    #toplot$subpheno
   # pheno = as.numeric(toplot$pheno)
-     beams = unique(toplot1$beam)
-     toplot1$beam  = factor(toplot1$beam, levels= beams, labels = sub("combined","C",beams))
-     combined_inds = which(toplot1$beam=="C")
+     toplot1$beam = as.numeric(toplot1$beam)
+     combined_inds = which(toplot1$modelname=="combined")
+     
+    # toplot1$beam  = factor(toplot1$beam, levels= beams, labels =chars[1:length(beams)] )
      levs_s = sort(unique(toplot1$subpheno))
      if(length(combined_inds)>0 && length(unique(toplot1$subpheno))==2){
       labels_s = levs_s 
@@ -1404,10 +1401,32 @@ plotPredictions=function(all_modelsh,
    pheno_levs = unique(toplot$pheno);
   
    toplot1$pheno = factor(toplot1$pheno, levels = pheno_levs)
-   
-  
+   #toplot1$modelname=as.numeric(toplot1$modelname)
+  toplot1 = toplot1 |> unite(type_varname, "datatype", "varname",sep="::", remove=FALSE)
+  dupls = duplicated(toplot1$type_varname)
+
+  toplot1$type_varname = factor(toplot1$type_varname, levels= toplot1$type_varname[!dupls])
+  facet="pheno~modelname";
+ 
+  if(merge_beam){
+    facet="combined~nvar"
+  }
+  if(length(table(toplot1$pheno))==1){
+    
+# facet="beam~modelname";# "beam~type_varname";
+  }
    #toplot1 = toplot |> tidyr::unite("cv_pheno",cv,pheno,sep="_", remove=FALSE)
-   plots_all = lapply(levs,function(lev)   ggplot(subset(toplot1, cv==lev), aes(x =knots, y=value,color=subpheno, label=beam, size=counts ))+facet_grid("pheno~modelname")+geom_text(size = 1, family = "sans"))
+   plots_all = lapply(levs,function(lev)  {
+     toplot2=subset(toplot1, cv==lev)
+     ggp=ggplot(toplot2, aes(x =knots, y=value,color=subpheno, label=beam, size=counts ))+facet_grid(facet);
+                   
+     if(length(grep("beam", facet))>0){
+       ggp = ggp+geom_point();
+     }else{
+       ggp= ggp+geom_text(family = "sans")
+     }
+     ggp+ggtitle(paste(fam,lev));
+     })
    }
     plots_all
    })
@@ -1428,21 +1447,23 @@ plot_results
 #' @returns  a table with results
 extractPredictions=function(all_modelsh,
                             phens = private$phens,
-                            liab=TRUE, merge_cv=FALSE){
+                            update=FALSE,
+                            liab=TRUE
+                            ){
+  if(update) self$update(all_modelsh$phens, all_modelsh$flags, transform_x = all_modelsh$transform_x)
+  
   flags = private$flags; transform_x = private$transform_x;
   private$updateLOOC()
     all_models_full = all_modelsh$models#[[mod_nme]]
-  # eval1 =  .merge1_new(lapply(nme_d2, function(nme1){
-  #print(nme1)
   d = private$data
-  #all_models_y = all_models_y0[[1]]
+
   coeffs = all_modelsh$coeffs
-  predictions0= d$extractPredictions(all_models_full, phens, flags, transform_x = transform_x, liab= liab,coeffs= coeffs, merge_cv=merge_cv)
-  ###  d$evaluateAllModels(all_models_y,phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
-  
- 
-#  predictions0=res3[unlist(lapply(res3, function(x) length(x[[1]])))>0]
-  predictions0 # 
+  if(is.null(phens)) stop("need to update")
+  predictions0= d$extractPredictions(all_models_full, phens, flags,
+                                     transform_x = transform_x, liab= liab,coeffs= coeffs,
+                                     merge=TRUE)
+ attr(predictions0,"trainedOn")=all_modelsh$trainedOn
+     predictions0 # 
 },
 
 #' @description plot all data for selected variables
@@ -1454,7 +1475,8 @@ extractPredictions=function(all_modelsh,
 #' @param max_model_length the maximum model length to consider
 #' @param order allows for a reordering of variables
 #' @returns  a table with results
-plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=FALSE, max_model_length=1000, max_beam = 1, order=NULL){
+plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=FALSE,
+                  max_model_length=1000, max_beam = 1, order=NULL){
   
   attrs = attributes(variables)
   if(update) self$update(attrs$phens, attrs$flags, transform_x =  attrs$transform_x)
@@ -1625,174 +1647,120 @@ getVariance=function(varnames){
 #' @description fit models based on variables
 #' @param variables list of variables selected by select method
 #' @param update whether to automatically update phens, transform_x and flags , default TRUE
-#' @param max_model_length the maximum model length to include
-#' @param order allows for re-ordering of variables
 #' @returns fitted models
 makeAllModels=function(variables,
-                       update=FALSE, max_model_length=1000, max_beam = 1000, order=NULL
+                       update=FALSE
                        ){
-  attrs = attributes(variables)
+  if(is.null(private$phens)) stop("need to update")
+  attrs = attributes(variables);
   if(update) self$update(attrs$phens, attrs$flags, transform_x =  attrs$transform_x)
-  
-  vars_all=super$integrate(variables, max_model_length = max_model_length, max_beam = max_beam, order=order)
-#  phens=vars_all[[1]]$phens, flags=vars_all[[1]]$flags, 
   useDB = super$useDB;
   flags = private$flags;phens = private$phens;
-  verbose=.readFlag(flags,'verbose',FALSE); max = .readFlag(flags,'max',1e6)
+  verbose=.readFlag(flags,'verbose',FALSE); 
   all_models = super$loadModels();
-  if(!is.null(all_models)) return(all_modelsh);
-  
+  if(!is.null(all_models)) return(all_models);
   private$updateLOOC()
-  logpthresh= log(.readFlag(flags,"pthresh",1e-3))
-  project=.readFlag(flags,"project",TRUE)
-  beams = names(vars_all); names(beams)=beams; 
-  beams = beams[1:min(max_beam, length(beams))]
-  all_models_full=lapply(beams, function(beam){
-    vars_all0 = vars_all[[beam]]
-    vars = vars_all0#[[nme_v_all]]
-   all_models = list()
-   variables1 = vars$variables
-   var_inds = vars$inds
-   rem_inds = self$nreps()
-   all_models = private$makeModels(list(),rem_inds )
-   if(length(variables1)==0)  return(all_models) ;#return(list(models=all_models, flags = flags, phens = phens, trainedOn=private$nme))
-   ord = order(unlist(lapply(variables1, length)),decreasing=TRUE)
-   variables1 = variables1[ord]
-   var_inds = var_inds[ord]
-  #v_nme = names(variables1)[1]; #max=10; verbose=TRUE; k=1;variables =vars_all$variables; 
   
-  for(v_nme in names(variables1)){
-    if(verbose)print(v_nme)
-    vars2 = variables1[[v_nme]]
-    vars2 = vars2[1:min(length(vars2), max)]
-    inds =var_inds[[v_nme]]
-    nme_ = paste(names(vars2),collapse=";")
-    models1 = all_models[[nme_]]
-    if(is.null(models1)){
-      models1 = private$makeModels( vars2, inds)
-      for(k in 1:length(models1)){
-        mod1 =   all_models[[names(models1)[[k]]]]
-        if(is.null(mod1)){
-          all_models[[names(models1)[[k]]]] = models1[[k]]
-        }else{
-          # for(p_nme in names(models1[[k]])){
-          mod2 = all_models[[names(models1)[[k]]]]#[[p_nme]]
-          if(is.null(mod2)){
-            all_models[[names(models1)[[k]]]]= models1[[k]]#[[p_nme]]#[[p_nme]] 
-            
-          }else{
-            for(r_nme in names(models1[[k]])){ #[[p_nme]])){
-              mod3 = all_models[[names(models1)[[k]]]][[r_nme]] #[[p_nme]][[r_nme]]
-              if(is.null(mod3)){
-                all_models[[names(models1)[[k]]]][[r_nme]]= models1[[k]][[r_nme]] #[[p_nme]][[r_nme]] #[[p_nme]][[r_nme]] 
-                
-              }
-            }
-          }
-          #}
-        }
-      }
-    }else{ ## fill in gaps
-      #for(p_i in 1:length(inds)){
-      # p_nme = names(inds)[p_i]
-      models2 = all_models[[nme_]]#[[p_nme]]  
-      if(is.null(models2)){
-        models2 = private$makeModels( vars2, inds)
-                                  
-        for(k in 1:length(models2)){
-          all_models[[names(models2)[[k]]]] = models2[[k]]#[[p_nme]]#[[p_nme]]
+  phens = private$phens; flags = private$flags
+  d = private$data
+ 
+  #if(!is.null(flags[['useglm']])) stop("define useglmnet not useglm")
+  
+  #inds1 = inds#[[nmes_inds1]]
+  phens1 = phens#[[nmes_inds1]]
+  nreps = 1:length(variables); names(nreps) = names(variables)
+  if(is.null(variables[['full']])) stop("problem")
+  #k=1; nvar=1; beam=1;
+  all_models_full = lapply(nreps, function(k){
+    vars_n = variables[[k]]
+    models = modelObj$new(k);
+    for(nvar in 1:length(vars_n)){
+      for(beam in 1:length(vars_n[[nvar]])){
+        v_beam = vars_n[[nvar]][[beam]]
+        vars2 = v_beam$var_names
+        if(length(grep("rand", names(vars2)))==0){ ## should not have random variables
+        if(verbose) print(paste(k,nvar,beam, paste(names(vars2), collapse=";")))
           
+        d$makeModels(models,phens, vars2,k,beam,  flags=flags)
+                          
         }
-      }else{
-        subinds= inds[which(is.na(match(names(inds), names(all_models[[nme_]]))))]
-        if(length(subinds)>0){ ## missing inds
-          models3 = private$makeModels( vars2, subinds)
-          for(nme1_ in names(models3)){
-            for(r_i in names(models3[[nme1_]])){
-              all_models[[nme1_]][[r_i]] = models3[[nme1_]][[r_i]]
-            }
-          }
-        }
+        
       }
-      #}
       
     }
-  }
-  all_models
-
+   am =  models$separate();
+   am;
   })
-  pres= .merge1_new(lapply(beams, function(beam){
-    varl = 1:length(variables); names(varl) = varl; names(varl)[[length(varl)]]="full"
-    .merge1_new( lapply(varl, function(k){
-    pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$pvs))
-    cum_pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cum_pv))
-    cum_pvs = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cum_pv))
-    cumpv_all = unlist(lapply(all_models_full[[beam]], function(am)  am$full$cumpv_all))
-    
-    length=(unlist(lapply(all_models_full[[beam]], function(am) length(am$full$var_names))))
-    model_names=names(pvs)
-    nvars=unlist(lapply(model_names, function(x)length(strsplit(x,";")[[1]])))
-    #names(length)=NULL
-    df = data.frame(cbind(pvs, cum_pvs)) |> tibble::add_column(model_names, nvars)
-    
-      df
-  }), addName="cv")
-   
-    }), addName="beam")
+ pres=
+  .merge1_new(lapply(all_models_full, function(all_models){
+   .merge1_new(lapply(all_models, function(am){
+   .merge1_new(lapply(am, function(am1){
+     .merge_lapply_nme(am1$logLiks,"family", function(fam){
+       if(length(am1$degsf[[fam]])==0){
+         return(       data.frame(list(logLiks=unlist(am1$logLiks[[fam]]))))
+       }
+       data.frame(list(logLiks=unlist(am1$logLiks[[fam]]), 
+                           degf=  unlist(am1$degsf[[fam]])))
+     })
   
-  coeffs = private$fitEnsemble(all_models_full)
-  
-  all_models_=list(models=all_models_full, flags = flags, phens = phens, coeffs = coeffs, trainedOn=private$nme, pres = pres)
-  super$saveModels(all_models_);
+   }), addName="model")
+  }), addName="nvar")
+   }), addName="cv_index")
+ 
+  ## now fit ensemble
+
+ #d1 = private$data
+
+ 
+  all_modelsh=list(models=all_models_full, flags = flags,
+                   phens = phens,  trainedOn=private$nme,
+                   transform_x = private$transform_x)#, pres = pres)
+  super$saveModels(all_modelsh);
   #combined_models
-  all_models_
+  all_modelsh
 },
+
+
+#' @description if beam >1 then this provides option for fitting an ensembl model
+#' @param all_modelsh output of makeAllModels
+#' @param max_model_length the maximum model length to include
+#' @param order allows for re-ordering of variables
+#' @returns updates all_modelsh to include meta-level coefficients
+updateEnsemble=function(all_modelsh){
+  all_models_full = all_modelsh$models
+  flags =private$flags;
+  phens = private$phens
+  minv = .readFlag(flags,"min",0); maxv = .readFlag(flags,"max",1e6)
+  preds=  private$data$extractPredictions(all_models_full,private$phens, flags, 
+                                          coeffs = NULL, 
+                                          transform_x =  private$transform_x, liab= FALSE, merge=FALSE,
+                                          minv=minv,maxv=  maxv
+  )
+  
+  coeffs = private$data$fitEnsemble(preds, phens);
+  
+  if(inherits(coeffs,"try-error")) {
+    warning(coeffs);
+    coeffs = NULL;
+  }
+all_modelsh$coeffs = coeffs;
+ all_modelsh
+  
+},
+
 #' @description evaluate the fit of models
 #' @param all_modelsh  models fitted from makeAllModels
 #' @param update whether to automatically update phens, transform_x and flags , default TRUE
 #' @returns evaluation of models
-evaluateAllModels=function(all_modelsh, update=TRUE){ ## different folds with same variables
-  if(update) self$update(all_modelsh$phens, all_modelsh$flags, transform_x =  fromJSON(all_modelsh$flags$transform_x))
+evaluate=function(predictions){ ## different folds with same variables
+#  if(update) self$update(all_modelsh$phens, all_modelsh$flags, transform_x =  fromJSON(all_modelsh$flags$transform_x))
   flags = private$flags; phens = private$phens;
-  eval1 = super$loadEval();
-  if(!is.null(eval1)) return(eval1);
-  
-  
-    private$data$updateTransform(private$transform_x)
-    verbose=.readFlag(flags,"verbose",TRUE)
-  inv_transform_x=FALSE
-  private$updateLOOC()
-  if(length(all_modelsh$models)==0) return(NULL)
-  coeffs = all_modelsh$coeffs
-  all_models_y0 = all_modelsh$models#[[mod_nme]]
-     d = private$data
-   
-  eval2 =  d$evaluateAllModels(all_models_y0, phens,flags, verbose=verbose, coeffs=coeffs) |> tibble::add_column(data=private$nme, trainedOn=all_modelsh$trainedOn)#|> tibble::add_column(trainedOn=private$nam)
+ phens = private$phens
+ trainedOn = attr(predictions,"trainedOn");
+  eval2 =  private$data$evaluate(predictions, phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=trainedOn)#|> tibble::add_column(trainedOn=private$nam)
     
-  
-   
-    #all_models_y=all_models_y0[[1]]
-  
-    #  print(resd)
-    #  print(paste("problem", nme1))
-    #  stop("!!")
-    #  return(NULL)
-    #}
-#    resd
-#  }),addName="data")
-  #}),addName="transform_x")
   if(is.null(eval2)) return(NULL)
-  #  eval1 = subset(eval1, model!="avg")
-
-  #eval2 = eval1|> pivot_wider(names_from="submeasure") #|> tibble::add_column(transform_x=strsplit(transform_x[[1]]," ")[[1]][2])
-  
-  #  isfull=eval2$model %in% full_model_nmes
-  #  eval2|>tibble::add_column(isfull=isfull)
-  
-  #print("HH")
-  #  if(TRUE) return(eval2)
-  #eval3 = .calcEval1(eval2, rename=FALSE)
-    #eval3 = eval2
+ 
   eval4 = eval2 |> tibble::add_column(variable= unlist(lapply(eval2$model, function(x){
     if(x=="cv" || x=="") return("");
     x1 =rev(strsplit(x,";")[[1]])[1]
@@ -1800,9 +1768,12 @@ evaluateAllModels=function(all_modelsh, update=TRUE){ ## different folds with sa
   })))
   eval4$variable[is.na(eval4$variable)]=""
   eval5 = eval4 |> tidyr::separate("variable", sep="\\.", into=c("type","variable","func","param"),remove=TRUE)|>
-               tibble::add_column(combined = eval4$beam=="combined")
+    tibble::add_column(mid_perc = round(eval4$mid*100,1),  combined = ifelse(eval4$beam=="combined",TRUE,FALSE))
+  #|>
+   #            tibble::add_column(combined = eval4$beam=="combined") |>
+      
   super$saveEval(eval5);
-  eval5
+  eval5 
 }
     
 )

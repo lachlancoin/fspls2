@@ -1,7 +1,10 @@
 
 
 check_flags<-function(flags){
-  if(flags$topn<flags$beam && !flags$angles_only) stop("beam should be less than topn")
+  angles_only = .readFlag(flags, 'angles_only', TRUE)
+  topn = .readFlag(flags, "topn", 20)
+  beam = .readFlag(flags, "beam",1)
+  if(topn<beam&& !angles_only) stop("beam should be less than topn")
  
   if(!is.null(.readFlag(flags,"nrep",NULL))){
     flags[['nfold']] = flags[['nrep']]
@@ -190,7 +193,8 @@ analysisBase<-R6::R6Class("analysisBase",
                     # }
                      phens = private$phens;
                     useDB=private$useDB;
-                     useAngles = !is.null(flags$angles_only) && flags$angles_only
+                     useAngles = .readFlag(flags, 'angles_only', TRUE)
+                    # useAngles = !is.null(flags$angles_only) && flags$angles_only
                      full_index = length(variables)
                      beam_m = min(length(variables[[full_index]]), max_beam)
                      beams = 1:beam_m

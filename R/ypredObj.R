@@ -363,13 +363,21 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
   c(minerr,corr, minerr/length(y), corr/length(y), thresh)
 }
 
-
+.calcArea<-function(yp_kj,y2, type_i = "area"){
+  ap1 = getAreaPlot(yp_kj, y2)
+  ap2=summariseAreaPlot(ap1)
+  ap2[[type_i]]
+}
 ##flip is doing NAs nont nonNAs
-
+#   .scoreInternal(yp[nonNA,,drop=FALSE], y1[nonNA],w1[nonNA], type_i, fam,thresh)
 
 .scoreInternal<-function(yp,y1, w1, type_i, fam,thresh){
   minlength = 1;
   if(type_i=="AUC" && fam=="ordinal") type_i = "AUC_all"
+  if(type_i=="AUPRC" && fam=="ordinal") type_i = "AUPRC_all"
+  if(type_i=="area" && fam=="ordinal") type_i = "area_all"
+  
+ # if(type_i=="area" && fam=="ordinal") type_i = "AUC_all"
   if(type_i %in% c("correlation","rank_correlation","area","area_full","AUC","AUC_full","AUC_all","var")) minlength=2
   if(length(y1)<minlength){
    # print('h')
@@ -401,7 +409,7 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
   }else if(type_i=="AUC_full"){
     rms = 1*(.calcAUCW(yp[,1],y1, w1))
     names(rms)=c("low","mid","high")
-  }else if(type_i %in% c("AUC_all","AUPRC_all")){
+  }else if(type_i %in% c("AUC_all","AUPRC_all","area_all")){
     if(fam=="ordinal"){
       levs = min(y1, na.rm=TRUE):(max(y1,na.rm=TRUE)-1) 
       lev_inds = 1:length(levs)
@@ -410,6 +418,8 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
         gt =y1<=levs[kj]  ##interpret as probability of being less or equal to  count
         if(length(which(gt))==0) return(NA)
         y2 = ifelse(gt,1,0)
+        if(type_i=="area_all") return(data.frame(value= 1*(.calcArea(yp[,kj],y2)), submeasure=c("low","mid","high")))
+        
         if(type_i=="AUC_all") return(data.frame(value= 1*(.calcAUCW(yp[,kj],y2, w1)), submeasure=c("low","mid","high")))
         data.frame(value= 1*(.calcAUPRC(yp[,kj],y2, w1)), submeasure=c("low","mid","high"))
       }),addName="subpheno")
@@ -472,7 +482,7 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
   }
   rms
 }
-.initYpred1<-function(y, phensi, family){
+.initYpred1<-function(y, phensi, family, liab){
   #inds1 = 1:maxn
   #names(inds1)=inds1
   nmey =names(phensi)
@@ -495,8 +505,8 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
          }))
          rr = do.call(rbind, replicate(length(yi),rr1, simplify=FALSE))
          dimnames(rr) = list(dimnames(y[[1]])[[1]],levs1)
-       }else if(family[[i]]=="ordinal"){
-           levs1 = min(yi,na.rm=TRUE):max(yi,na.rm=TRUE)
+       }else if(family[[i]]=="ordinal" && liab){
+           levs1 = min(yi,na.rm=TRUE):max(yi,na.rm=TRUE) 
            names(levs1) = levs1
           rr0= unlist(lapply(levs1[-length(levs1)], function(l1){
              vv = ifelse(yi ==l1, 1, 0)
@@ -529,8 +539,9 @@ ypredObj<-R6::R6Class("ypredObj", public = list(
   types_="list",
   phensi="numeric",
   nrow="numeric",
+  liab="boolean",
   
-  initialize=function(data, phensi,  
+  initialize=function(data, phensi,  liab=TRUE,
                       family = unlist(lapply(names(phensi), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1]))),
                      
                       types_=getOption("fspls.types", 
@@ -538,10 +549,11 @@ ypredObj<-R6::R6Class("ypredObj", public = list(
    # rms_prev = 99999
   wname=NULL
   rmsv=NULL
+  self$liab = liab
   self$phensi = phensi
   self$family=family
   self$types_ = types_
-    ypreds=.initYpred1(data$y, phensi, family)
+    ypreds=.initYpred1(data$y, phensi, family, liab)
  # self$params=params
   self$wname=wname
   self$ypreds=ypreds
@@ -559,29 +571,86 @@ ypredObj<-R6::R6Class("ypredObj", public = list(
 #  ypred$updateYP(data, prev, nonNA, !within)  
 #},
 ## use inv_transform on y  
-updateEnsemble=function(ypreds, coeff, nonNA, flip=TRUE){
-  nmes = names(coeff); names(nmes)=nmes
+updateEnsemble=function(ypreds1, coeff1, nonNA, colnames,liab=FALSE,flip=TRUE){
+  nmes = names(coeff1); names(nmes)=nmes
+  
   if(is.null(nonNA)){
     ind_1 = if(flip) rep(TRUE, self$nrow) else rep(FALSE,self$nrow)
   }else{
     ind_1 = if(flip) !nonNA else nonNA
   }
   for(nme in nmes){
-    indy = 1:ncol(coeff[[nme]]); names(indy) = names(coeff[[nme]])
-    ab=as.matrix(data.frame(lapply(indy, function(i){
-      mat=as.matrix(data.frame(lapply(ypreds, function(yp){
-        yp$ypreds[[nme]][ind_1,1]
-      })))
-      coeff1=coeff[[nme]][[i]]
-      coeff1[1] + mat %*% coeff1[-1] 
-    })))
-    self$ypreds[[nme]][ind_1,] = ab
+    lambda = attr(coeff1[[nme]],"lambda")
+  family = strsplit(nme,"\\.")[[1]][1]
+  #if(is.null(lambda) && family!="gaussian" && family!="multinomial") stop("lambda is NULL")
+  
+  if(family=="ordinal"){
+    
+    interc = attr(coeff1[[nme]],"zeta")
+    coeff2 = as.matrix(coeff1[[nme]])
+  }else{
+    interc = unlist(coeff1[[nme]][1,,drop=TRUE])
+    coeff2 = as.matrix(coeff1[[nme]][-1,,drop=F]); 
+  }
+#  print(nme)
+    if(nrow(coeff2)==0){
+      self$ypreds[[nme]][ind_1,] = matrix(interc, nrow = length(ind_1), ncol = length(interc), byrow = TRUE)
+    }else if(family=="multinomial"){
+      indy = 1:ncol(coeff2); names(indy) = names(coeff2)
+      names(ypreds1) = colnames
+       li1 = unlist( lapply(ypreds1, function(yp){
+         df0=data.frame(yp$ypreds[[nme]][ind_1,])
+        }), recursive=FALSE)
+       mat=as.matrix(data.frame(li1))
+      # match(rownames(coeff2), colnames(mat))
+        # coeff1=coeff[[nme]][[i]]
+       m1 =   matrix(unlist(interc), nrow = nrow(mat), ncol = ncol(coeff2), byrow = TRUE)
+        
+       self$ypreds[[nme]][ind_1,] =   mat %*% coeff2 +m1
+   
+    }else{
+      if(is.null(lambda)) lambda = rep(1,ncol(coeff2))
+         # mi1 = match( colnames,rownames(coeff2));
+        #  mi2 = match( rownames(coeff2), colnames);
+        #  if(length(which(is.na(mi2)))>0 || length(which(is.na(mi1)))>0) warning("coeffs dont match");
+          
+         # coeff2 = as.matrix(coeff2[mi1,,drop=F])
+      #    if(length(which(is.na(mi1)))>0) stop("problem")
+          indy = 1:ncol(coeff2); names(indy) = names(coeff2)
+          li1 = lapply(indy, function(i){
+            mat=as.matrix(data.frame(lapply(ypreds1, function(yp){
+              yp$ypreds[[nme]][ind_1,i]
+            })))
+            if(family=="gaussian"){
+              return(mat %*% coeff2[,i]+interc[i] )
+            }
+            if(family=="ordinal"){
+              if(!liab) return( mat %*% coeff2[,i])
+              aop=1-ao_probs(mat,interc, coeff2[,i],  lambda[[i]], type="cum")
+              return(aop); 
+            }
+            if(family=="binomial"){
+              ab =  mat %*% coeff2[,i]+interc[i]
+              if(!liab) return(ab)
+              return(pao_(ab, lambda[[i]]))
+            }
+            
+            stop("unrecognised family")
+           # coeff1=coeff[[nme]][[i]]
+           
+          })
+          result=if(length(li1)==1) li1[[1]] else as.matrix(data.frame(li1))
+          #colnames(ab)
+          self$ypreds[[nme]][ind_1,] = result
+    }
     
   }
-  
+  preds = self$predictions(nonNA, flip=flip)
+  preds
 },
-updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
+updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
   prev_i1=full_model
+  liab = self$liab
   ypred = self
   prev_kj = prev_i1 
   phensi=self$phensi
@@ -603,13 +672,12 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
   for(kk1 in names(phensi)){ #} 1:length( ypred$ypreds)){
    # print(kk1)
     kk = phensi[[kk1]]
-   
     levs1 = NULL
     family =getOption("fspls.family",strsplit(kk1,"\\.")[[1]][1])
     # if(family=="multinomial") levs1=dimnames(self$y[[kk1]])[[2]]
     #  if(family=="ordinal")levs1 = min(self$y[[kk1]][,kk], na.rm=TRUE):max(self$y[[kk1]][,kk],na.rm=TRUE) 
   #  if(!is.null(inv_func)) stop("this should be null")
-    self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, family=family, liab=liab)
+    self$calcYpred(prev_kj,d,ind_1,kk1, kk,na_x, family=family)
    
   }
   #   names(ypred$ypreds) = names(self$y)
@@ -620,26 +688,39 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
 #calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, kk)
 # if inv_func is NULL we should forward transform the x otherwise we transform y
   calcYpred=function(prev_kj, d, ind_1,  kk1, kk,na_x, 
-                     family = self$family[[kk]],liab=TRUE){  ## kk1 in model space 
+                     family = self$family[[kk]]){  ## kk1 in model space 
     transforms = d$getTransforms(prev_kj$var )
+    liab=self$liab
     x_ = d$extractData(prev_kj$var, adjust=FALSE)
+    betas=prev_kj$betas_proj[[kk1]]
+   
     if(length(prev_kj$var)==0){
-      ab =matrix(0, nrow = length(which(ind_1)) ,ncol = ncol( prev_kj$betas_proj[[kk1]]))
+      if(family=="multinomial"){
+        x_trans =matrix(0, nrow = length(which(ind_1)) ,ncol = nrow( betas))
+        
+      }else{
+        x_trans =matrix(0, nrow = length(which(ind_1)) ,ncol = ncol( betas))
+      }
     }else{
-        x_trans=.eval1_(x_[ind_1,,drop=FALSE], prev_kj$Wall[[kk1]], transforms, family)
-          #print(x_trans)
-      #    print(dim(x_trans));
-      #    print(prev_kj$betas_proj[[kk1]])
-          ab = x_trans %*% prev_kj$betas_proj[[kk1]] ## mean_x = prev_kj$mean_x)
-          ab = as.matrix(ab)
+   
+      x_trans=.eval1_(x_[ind_1,,drop=FALSE], prev_kj$Wall[[kk1]], transforms, family)
+      
+          #ab = x_trans %*% betas ## mean_x = prev_kj$mean_x)
+          #ab = as.matrix(ab)
     }
+    if(nrow(betas)!=ncol(x_trans)) betas = t(betas)
+    #print(cbind(dim(x_trans),dim(betas) ))
+#    print(dim(x_))
+    lambdas = prev_kj$lambdas[[kk1]]
     constants = prev_kj$constants_proj[[kk1]]
-   # transforms = if(is.null(inv_func)) d$transforms else NULL
-    #      ypred$ypreds[[kk]]$calcYpred(prev_kj,self$data,ind_1,levs,numvar,kk1, self$family[[kk]])
     if(family=="multinomial"){
         levs = names(prev_kj$tbls[[kk1]][kk])
-      if(is.null(dim(ab)) ) ab = matrix(1, ncol=length(levs), nrow = length(which(ind_1)))
-      dimnames(ab)[[2]] = levs
+      ab =   x_trans %*% betas
+      if(is.null(dim(ab)) ){ 
+        ab = matrix(1, ncol=length(levs), nrow = length(which(ind_1)))
+        dimnames(ab)[[2]] = levs
+      }
+      
       if(max(abs(ab))==0) ab =ab+1
       attr(ab, "levs") =levs
       #print(yp)
@@ -649,7 +730,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
       self$ypreds[[kk1]][ind_1,is.na(mi22)]=0
       self$ypreds[[kk1]][ind_1,!is.na(mi22)] =  as.matrix(ab[,mi22[!is.na(mi22)]]) 
     }else if(family=="ordinal"){
-    
+     
       ncols = ncol(self$ypreds[[kk1]])
       constk = constants[[1]]
       if(length(constk)==0){
@@ -659,43 +740,35 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
       }else if(length(constk)>ncols){
         constk = constk[1:ncols]
       }
-      levs1 = 0:length(constk)
-      attr(ab, "levs") =levs1
-      ab1=liability1(ab, constk, liab=liab)
-      self$ypreds[[kk1]][ind_1,] =  ab1
+      if(liab){
+#       ab1= liability1(ab, constk, liab=liab) 
+       aop=1-ao_probs(x_trans,constk, betas,  lambdas[[1]], type="cum")
+        self$ypreds[[kk1]][ind_1,] =  aop;
+      }else{
+        ab = x_trans %*% betas
+        levs1 = 0:length(constk)
+        attr(ab, "levs") =levs1
+        self$ypreds[[kk1]][ind_1,] = ab
+      }
     }else if(family=="binomial"){
-    #  kk_1 = 1
-      constants = unlist(prev_kj$constants_proj[[kk1]])
-      for(jkk in 1:ncol(ab)) ab[,jkk] = ab[,jkk]+ constants[jkk]
-     # for(kk_1 in 1:length(kk)){
-      if(liab)ab = .logistic(ab)
-#        ab =   .calcYpred_binomial(prev_kj,  data, ind_1, kk1 = kk1,
-#                                                    kk=kk_1, 
-#                                   transforms=transforms, 
-#                                     betas1 = prev_kj$betas[[kk1]],
-#                                   constants = constants, liab=liab)  ## for multi-prediction
+      ab = x_trans %*% betas
+      for(jkk in 1:ncol(ab)){
+        ab[,jkk] = if(liab) pao_(ab[,jkk]+ constants[[jkk]], lambdas[[jkk]]) else ab[,jkk]+ constants[[jkk]]
+      }
+      
         self$ypreds[[kk1]][ind_1,] =ab
         colnames(self$ypreds[[kk1]]) = colnames(ab)
-      #}
+
     }else{
       kk_1 = 1
-     # self$ypreds[[kk]]= array(dim=c(length(ind_1),length(kk)))
-      #constants = unlist(prev_kj$constants_proj)
+ 
       constants = unlist(prev_kj$constants_proj[[kk1]])
+      ab = x_trans %*% betas
       for(jkk in 1:ncol(ab)) ab[,jkk] = ab[,jkk]+ constants[jkk]
-      #ab=ab+constants
-#      constants = prev_kj$constants_proj[[kk1]]
- #     for(kk_1 in 1:length(kk)){
-       # ab = .calcYpred_1(prev_kj,  d, ind_1,kk=kk_1, kk1 = kk1,
-      #                    betas1 = prev_kj$betas[[kk1]],
-      #                    transforms = transforms,
-      #                    constants=constants) 
-      #  if(!is.null(inv_func)){
-      #    ab=apply(ab,2,inv_func)
-      #  }
+  
         self$ypreds[[kk1]][ind_1,] = ab
         colnames(self$ypreds[[kk1]]) = colnames(ab)
-  #    }
+
     }
     
     if(!is.null(na_x) && length(which(na_x))>0){
@@ -720,7 +793,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE, liab=TRUE){
      yp1
    })
  },
-calcRMSV=function(y, nonNA,      flip=FALSE){
+calcRMSV=function(y, nonNA,      flip=FALSE, betas=NULL){
   phensi = self$phensi
   ypreds = self$ypreds
   types_ =self$types_
@@ -731,6 +804,8 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
   nsamps = length(which(ind_1))
   #nme_p1 = nme_phens[[1]]
   res_phens=lapply(nme_phens, function(nme_p1){
+  #  print(nme_p1)
+    beta = if(is.null(betas))NULL else betas[[nme_p1]]
     family=  getOption("fspls.family",strsplit(nme_p1,"\\.")[[1]][1])
     fam = family
     mtype = match(family,names(types_))
@@ -739,7 +814,7 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
     names(types_i) = types_i
     ycols = phensi[[nme_p1]]
     ypreds1 = ypreds[[nme_p1]]
-    names(ycols) = names(ypreds1)
+  #  names(ycols) = names(ypreds1)  ##SAFE TO REMOVE
     #  print(names(ycols))
     phens = dimnames(ypreds1)[[2]]
     ycol_inds = 1:length(ycols)
@@ -748,6 +823,7 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
     yp2 = if(is.null(ind_1))ypreds1 else  ypreds1[ind_1,,drop=FALSE] 
     names(ycol_inds) = dimnames(y2)[[2]][ycols]
     rms_1=lapply(ycol_inds, function(ycol_ind){
+      beta1 = if(is.null(beta)) NA else beta[nrow(beta),ycol_ind]
       #print(ycol_ind)
       ycol = ycols[ycol_ind]
       y1 =  y2[,ycol]
@@ -755,7 +831,8 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
     #  yp = inverse_func(yp)
       nonNA = !is.na(y1)
       nonNA = nonNA & !is.na(yp[,1]) 
-      .merge1_new(
+      names(types_i) = types_i
+     aa2= .merge1_new(
         lapply(types_i, function(type_i1){
           #print(type_i1)
           type_i1s = strsplit(type_i1,"\\.")[[1]]
@@ -764,6 +841,8 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
           rms =tryCatch({
             .scoreInternal(yp[nonNA,,drop=FALSE], y1[nonNA],w1[nonNA], type_i, fam,thresh)
           },error=function(w){
+           print("warning");
+            print(w);
             r1 = c(NA,NA,NA);   names(r1) = c("low", "mid","high")
             return(r1)
           })
@@ -779,7 +858,8 @@ calcRMSV=function(y, nonNA,      flip=FALSE){
             df12[,2]=as.numeric(df12[,2])
           }
           df12
-        }), num_cols="value", addName="measure")|> tibble::add_column(nsamps = nsamps, cv=flip)
+        }), num_cols="value", addName="measure")|> tibble::add_column(nsamps = nsamps, cv=flip, beta = beta1, sign = sign(beta1))
+      aa2
     })
     rms_2 = .fixBeforeMerge(rms_1)
     df3=.merge1_new(rms_2,num_cols="value", addName="pheno")

@@ -23,7 +23,7 @@ library(fspls2)
 
 #devtools::load_all( "~/github/fspls2/R")
 ##set the types
-  options("fspls.types"= jsonlite::fromJSON('{"gaussian":["correlation","rms"],"binomial":["AUC","AUPRC"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
+  options("fspls.types"= jsonlite::fromJSON('{"gaussian":["correlation","rms"],"binomial":["AUC","AUPRC","area"],"multinomial":["AUC"],"ordinal" : "AUC_all"}'))
 
   ## set the y_transforms to explore 
   pows = 1
@@ -37,13 +37,15 @@ library(fspls2)
                batchsize=0, ##batchsize can be specified alternatively to nfold, but only one can be nonzero
                angles_only=TRUE, ## whether to use purely angles to find best variables (TRUE is much faster but potentially less accurate)
                topn=20,  ## if using model fit to rank variables, how many top angles to take  (larger takes more time if angles_only is FALSE)
-               beam=1, ## how many best combinations to take through to next round of iteration. minimum value is 1, but higher explores more combinations
+               beam=5, ## how many best combinations to take through to next round of iteration. minimum value is 1, but higher explores more combinations
                all_v_all=FALSE,  ## for multi-class outcomes, this builds all vs all classifier, instead of a one vs all
                project=TRUE,   ## whether to use the projection approach in model building (TRUE recommended)
             useglmnet=FALSE,  ##whether to use glmnet for model fitting (after variables selected) doesnt work well for randomisation.  Note that useglmnet is TRUE by default for multinomial
             update_norm_each_iteration=FALSE,  #whether to update norm each iteration
                         verbose=FALSE,
-            lambda = NULL, ## for using glmnet
+            lambda = NULL, 
+            firth=TRUE,
+            link = 1:5/5,  ## link function paramaterisations under Aranda-Ortaz model. A value of 1 is normal logit link function.  This affects ordinal and binomial models only
               show_warnings=FALSE
     )
 
@@ -76,9 +78,10 @@ library(fspls2)
     data_types = dh$data_types();
     phens = dh$pheno()$all
     variables=analysis$select(datasH, phens, transform_x)
-      dh$update(phens = dh$pheno()$all, flags = flags, transform_x = transform_x, data_types = data_types)
-    variables = dh$select( analysis=analysis)
+    phens = dh$pheno()$all; print(phens)
+   # variables = dh$select( analysis=analysis)
     allvar_table = extract_all_variables(variables)
+    print(subset(allvar_table, beam=="1" & nrep=="full"))
     #vars_all1 = dh$integrate(variables)
     #  vars_all2 = dh$integrate(variables2)
    #ggp2= dh$plot_angles(type=NULL)
@@ -86,22 +89,37 @@ library(fspls2)
   # print(selected_plot)
     #variables = fspls.select(list(dh),  flags, transform_x) #, phens = dh$pheno()$all)
     #Step 2. make models with selected variables
-    all_models =dh$makeAllModels(variables, max_model_length=1000, max_beam=1)
+    dh$update(phens = phens, flags = flags, transform_x = transform_x, data_types = data_types)
+
+    all_models =dh$makeAllModels(variables);
+    ##OPTIONAL IF BEAM>1
+    if(flags$beam>1){
+        all_models = dh$updateEnsemble(all_models)
+    }
+
     #dh$plot_angles()
     #optionally get predictions
+    predictions = dh$extractPredictions(all_models, liab=TRUE)
     
+
+    
+    #optionally visualise the predictions
+        pred_plots = dh$plotPredictions(predictions, merge_beam=FALSE, keep_cv=FALSE)
+
     #Step 3. evaluate the models
-    eval1= dh$evaluateAllModels(all_models)
+   
+    eval1= dh$evaluate(predictions)
+    eval2 = subset(eval1, cv_index %in% c("avg","full","merged"))
     ## Now visuaise the resultsy
-    ggps1=plotEval(eval1,legend=T, grid1=c("subpheno","pheno", "measure"), grid0=c("cv_full"),linetype="data",
+    ggps1=plotEval(eval2,legend=T, grid_y=c("subpheno","pheno", "measure"), grid_x=c("cv_index"),linetype="combined",
                    color="beam",##"full_model"
-                   shape=c("data","transf"),sep_by="data", showranges=F,text="variable",logy=example=="gaussian",
+                   shape=c("combined"),sep_by="data",
+                   showranges=F,text="variable",logy=example=="gaussian",
                    scales="free",title =names(phens)[1], title1="pheno" ) #, grid="pheno~cv_full",showranges = F)
   
     ##optionally get all predictions
     #predictions =     dh$extractPredictions(all_models)
-   
-    ggps1[[1]]
+    list(perf=ggps1, preds=pred_plots)
   }
 
 
@@ -135,7 +153,7 @@ runIterative<-function(example, prop_na=0.2, seed=42){
 ```
 Example 1
 ```{r, eval = FALSE}
-flags$angles_only=FALSE
+flags$angles_only=TRUE
 ggp1=runExample("binomial", nfold=5);
 ggp1
 ```
@@ -153,7 +171,7 @@ ggp3
 Example 4
 ```{r, eval = FALSE}
  ggp4= runExample("multinomial", nfold=5)
-ggp4
+flagsggp4
 ```
 Iteratively replacing uncertain values
 ```{r, eval = FALSE}

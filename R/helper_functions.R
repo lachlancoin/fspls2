@@ -331,8 +331,8 @@ plotEval2<-function(eval1,...){
 #' @param point whether to show dots
 #' @param line whether to include line
 #' @param labelsize the size of the text labels
-#' @param grid0 how to facet on y 
-#' @param grid1 how to facet on x
+#' @param grid_y how to facet on y 
+#' @param grid_x how to facet on x
 #' @param title the title
 #' @param title1 columns to include in the title
 #' @returns ggplot2 plot
@@ -347,9 +347,9 @@ plotEval<-function(eval3,
           showranges=TRUE, ## linetype="fullmodel"
            txtsize=1,logy=FALSE,legend=FALSE,sep_by="",scales="free",point=TRUE,line=TRUE,
        labelsize=2,
-           grid0 = c("cohort","measure"),grid1 = "cv_full",title="", title1=""
+           grid_x = c("cohort","measure"),grid_y = "cv_full",title="", title1=""
           ){
-  
+  grid1 = grid_y; grid0 = grid_x;
   grid0= grid0[grid0 %in% names(eval3)];  grid1= grid1[grid1 %in% names(eval3)]
   beam_levs = c(sort(unique(as.numeric(as.character(eval3$beam)))),"combined"); 
   
@@ -727,16 +727,16 @@ logfunc<-function(x,pow, norm=1,offset=0.1){
   x1=(x+offset)/norm; 
   log(x1)/log(pow)
 }
+invpowfunc<-function(y,pow, norm=1, offset=0.0001){
+  #pow=v[1]; norm=v[2]; offset=v[3];
+  y1 = sign(y) * abs(y)^(1/pow); 
+  y1*norm-offset
+}
 
 powfunc<-function(x,pow, norm=1, offset=0.0001){
  # pow=v[1]; norm=v[2]; offset=v[3]
   x1=(x+offset)/norm; 
   sign(x1) * abs(x1)^pow
-}
-invpowfunc<-function(y,pow, norm=1, offset=0.0001){
-  #pow=v[1]; norm=v[2]; offset=v[3];
-  y1 = sign(y) * abs(y)^(1/pow); 
-  y1*norm-offset
 }
 
 ##this gets transformations for x variable
@@ -930,6 +930,8 @@ sparse_levs<-function(X){
   df
 }
 
+
+
 .sumChisq<-function(pvi){
   if(length(pvi)==0) return(0)
   pvi1=unlist(pvi)
@@ -1021,8 +1023,8 @@ lapply_filter = function(y, FUN){
      t_new = lapply(t, function(t1){
        mi1 = match(nmes0,names(t1))
        if(length(which(is.na(mi1)))>0) {
-         print(nmes0);
-         print(names(t1))
+        # print(nmes0);
+        # print(names(t1))
          stop(" colnames mismatch")
        }
        
@@ -1375,7 +1377,9 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   df
 }
 summariseAreaPlot<-function(df){
-  pw = pivot_wider(df, names_from="subpheno", id_cols="knots")
+pw = df |>
+    dplyr::distinct(subpheno, knots, .keep_all = TRUE) |>
+    pivot_wider(names_from="subpheno", id_cols="knots")
   diff=0
   diff_v = apply(pw, 1, function(v)abs(v[2]-v[1]))
   for(k in 2:nrow(pw)){
@@ -1889,7 +1893,11 @@ summariseAreaPlot<-function(df){
   }
   
 }
-.lrt<-function(ll1,ll2,  df1 =  attr(ll1,"df")[1] ,  df2 = attr(ll2,"df")[1],totweight=1,log.p=FALSE){
+.lrt<-function(ll1,ll2,  df1,df2,
+              totweight=1,log.p=FALSE){
+  if(is.null(ll2)) ll2 = ll1;
+ # df1 =  attr(ll1,"df")[1] 
+#  df2 = attr(ll2,"df")[1]
   if(df2>df1) stop(paste("df2 should be bigger than df1 ",df2,df1))
   pchisq((2*(ll1 - ll2))/(totweight),df1-df2,lower.tail=FALSE,log.p=log.p)
 }
@@ -1939,3 +1947,6 @@ cbind(model_weights[[1]][,1:2], data.frame(lapply(model_weights, function(mw)mw[
 
   })
 }
+
+
+
