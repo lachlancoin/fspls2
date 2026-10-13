@@ -838,7 +838,7 @@ predefined=function(incl1,prev_signature, sumAngle){
      beam=0
      prev_i1 = d$makeNextModel(private$models[[k]], prev_i2,b_i_name,phens,k,beam, ypred=NULL, 
                                project=project, logpthresh =0)
-     prev_i1$angle= angle
+     prev_i1$angle=  angle
      prev_i1$angles = c(prev_i2$angle, angle)
      prev_i1$sumAngle = sum(prev_i1$angles);
      prev_i1
