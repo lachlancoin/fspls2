@@ -1683,7 +1683,7 @@ makeAllModels=function(variables,
   phens1 = phens#[[nmes_inds1]]
   nreps = 1:length(variables); names(nreps) = names(variables)
   if(is.null(variables[['full']])) stop("problem")
-  #k=1; nvar=1; beam=1;
+  #k=1; nvar=2; beam=1;
   all_models_full = lapply(nreps, function(k){
     vars_n = variables[[k]]
     models = modelObj$new(k);
@@ -1694,7 +1694,7 @@ makeAllModels=function(variables,
         if(length(grep(random_identifier, names(vars2)))==0){ ## should not have random variables
         if(verbose) print(paste(k,nvar,beam, paste(names(vars2), collapse=";")))
           
-        d$makeModels(models,phens, vars2,k,beam,  flags=flags)
+        private$data$makeModels(models,phens, vars2,k,beam,  flags=flags)
                           
         }
         
