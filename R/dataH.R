@@ -655,6 +655,8 @@ dataH<-R6::R6Class("dataH",
    updateLOOC=function( varn=c(),verbose=FALSE, force=FALSE){
      private$data$updateLOOC( private$phens,private$flags,varn=varn,force=force, verbose=verbose); ### update training object - updates all
    },
+
+
    findPrev=function(comb20, expt_id, var_names, k){
      if(length(var_names)==0){
        ##initial 
@@ -1683,7 +1685,7 @@ makeAllModels=function(variables,
   phens1 = phens#[[nmes_inds1]]
   nreps = 1:length(variables); names(nreps) = names(variables)
   if(is.null(variables[['full']])) stop("problem")
-  #k=1; nvar=2; beam=1;
+  #k=1; nvar=1; beam=1;
   all_models_full = lapply(nreps, function(k){
     vars_n = variables[[k]]
     models = modelObj$new(k);
@@ -1694,7 +1696,7 @@ makeAllModels=function(variables,
         if(length(grep(random_identifier, names(vars2)))==0){ ## should not have random variables
         if(verbose) print(paste(k,nvar,beam, paste(names(vars2), collapse=";")))
           
-        private$data$makeModels(models,phens, vars2,k,beam,  flags=flags)
+        d$makeModels(models,phens, vars2,k,beam,  flags=flags)
                           
         }
         
