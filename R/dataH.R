@@ -1555,12 +1555,12 @@ plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=
 #' @param all_models the output of dataH function getAllModels
 #' @returns list of auc beta and updated sumdiff of weights used as stopping criteria
 updateWeights=function(all_models){
-  predictions =     self$extractPredictions(all_models, liab=TRUE) ## extract predictions in liability space
-  pr1 = predictions[[1]];
-  fulls = lapply(pr1, function(x) x$full)
-  fulls = fulls[unlist(lapply(fulls, length))>0]
+  preds=     self$extractPredictions(all_models, liab=TRUE) ## extract predictions in liability space
+
+  fulls = lapply(preds, function(x) x$full)
   
-  pr =fulls[[length(fulls)]]
+  pr1 =fulls[[length(fulls)]]
+  pr = pr1[[length(pr1)]]
   #calcAUC=TRUE;calcWeights=TRUE;
   auc = private$sample_auc(pr)
   am = all_models$models[[1]]
