@@ -21,9 +21,13 @@ nullLikelihood <- function(y, w = NULL, family = c("binomial", "gaussian", "ordi
   }else if (family == "binomial") {
     if (!all(y1 %in% c(0, 1))) stop("binomial needs a 0/1 response")
     mu <- sum(w1 * y1) / n
-    if (mu <= 0 || mu >= 1) return(0)          # all one class
-    ll = (n * (mu * log(mu) + (1 - mu) * log1p(-mu)))
-    attr(ll,"df") = 1;
+    if (mu <= 0 || mu >= 1){
+      ll = 0;attr(ll,"df")=0
+              # all one class
+    }else{
+      ll = (n * (mu * log(mu) + (1 - mu) * log1p(-mu)))
+      attr(ll,"df") = 1;
+    }
   }else{
   # gaussian
   mu  <- sum(w1 * y1) / n
@@ -35,12 +39,30 @@ nullLikelihood <- function(y, w = NULL, family = c("binomial", "gaussian", "ordi
   ll
 }
 
-fitOrdinal<-function(func, df, lambda, firth=TRUE){
-  m1r = clm_ao(func, df,lambda = lambda, firth = firth)
+fitOrdinal<-function(y,x, lambs,family, firth=TRUE, steps = getOption("clm.steps",1)){
+  colnames(x)=paste("x", 1:ncol(x), sep="")
+  df = data.frame(cbind(y,as.matrix(x) ))
+  df$y = factor(y, levels = sort(unique(y)))  
+  func = paste0("y~",paste(colnames(x), collapse="+"))
   tryCatch({
-  return( list(beta_new1 = m1r$beta, const_term = m1r$alpha, lambda = m1r$lambda, logLik = m1r$logLik,
-       extra_df = 1))
+  fits = clm_ao_path(func, df, lambdas = lambs, firth = FALSE, steps = steps)
+  
+  cfs= clm_ao_path(func, df,lambs, firth=FALSE, steps=steps)
+  max_ind = which.max(unlist(lapply(cfs, function(x) x$logLik)))
+  if(firth){
+    m1r = clm_ao(func, df, lambda = cfs[[max_ind]]$lambda, start = cfs[[max_ind]]$par, steps=1, firth=TRUE)
+  }else{
+    mr1 = cfs[[max_ind]]
+  }
+  const_term = if(family=="binomial") -1*m1r$alpha else m1r$alpha;
+  list(beta_new1 = m1r$beta, const_term =const_term, lambda = m1r$lambda, logLik = m1r$logLik,
+               extra_df = 1)
+ 
+   
+ 
+ 
   }, error=function(errw) {
+    return(NULL);
     tryCatch({
     resz = .getZetaBinary(x,y, w)  ##need as.matrix(x) ??
     return(list(beta_new1=resz$beta_new1,const_term =resz$const_term, lambda=1, logLik =resz$logLik ,
@@ -53,14 +75,22 @@ fitOrdinal<-function(func, df, lambda, firth=TRUE){
   })
 }
 
-fitGLMnet<-function(y,x,family,w, lamb){
+fitGLMnet<-function(y,x,family,w, lambs){
   nonNAy = !is.na(y)
-  
+  names(lambs) = lambs;
+  n = length(which(nonNAy));
+  ncolx = ncol(x)
+  if(ncolx==1){
+    ones = rep(1,nrow(x))
+    x = cbind(ones, x)
+  }
   tryCatch({
-    linkfun = family
-    if(family=="binomial"){
-      linkfun =  binomial(link = ao_link(lamb, reflected=TRUE))
-    }
+    rbetas = lapply(lambs, function(lamb){
+      if(family=="binomial"){
+        linkfun =  binomial(link = ao_link(lamb, reflected=TRUE))
+      }else{
+        linkfun =gaussian(link = sinh_asinh_link(lambda));
+      }
     
     ridge <-  glmnet::cv.glmnet(x[nonNAy,,drop=FALSE],y[nonNAy],family=linkfun,
       #df1, y,family = family,
@@ -76,108 +106,89 @@ fitGLMnet<-function(y,x,family,w, lamb){
       #           lambda = getOption("lambda"), lambda.min.ratio = 1e-10)
     
     rbeta <- coef(ridge,s=min(ridge$lambda),gamma = "gamma.min")
+          mu <- predict(ridge,s="lambda.min", newx = x[nonNAy,,drop=FALSE], type = "response")     # n x nlambda matrix
+         
+           if(family=="binomial"){
+            logLik <- colSums(y * log(mu) + (1 - y) * log1p(-mu))
+         }else{
+          # gaussian
+            rss      <- colSums((y - mu)^2)
+            logLik <- -n / 2 * (log(2 * pi * rss / n) + 1)
+         }
+      attr(rbeta, "logLik")=logLik;
+      rbeta
+    })
+     lls = unlist(lapply(rbetas, function(xx)attr(xx,"logLik")))
+     rbeta = rbetas[[which.max(lls)]];
     const_term = rbeta[1,1]
-    beta_new1 =  rbeta[-1,1]
+    beta_new1 =  if(ncolx==1) rbeta[-(1:2),1] else rbeta[-1,1]
     
-    mu <- predict(ridge,s="lambda.min", newx = x[nonNAy,,drop=FALSE], type = "response")     # n x nlambda matrix
-    n = length(which(nonNAy));
-   if(family=="binomial"){
-      logLik <- colSums(y * log(mu) + (1 - y) * log1p(-mu))
-   }else{
-    # gaussian
-      rss      <- colSums((y - mu)^2)
-      logLik <- -n / 2 * (log(2 * pi * rss / n) + 1)
-   }
+   
+  
     
-    list(const_term = const_term, beta_new1 = beta_new1, lambda = lamb,logLik = logLik, extra_df = 1)
+    list(const_term = const_term, beta_new1 = beta_new1, lambda = lambs[[which.max(lls)]],logLik = attr(rbeta,"logLik"), extra_df = 1)
   }, error=function(errw) {
     warning("reverting to normal glm")
-    fitGLM(y,x,family,w, lamb)
+    fitGLM(y,x,family,w, lambs)
   })
   
 }
 
-fitFirth<-function(y,x,family,w, lambda, firth = TRUE){
+fitGLM<-function(y,x, family,w,lambs, firth=FALSE, type="AS_mean"){ ## type"MPL_Jeffreys
+  #if(family!="binomial") stop("needs to be binomial")
+  names(lambs) = lambs;
   if(is.null(colnames(x))){
     colnames(x) = paste("x",1:ncol(x),sep="")
   }
-   # if(is.null(dim(x))) return( fitGLM(y,x,family,w, lambda, firthIfFail=FALSE))
-    tryCatch({
-    df = data.frame(cbind(y,as.matrix(x) ))
-    df$y = factor(y, levels = sort(unique(y)))  
+  # if(is.null(dim(x))) return( fitGLM(y,x,family,w, lambda, firthIfFail=FALSE))
+  tryCatch({
     func = paste0("y~",paste(colnames(x), collapse="+"))
+    df = as.data.frame(x); 
+    df$y = if(family=="binomial") factor(y, levels = sort(unique(y), decreasing=T))  else y; 
+    rbetas = lapply(lambs, function(lambda){
+    if(family=="binomial"){
+        fam <- binomial(link = ao2(lambda))
+        if(firth){
+          m_mean <- glm(func, data = df, family = fam, method = "brglm_fit", type = type)
+        }else{
+          m_mean <- glm(func, data = df, family = fam)
+          
+        }
+        
+        coeffs = coef(m_mean)
+        beta_new1  = -1*coeffs[-1]
+     
+        names(beta_new1)= colnames(x)
+        const_term  = -1 *coeffs[1];
+    }else{
+      fam = gaussian(link = sinh_asinh_link(lambda))
+      if(firth && FALSE){
+        m_mean <- glm(func, data = df, family = fam, method = "brglm_fit", type = type)
+      }else{
+        m_mean <- glm(func, data = df, family = fam)
+        
+      }
+      coeffs = coef(m_mean)
+      beta_new1  = coeffs[-1]
+      names(beta_new1)= colnames(x)
+      const_term  = coeffs[1];
+    }
    
-    m1s = clm_ao(func, df,lambda = lambda, firth = firth)
-      #m1 =  logistf(y ~ as.matrix(x), weights = w)
-    beta_new1   = m1s$beta;# m1$coefficients[-1]
-    names(beta_new1)= colnames(x)
-      se          =m1s$se_beta; # sqrt(diag(m1$var))[-1]
-   # pv1         <- m1$prob[3]          # penalized profile-likelihood p-value
-    const_term  = -1 *m1s$alpha;# m1$coefficients[1]
-    
-      
-    return(list(const_term = const_term, beta_new1 = beta_new1, lambda = lambda, logLik=m1s$logLik, extra_df = 1))
-  } ,error=function(errw) {
-    message(errw) 
-    return(NULL)
-  })
+      list(const_term = const_term, beta_new1 = beta_new1, lambda =lambda, logLik= logLik(m_mean), extra_df = 1)
+    })
+    rbeta = rbetas[[which.max(unlist(lapply(rbetas, function(xx) xx$logLik)))]]
   
+    
+    return(rbeta)
+  } ,error=function(e) {
+    message(conditionMessage(e)) 
+    if(firth==FALSE && family!="gaussian"){
+      return(fitGLM(y,x, family,w,lambs, firth=TRUE, type="AS_mean")) ## type"MPL_Jeffreys
+        
+    }
+  })
 }
 
-fitGLM<-function(y,x,family,w, lamb,firthIfFail=TRUE){
-  
- tryCatch({
-    withCallingHandlers({
-      if(family=="binomial"){
-        m1=glm(y~as.matrix(x), family=binomial(link = ao_link(lamb, reflected=TRUE)), weights=w) ## including weights lead to non-convergence
-        
-      }else{
-        m1=glm(y~as.matrix(x), family=family, weights=w) ## including weights lead to non-convergence
-      }
-      sm  = summary(m1)
-      ll = logLik(m1)
-      #print(var(x))
-      nr = nrow(sm$coefficients)
-      if(nrow(sm$coeff)<1+ncol(x) ){ ##|| sm$coefficients[nr,2] > abs(sm$coefficients[nr,1])){
-        if(firthIfFail){
-          return(  fitFirth(y,x,family,w, lamb))
-        }
-          return(NULL)
-      }else{
-        #coeff = sm$coeff[2,]
-        
-        const_term = sm$coefficients[1,1]
-        beta_new1=sm$coefficients[-1,1]
-        
-        names(beta_new1)=colnames(x)
-       
-      }
-      
-     return(list(const_term = const_term, beta_new1 = beta_new1,logLik=ll,lambda = lamb, extra_df = 1))
-    }, warning = function(w) {
-      message(w) #warning
-      if(!firthIfFail){
-        return(NULL)
-      
-      }
-      message("reverting to firth")
-     # print("HHH")
-      fitFirth(y,x,family,w, lamb)
-      
-      if(grepl("fitted probabilities numerically 0 or 1", conditionMessage(w))){
-        invokeRestart("muffleWarning")   # ignore this one, keep going
-      }
-      # anything else falls through and propagates up to tryCatch's handler
-    })
-  }, err=function(errw) { ## was warning
-    if(!firthIfFail){
-      return(NULL)
-      
-    }
-    fitFirth(y,x,family,w, lamb)
-  })
- 
-}
 
 .averageResults<-function(res4){
   if(length(res4)==0) return(NULL)
@@ -791,7 +802,7 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,prev_i2,
     res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, b_i_name,prev_var, Wall1,
                               prev_i2,
                               project=project, strict=strict,useoffset=useoffset)
-    
+   
    # data.frame(res1$betas)
     if(family=="multinomial"){
      # betas_new = res1$betas
@@ -1018,8 +1029,10 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
     yp1 =   x_trans_prev[nonNA,,drop=FALSE] %*% betas1
   }
   for(kk in 1:ncoly){
-#    print(kk)
-    lambs=getOption("link", 1.0); names(lambs)=lambs
+   # cat(paste("cBPAll",nme,kk))
+  # print(kk)
+    lambs=if(family=="gaussian") getOption("gaussian.link", 0.0) else  getOption("binomial.link", 1.0);
+    names(lambs)=lambs
     nonNAk = nonNA & non_na_x
     nonNAk1 = non_na_x[nonNA]; ## second subset
     y=ys[,kk][nonNAk]
@@ -1039,7 +1052,12 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
       
     }
     varx = apply(x,2,var,na.rm=T)
-    if(family=="multinomial"){
+#    print(family); print(head(y));
+    if(family=="gaussian" && var(y,na.rm=TRUE)==0){
+      sm2 = NULL
+    }else if(length(table(y))<=1){
+      sm2 = NULL
+    }else if(family=="multinomial"){
        ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
       #mean_x = apply(x,2, mean,na.rm=TRUE)
@@ -1066,49 +1084,14 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
     }else if(family=="ordinal" ){
       ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
-        colnames(x)=paste("x", 1:ncol(x), sep="")
-        df = data.frame(cbind(y,as.matrix(x) ))
-        df$y = factor(y, levels = sort(unique(y)))  
-        func = paste0("y~",paste(colnames(x), collapse="+"))
-      
-        #m11=try(suppressWarnings(polr(func,  data=df,weights=w,Hess=TRUE, method=getOption("ordinal.link","logistic"))),silent=TRUE)
-        sms= lapply(lambs,function(lambda) fitOrdinal(func, df, lambda, firth = firth) )
-        sms = sms[unlist(lapply(sms,length))>0];
-        sm2= if(length(sms)==0) NULL else sms[[which.max(unlist(lapply(sms, function(x)x$logLik)))]]
-        
-       
-        
+        sm2 = fitOrdinal(y,x,  lambs, family, firth = firth);
     }else if(useglm){
-      sms= lapply(lambs, function(lamb) fitGLMnet(y[nonNAy],x[nonNAy,,drop=F],family,w[nonNAy], lamb))
-      sms = sms[unlist(lapply(sms,length))>0];
-      sm2= if(length(sms)==0) NULL else sms[[which.max(unlist(lapply(sms, function(x)x$logLik)))]]
-
-
-    }else if(family=="binomial"){
-            #spike_slab_iter = getOption("spike_slab_iter",0)
-    
-        sms= lapply(lambs, function(lamb) fitGLM(y,x,family,w, lamb, firthIfFail = firth))
-        sms = sms[unlist(lapply(sms,length))>0];
-        if(length(sms)==0){
-          sm2 = NULL
-        }else{
-          max_ind=which.max(unlist(lapply(sms, function(x)x$logLik)))
-         
-            if(  max(varx)>0 && firth && ncol(x)>0){
-              colnames(x)=paste("x", 1:ncol(x), sep="")
-              
-              ##refit with firth only for best lambda to get shrunk beta
-              sm2 = fitFirth(y,x,family,w, lambs[[max_ind]], firth = TRUE)
-              sm2$logLik = sms[[max_ind]]$logLik  ## replace logLik , only use firth for beta
-            }else{
-              sm2=sms[[max_ind]]
-            }
-        }
       
+      sm2 =  fitGLMnet(y[nonNAy],x[nonNAy,,drop=F],family,w[nonNAy], lambs)
+    
     }else{
-       
-        sm2=fitGLM(y,x, family,w,1.0, firthIfFail = firth)
-       
+      sm2 = fitGLM(y,x,family,w, lambs, firth=firth)
+     
     }
     if(zero_model ){
       lambdas[[kk]]=1.0;
@@ -1222,7 +1205,7 @@ extractData=function(var, adjust=TRUE,convert=FALSE){
 },
 
 
-fitEnsemble=function(preds, phens, CHECK=FALSE, verbose=FALSE){
+fitEnsemble=function(preds, phens, CHECK=FALSE, verbose=FALSE,  steps = getOption("clm.steps",1)){
   nvars = 1:length(preds);names(nvars) = names(preds)
   nmes_phens = names(phens); names(nmes_phens) =nmes_phens;
 firth = getOption("firth",FALSE);
@@ -1312,7 +1295,7 @@ coeffs =
           func = paste0("y~",paste(colnames(df1)[-1], collapse="+"))
           #m1 <- ordinal::clm(func, data = df1,  link = "logit")
                       
-          m1 = clm_ao(func, df1,lower=0,lambda = lambda1, firth = firth)
+          m1 = clm_ao(func, df1,lower=0,lambda = lambda1, firth = firth, steps  =steps)
           
           
           rbeta1 =  m1$beta
@@ -1356,9 +1339,18 @@ coeffs =
           }
            df1 = data.frame(preds1[include_ind])[nonNAy,,drop=F];
            names(df1) = names(preds1)[include_ind]
+           lambda1 =mean(unlist(lapply(lambdas[include_ind], function(x) x[[nme_p]][[y_ind]])))
+           if(family=="binomial") {
+             
+             linkfun=  binomial(link = ao_link(lambda1, reflected = TRUE))
+           }else{
+             linkfun=  gaussian(link=sinh_asinh_link(lambda))
+             
+           }
+           
           if(length(include_ind)==1){
             
-            summ = summary(glm(y[nonNAy,ik]~df1[[1]], family=family, weights = weights))
+            summ = summary(glm(y[nonNAy,ik]~df1[[1]], family=linkfun, weights = weights))
             rbeta = summ$coefficients[,1]
             if(length(rbeta)==1){ ##coeff only
               rbeta = c(0,1)
@@ -1370,12 +1362,8 @@ coeffs =
            
             df2 = as.matrix(df1);
             nonNAx = apply(df2,1,function(v) length(which(is.na(v)))==0)
-          linkfun =  family;
-          lambda1 = 1;
-          if(family=="binomial") {
-            lambda1 =mean(unlist(lapply(lambdas[include_ind], function(x) x[[nme_p]][[y_ind]])))
-            linkfun= if(lambda1==1) "binomial" else binomial(link = ao_link(lambda1, reflected = TRUE))
-          }
+
+         
            rbeta<- tryCatch({
               ridge_cv <- glmnet::cv.glmnet(df2[nonNAx,,drop=F], y[nonNAy, ik][nonNAx],
                                     family =linkfun ,
@@ -1484,7 +1472,7 @@ makeModels=function(models, phens1, vars2,k, beam,
  rmsv=if(checkRMSV) self$checkRMSV(subphens,prev_i2, ypred, nonNA,verbose=verbose) else NULL
   while(jk<=len){
     b_i_name = vars2[[jk]]
-  #  if(verbose) cat(paste(jk,"of",len,";"))
+    if(verbose) cat(paste(jk,"of",len,";"))
     prev_i1 = try(self$makeNextModel(models, prev_i2,b_i_name,subphens,k,beam, Wall=Wall,
                                   ypred=ypred, project=project,  logpthresh =logpthresh))
     if(is.null(prev_i1)) break;
@@ -1574,7 +1562,8 @@ checkRMSV=function(subphens, prev_i1, ypred, nonNA,verbose=FALSE, useglm=TRUE){
   rmsv=(ypred$calcRMSV(self$y, nonNA,     flip=FALSE))
   rmsv
 },
- makeNextModel=function(models,prev_i2, b_i_name, phens, k,beam, ypred=NULL, project=TRUE,  useoffset=TRUE,  logpthresh = -5,
+ makeNextModel=function(models,prev_i2, b_i_name, phens, k,beam, ypred=NULL, project=TRUE,  useoffset=TRUE, 
+                        logpthresh = -5,
                         Wall = prev_i2$Wall,
                         CHECK=getOption("fspls.check",FALSE),
                      #   fitting = TRUE,  ## whether we are trying to fit the model or just get a pvalue
@@ -2009,10 +1998,11 @@ evaluate=function(predictions,phens,flags,
     # print("HH")
      beams = 1:length(pred_nvar_cv); names(beams) = names(pred_nvar_cv)
       .merge1_new(lapply(beams, function(beam){
-        #print(beam)
+      #  print(beam)
         pred_nvar_cv_beam = pred_nvar_cv[[beam]]
         pred2 = pred_nvar_cv_beam
         betas=attr(pred2,"betas"); variables =attr(pred2,"variables")
+        if(nrow(pred2[[1]])<length(nonNA)) stop(paste("dimension mismatch", nrow(pred2[[1]]), self$nrow))
         ypred$ypreds = pred2
         ##note the NAs are already embedded in the prediction
        res33= ypred$calcRMSV(self$y, nonNA, flip=FALSE, betas=betas) |> tibble::add_column(beam=beam)

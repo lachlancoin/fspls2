@@ -622,7 +622,8 @@ updateEnsemble=function(ypreds1, coeff1, nonNA, colnames,liab=FALSE,flip=TRUE){
               yp$ypreds[[nme]][ind_1,i]
             })))
             if(family=="gaussian"){
-              return(mat %*% coeff2[,i]+interc[i] )
+              fam = gaussian(link = sinh_asinh_link(lambda[[i]]))
+              return(fam$linkinv(mat %*% coeff2[,i]+interc[i]))
             }
             if(family=="ordinal"){
               if(!liab) return( mat %*% coeff2[,i])
@@ -761,10 +762,13 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
 
     }else{
       kk_1 = 1
- 
+
       constants = unlist(prev_kj$constants_proj[[kk1]])
       ab = x_trans %*% betas
-      for(jkk in 1:ncol(ab)) ab[,jkk] = ab[,jkk]+ constants[jkk]
+      for(jkk in 1:ncol(ab)){
+        fam = gaussian(link = sinh_asinh_link(lambdas[[jkk]]))
+        ab[,jkk] = fam$linkinv(ab[,jkk]+ constants[jkk])
+      }
   
         self$ypreds[[kk1]][ind_1,] = ab
         colnames(self$ypreds[[kk1]]) = colnames(ab)

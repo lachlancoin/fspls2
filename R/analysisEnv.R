@@ -118,12 +118,25 @@ fspls.iterative<-function(dataset,flags, transform_x){
                  nme="iterative", flags=flags)
  vars_all = NULL; all_models = NULL; preds1 = NULL;
  updates = list();
- select_each_iteration = .readFlag(flags, "select_each_iteration",TRUE);
+ select_each_iteration = .readFlag(flags, "select_each_iteration",FALSE);
  datasH = list(dh);
  k=0
  phens = dh$pheno()$all
+
  analysis =analysisEnv$new(flags=flags, dbDir=NULL) ;
+ quantiles = list(); 
+ sumdiffs = c();
   repeat  {
+    {
+    y_new =     dh$getYNew();
+    q1 = c(y_new$error_rate, quantile(y_new$certainty[y_new$na_inds]));
+    names(q1)[[1]] = "error"
+    quantiles[[k+1]] =q1
+    names(quantiles) = 1:(k+1)
+   
+  # print(data.frame(quantiles))
+    }
+    
     if(k==0 || select_each_iteration) {
             
           vars_all = analysis$select(datasH, phens, transform_x)
@@ -135,15 +148,30 @@ fspls.iterative<-function(dataset,flags, transform_x){
    updated =  dh$updateWeights(all_models)
      updates[[k]] = updated
    message(paste("sumdiff",k,abs(updated$sumdiff)))
+    sumdiffs[[k]] = abs(updated$sumdiff)
   if(abs(updated$sumdiff)<=1e-5 && k>2) {
         message("breaking since probs ordered not improving")
         break;
         
-      }
   }
-  y_new =     dh$getYNew();
-
-   list(dh = dh, vars_all = vars_all, all_models = all_models,updates = updates, 
+    
+    if(length(sumdiffs)>2 && sumdiffs[[k]] >= sumdiffs[[k-1]]) {
+      message("breaking since sumdiff not changing");
+      break;
+      
+    }
+  }
+ 
+ {
+   y_new =     dh$getYNew();
+   q1 = c(y_new$error_rate, quantile(y_new$certainty[y_new$na_inds]));
+   names(q1)[[1]] = "error"
+   quantiles[[k+1]] =q1
+   names(quantiles) = 1:(k+1)
+   
+ }
+  
+   list(dh = dh, vars_all = vars_all, all_models = all_models,updates = updates, quantiles = quantiles,
         y_new = y_new$y, certainty_new = y_new$certainty,error_rate = y_new$error_rate
         
          )

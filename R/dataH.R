@@ -1678,10 +1678,6 @@ makeAllModels=function(variables,
   
   phens = private$phens; flags = private$flags
   d = private$data
- 
-  #if(!is.null(flags[['useglm']])) stop("define useglmnet not useglm")
-  
-  #inds1 = inds#[[nmes_inds1]]
   phens1 = phens#[[nmes_inds1]]
   nreps = 1:length(variables); names(nreps) = names(variables)
   if(is.null(variables[['full']])) stop("problem")
@@ -1694,7 +1690,7 @@ makeAllModels=function(variables,
         v_beam = vars_n[[nvar]][[beam]]
         vars2 = v_beam$var_names
         if(length(grep(random_identifier, names(vars2)))==0){ ## should not have random variables
-        if(verbose) print(paste(k,nvar,beam, paste(names(vars2), collapse=";")))
+        if(verbose) print(paste("HH",k,nvar,beam, paste(names(vars2), collapse=";")))
           
         d$makeModels(models,phens, vars2,k,beam,  flags=flags)
                           
@@ -1706,6 +1702,7 @@ makeAllModels=function(variables,
    am =  models$separate();
    am;
   })
+  if(verbose) print("finished making models")
  pres=
   .merge1_new(lapply(all_models_full, function(all_models){
    .merge1_new(lapply(all_models, function(am){

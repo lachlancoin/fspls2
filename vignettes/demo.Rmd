@@ -37,7 +37,7 @@ library(fspls2)
                batchsize=0, ##batchsize can be specified alternatively to nfold, but only one can be nonzero
                angles_only=TRUE, ## whether to use purely angles to find best variables (TRUE is much faster but potentially less accurate)
                topn=20,  ## if using model fit to rank variables, how many top angles to take  (larger takes more time if angles_only is FALSE)
-               beam=5, ## how many best combinations to take through to next round of iteration. minimum value is 1, but higher explores more combinations
+               beam=1, ## how many best combinations to take through to next round of iteration. minimum value is 1, but higher explores more combinations
                all_v_all=FALSE,  ## for multi-class outcomes, this builds all vs all classifier, instead of a one vs all
                project=TRUE,   ## whether to use the projection approach in model building (TRUE recommended)
             useglmnet=FALSE,  ##whether to use glmnet for model fitting (after variables selected) doesnt work well for randomisation.  Note that useglmnet is TRUE by default for multinomial
@@ -45,7 +45,8 @@ library(fspls2)
                         verbose=FALSE,
             lambda = NULL, 
             firth=TRUE,
-            link = 1:5/5,  ## link function paramaterisations under Aranda-Ortaz model. A value of 1 is normal logit link function.  This affects ordinal and binomial models only
+            binomial.link = 1:5/5,  ## link function paramaterisations under Aranda-Ortaz model. A value of 1 is normal logit link function.  This affects ordinal and binomial models only
+            gaussian.link=seq(-1,1,by=0.5),
               show_warnings=FALSE
     )
 
@@ -81,7 +82,7 @@ library(fspls2)
     phens = dh$pheno()$all; print(phens)
    # variables = dh$select( analysis=analysis)
     allvar_table = extract_all_variables(variables)
-    print(subset(allvar_table, beam=="1" & nrep=="full"))
+  #  print(subset(allvar_table, beam=="1" & nrep=="full"))
     #vars_all1 = dh$integrate(variables)
     #  vars_all2 = dh$integrate(variables2)
    #ggp2= dh$plot_angles(type=NULL)
@@ -128,6 +129,8 @@ library(fspls2)
 runIterative<-function(example, prop_na=0.2, seed=42){
  
   flags$nfold=1 ## only works with one fold currently
+  flags$min=1  ## need at least one variable
+  flags$angles_only=FALSE ## works much better with pvalus
  # flags$angles_only = FALSE ## works better with angles_only=FALSE
      fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
     dataset = readRDS(fi); 
@@ -142,8 +145,9 @@ runIterative<-function(example, prop_na=0.2, seed=42){
   flags$select_each_iteration = TRUE;
   results = fspls.iterative(dataset, flags, transform_x)
   #print(results$updates)
-  na_remaining= length(which(results$certainty_new<0.95))
-  message(paste("na remaining", na_remaining))  
+  print(data.frame(results$quantiles))
+  na_remaining= length(which(results$certainty_new<0.90))
+  message(paste("na remaining", na_remaining, "of", length(na_inds1)))  
   message(paste("error rate",results$error_rate))
  results_all =  list(input = data.frame(y = dataset$y, certainty=dataset$certainty ), output = data.frame(results$y_new, results$certainty_new), results = results)
  return(results_all)
@@ -153,7 +157,6 @@ runIterative<-function(example, prop_na=0.2, seed=42){
 ```
 Example 1
 ```{r, eval = FALSE}
-flags$angles_only=TRUE
 ggp1=runExample("binomial", nfold=5);
 ggp1
 ```
@@ -171,12 +174,12 @@ ggp3
 Example 4
 ```{r, eval = FALSE}
  ggp4= runExample("multinomial", nfold=5)
-flagsggp4
+ggp4
 ```
 Iteratively replacing uncertain values
 ```{r, eval = FALSE}
 ## test Iterative works on binomial and multinomial
-flags$angles_only = TRUE;
+flags$angles_only = FALSE;
 
 results = runIterative("binomial")
 print(cbind(results$input, results$output))
@@ -184,7 +187,7 @@ print(cbind(results$input, results$output))
 
 ```{r, eval = FALSE}
 ## test Iterative works on binomial and multinomial
-flags$angles_only = TRUE;
+flags$angles_only = FALSE;
 results = runIterative("multinomial")
 print(cbind(results$input, results$output))
 

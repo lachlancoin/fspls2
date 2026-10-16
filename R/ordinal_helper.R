@@ -24,6 +24,31 @@ dao_ <- function(eps, lambda) {
   exp(eps - (1 / lambda + 1) * log1p(lambda * exp(eps)))
 }
 
+ao_info_fast <- function(theta, beta, X, lambda) {
+  X <- as.matrix(X); n <- nrow(X); K <- length(theta) + 1; p <- ncol(X)
+  eta  <- drop(X %*% beta)
+  dens <- cbind(0, vapply(theta, function(t) dao_(t - eta, lambda), numeric(n)), 0)  # n x (K+1)
+  Fc   <- cbind(0, vapply(theta, function(t) pao_(t - eta, lambda), numeric(n)), 1)
+  P    <- pmax(Fc[, -1, drop = FALSE] - Fc[, -(K + 1), drop = FALSE], 1e-300)       # n x K
+  fu   <- dens[, -1, drop = FALSE]; fl <- dens[, -(K + 1), drop = FALSE]
+  d    <- fu - fl
+  
+  Itt <- matrix(0, K - 1, K - 1)
+  for (j in seq_len(K - 1))
+    Itt[j, j] <- sum(fu[, j]^2 / P[, j]) + sum(fl[, j + 1]^2 / P[, j + 1])
+  for (j in seq_len(K - 2) + 1)
+    Itt[j, j - 1] <- Itt[j - 1, j] <- -sum(fu[, j] * fl[, j] / P[, j])
+  
+  Itb <- matrix(0, K - 1, p)
+  for (t in seq_len(K - 1))
+    Itb[t, ] <- drop(crossprod(X, -fu[, t] * d[, t] / P[, t] + fl[, t + 1] * d[, t + 1] / P[, t + 1]))
+  
+  W   <- rowSums(d^2 / P)
+  Ibb <- crossprod(X, X * W)
+  
+  rbind(cbind(Itt, Itb), cbind(t(Itb), Ibb))
+}
+
 # Closed-form expected information for (theta_1..theta_{K-1}, beta_1..beta_p)
 ao_info <- function(theta, beta, X, lambda) {
   X <- as.matrix(X); n <- nrow(X); K <- length(theta) + 1; p <- ncol(X)
@@ -45,7 +70,22 @@ ao_info <- function(theta, beta, X, lambda) {
   I
 }
 
-clm_ao <- function(formula, data, lambda,lower=NULL, firth = FALSE, steps = 6, maxit = 1000) {
+clm_ao_path <- function(formula, data, lambdas, ...) {
+  ord  <- order(lambdas, decreasing = TRUE)      # start at the logit end and walk down
+  fits <- vector("list", length(lambdas))
+  st   <- NULL
+  for (i in ord) {
+    f <- tryCatch(clm_ao(formula, data, lambda = lambdas[i], start = st, ...),
+                  error = function(e) NULL)
+    fits[[i]] <- f
+    if (!is.null(f) && f$convergence == 0) st <- f$par   # carry forward only good fits
+  }
+  names(fits) <- format(lambdas)
+  fits
+}
+
+
+clm_ao <- function(formula, data, lambda,lower=NULL, firth = FALSE, steps = 6, maxit = 1000,  start = NULL) {
   stopifnot(is.numeric(lambda), length(lambda) == 1, lambda > 0)
   formula <- as.formula(formula)
   
@@ -92,7 +132,10 @@ clm_ao <- function(formula, data, lambda,lower=NULL, firth = FALSE, steps = 6, m
     -sum(log(pmax(pr, 1e-300)))
   }
   
-  info_fn <- function(par, lam) ao_info(th_of(par), par[(K - 1) + seq_len(p)], X, lam)
+    info_fn <- function(par, lam) ao_info_fast(th_of(par), par[(K - 1) + seq_len(p)], X, lam)
+    
+
+  #  info_fn <- function(par, lam) ao_info(th_of(par), par[(K - 1) + seq_len(p)], X, lam)
   
   # Expected Fisher information on the (theta, beta) scale
   info_fn_old <- function(par, lam) {
@@ -132,14 +175,28 @@ clm_ao <- function(formula, data, lambda,lower=NULL, firth = FALSE, steps = 6, m
 #  }
   # then use nll_pen(l) in place of nll_fn(l) inside the nlminb loop
   
-  # Start from marginal logit cutpoints and zero betas
-  cp <- qlogis(cumsum(tabulate(y, K))[-K] / n)
-  #st <- c(cp[1], log(diff(cp)), rep(0, p))
-  st <- c(cp[1], log(diff(cp)), pmax(rep(0, p), lb))
+ 
+  
+  if (!is.null(start)) {
+    stopifnot(length(start) == npar)
+    st <- start
+    # if you have the `lower` edit, keep the start feasible: st <- pmax(st, lower_all)
+  }else{
+    # Start from marginal logit cutpoints and zero betas
+    cp <- qlogis(cumsum(tabulate(y, K))[-K] / n)
+    #st <- c(cp[1], log(diff(cp)), rep(0, p))
+    st <- c(cp[1], log(diff(cp)), pmax(rep(0, p), lb))
+  }
   
   # Continuation from logit (lambda = 1) down/up to the target, with warm starts
-  path <- if (lambda == 1) 1 else exp(seq(0, log(lambda), length.out = steps + 1))
+  #path <- if (lambda == 1) 1 else exp(seq(0, log(lambda), length.out = steps + 1))
+  #path[length(path)] <- lambda
+  
+  path <- if (!is.null(start)) lambda
+  else if (lambda == 1) 1
+  else exp(seq(0, log(lambda), length.out = steps + 1))
   path[length(path)] <- lambda
+  
   for (l in path) {
     #  fit <- nlminb(st, nll_fn(l), control = list(iter.max = maxit, eval.max = 2 * maxit))
     fit <- nlminb(st, nll_fn(l), lower = lower_all,
@@ -198,6 +255,7 @@ clm_ao <- function(formula, data, lambda,lower=NULL, firth = FALSE, steps = 6, m
                  se_alpha = se[1:length(theta)], se_beta = se[-(1:length(theta))], vcov = V,
                 logLik=logLik, pen.logLik = -fit$objective,
                  npar = npar,firth = firth,
+                par = fit$par,
               #   removed = colnames(full)[-keep],
                  nobs = n, convergence = fit$convergence,
                  fitted.prob = fitted.prob, call = match.call()),
@@ -367,7 +425,7 @@ perm_link <- function(seed) {
 
 
 ordinal_validation<-function(){
-  
+  fast = FALSE;
   set.seed(42)
   lambda <- 0.5
   K <- 4; p <- 2; n <- 5000
@@ -388,8 +446,10 @@ ordinal_validation<-function(){
     cum <- outer(eta, theta, function(e, t) pao_(t - e, lambda))
     cbind(cum, 1) - cbind(0, cum)
   }
+  max(abs(ao_info_fast(theta0, beta0, X, lambda) - ao_info(theta0, beta0, X, lambda)))   # expect ~1e-10 or smaller
   
-  I_closed <- ao_info(theta0, beta0, X, lambda)
+    I_closed <- ao_info_fast(theta0, beta0, X, lambda)
+  #    I_closed1 <- ao_info(theta0, beta0, X, lambda)
   
   ## ---- Test 1 (exact): closed form vs finite-difference derivatives of the probabilities
   P  <- prob_fn(par0)
@@ -470,8 +530,35 @@ ordinal_validation<-function(){
 }
 
 
+sinh_asinh_link <- function(lambda) {
+  stopifnot(is.numeric(lambda), length(lambda) == 1)
+  if (abs(lambda) < 1e-8) return(make.link("identity"))
+  k   <- abs(lambda)
+  big <- 700                                   # keep sinh/cosh below overflow (~710)
+  
+  if (lambda > 0) {                            # inverse link = sinh(k*eta)/k  (steeper)
+    linkfun   <- function(mu)  asinh(k * mu) / k
+    linkinv   <- function(eta) sinh(pmin(pmax(k * eta, -big), big)) / k
+    mu.eta    <- function(eta) cosh(pmin(pmax(k * eta, -big), big))
+    d2mu.deta <- function(eta) k * sinh(pmin(pmax(k * eta, -big), big))
+  } else {                                     # inverse link = asinh(k*eta)/k  (flatter)
+    linkfun   <- function(mu)  sinh(pmin(pmax(k * mu, -big), big)) / k
+    linkinv   <- function(eta) asinh(k * eta) / k
+    mu.eta    <- function(eta) 1 / sqrt(1 + (k * eta)^2)
+    d2mu.deta <- function(eta) -k^2 * eta / (1 + (k * eta)^2)^1.5
+  }
+  
+  structure(list(linkfun = linkfun, linkinv = linkinv, mu.eta = mu.eta,
+                 d2mu.deta = d2mu.deta, valideta = function(eta) TRUE,
+                 name = paste0("sinh-asinh(", lambda, ")")),
+            class = "link-glm")
+}
+
+
 TEST=FALSE;
 if(TEST){
+  
+  
   
   ordinal_validation()
   
@@ -526,4 +613,80 @@ for (lam in c(0.1, 0.5, 1, 2)) print(all.equal(pao_(qao_(p, lam), lam), p))
 #qao_(cumsum(prop.table(table(df1$y)))[-nlevels(df1$y)], lambda = 0.25)
 
 }
+
+test_logistf<-function(){
+  
+  library(logistf)
+  library(brglm2)
+  library(glmx)
+  
+  # Define an asymmetric Aranda-Ordaz link with lambda = 0.5
+ # ao_link <- aranda.ordaz(lambda = 1.0, type = "asymmetric")
+  
+ 
+
+  
+  set.seed(42)
+  lambda <- 0.5
+  K <- 2; p <- 2; n <- 5000
+  theta0 <- c(-1); beta0 <- c(0.8, -0.5)
+  X <- matrix(rnorm(n * p), n, p, dimnames = list(NULL, c("x1", "x2")))
+  eta0 <- drop(X %*% beta0)
+  
+  sim_y <- function() {                       # Y = j  <=>  theta_{j-1} < eta + eps <= theta_j
+    z <- eta0 + qao_(runif(n), lambda)
+    findInterval(z, theta0) + 1L
+  }
+  y <- sim_y()
+  d = data.frame(cbind(y,X))
+  d$y = factor(d$y, ordered=TRUE)
+  d$y01_low <- as.numeric(d$y == levels(d$y)[1])     # 1 = lower category
+  
+  
+  fam <- binomial(link = ao2(lambda))                   # phi = your lambda
+  
+  m_ml   <- glm(y01_low ~ x1 + x2, data = d, family = fam)
+  m_mean <- glm(y01_low ~ x1 + x2, data = d, family = fam, method = "brglm_fit", type = "AS_mean")
+  m_mpl  <- glm(y01_low ~ x1 + x2, data = d, family = fam, method = "brglm_fit", type = "MPL_Jeffreys")
+  
+  cf <- clm_ao(y ~ x1 + x2, d[,1:3], lambda = lambda, firth = TRUE)
+  cbind(MPL = -coef(m_mpl)[-1], AS_mean = -coef(m_mean)[-1], clm_ao_firth = cf$beta)
+  c(coef(m_mpl)[1], cf$alpha)      
+  func = "y~x1+x2";
+  
+  lf <- logistf(y ~ x1 + x2, data = d)            # your predictors here
+  cf <- clm_ao(func, d[,1:3], lambda = lambda, firth = TRUE, steps = 1)
+  cfs= clm_ao_path(func, d[,1:3], c(0.1,0.5,1.0), firth=FALSE, steps=1)
+  max_ind = which.max(unlist(lapply(cfs, function(x) x$logLik)))
+  clm_ao(func, d[,1:3], lambda = cfs[[max_ind]]$lambda, start = cfs[[max_ind]]$par, steps=1, firth=TRUE)
+  
+  fitOrdinal(y,X,c(0.1,1.0) )
+  
+  m <- glm(y ~ x1 + x2, data = d[1:10,1:3], family = gaussian(link = sinh_asinh_link(-0.5)), method="brglm_fit", type="MPL_Jeffreys") #AS_mean
+  
+  
+  fitFirth_brglm2(y,X, "binomial",rep(1, length(y)),lambda)
+    
+
+  m <- glm(y ~ x1 + x2, data = d,
+           family = binomial(link = ao2(lambda)) ,
+           method = "brglm_fit",
+           type = "AS_mean")  
+  sm = summary(m);
+  
+  cbind(logistf = coef(lf)[-1], clm_ao = cf$beta, brglm2=-1*sm$coefficients[-1,1])
+  c(-coef(lf)[1], cf$alpha, sm$coefficients[1,1])
+  
+  
+  library(microbenchmark)
+  microbenchmark(
+    brglm = fitFirth_brglm2(y, X, "binomial",w = rep(1, nrow(x)), lambda = 0.5, type = "MPL_Jeffreys"),
+    clm   = clm_ao(y ~ x1 + x2, d, lambda = 0.5, firth = TRUE, steps = 1),
+    times = 20
+  )
+  
+}
+
+
+
 
