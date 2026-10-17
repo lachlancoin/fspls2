@@ -1690,7 +1690,7 @@ makeAllModels=function(variables,
         v_beam = vars_n[[nvar]][[beam]]
         vars2 = v_beam$var_names
         if(length(grep(random_identifier, names(vars2)))==0){ ## should not have random variables
-        if(verbose) print(paste("HH",k,nvar,beam, paste(names(vars2), collapse=";")))
+        if(verbose) print(paste("k,nvar,beam,vars2:",k,nvar,beam, paste(names(vars2), collapse=";")))
           
         d$makeModels(models,phens, vars2,k,beam,  flags=flags)
                           
