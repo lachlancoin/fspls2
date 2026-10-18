@@ -9,7 +9,7 @@ Authors@R: c(person(given = "Lachlan",
                       role = c("aut", "cre"),
                       email = "l.coin@imb.uq.edu.au")
         )
-Imports: R6, jsonlite, Matrix, glmnet, tidyr, MASS, ggplot2, pROC, binom, confintr, DBI, RSQLite, methods,tibble, ggrepel, RColorBrewer, data.table, boot, precrec
+Imports: R6, jsonlite, Matrix, glmnet, tidyr, MASS, ggplot2, pROC, binom, confintr, DBI,dplyr, RSQLite, methods,tibble, ggrepel, RColorBrewer, data.table, boot, precrec, ordinal, brglm2, glmx
 Depends:
     R (>= 4.1.0)
 Maintainer: Lachlan Coin <l.coin@imb.uq.edu.au>
