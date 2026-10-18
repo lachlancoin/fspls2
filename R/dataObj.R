@@ -75,9 +75,9 @@ fitOrdinal<-function(y,x, lambs,family, firth=TRUE, steps = getOption("clm.steps
   })
 }
 
-fitGLMnet<-function(y,x,family,w, lambs){
+fitGLMnet<-function(y,x,family,w, fams){
   nonNAy = !is.na(y)
-  names(lambs) = lambs;
+#  names(lambs) = lambs;
   n = length(which(nonNAy));
   ncolx = ncol(x)
   if(ncolx==1){
@@ -85,14 +85,10 @@ fitGLMnet<-function(y,x,family,w, lambs){
     x = cbind(ones, x)
   }
   tryCatch({
-    rbetas = lapply(lambs, function(lamb){
-      if(family=="binomial"){
-        linkfun =  binomial(link = ao_link(lamb, reflected=TRUE))
-      }else{
-        linkfun =gaussian(link = sinh_asinh_link(lambda));
-      }
+    rbetas = lapply(fams, function(fam){
+   
     
-    ridge <-  glmnet::cv.glmnet(x[nonNAy,,drop=FALSE],y[nonNAy],family=linkfun,
+    ridge <-  glmnet::cv.glmnet(x[nonNAy,,drop=FALSE],y[nonNAy],family=fam,
       #df1, y,family = family,
                                    alpha = 0,
                                    standardize = FALSE,
@@ -126,17 +122,19 @@ fitGLMnet<-function(y,x,family,w, lambs){
    
   
     
-    list(const_term = const_term, beta_new1 = beta_new1, lambda = lambs[[which.max(lls)]],logLik = attr(rbeta,"logLik"), extra_df = 1)
+    list(const_term = const_term, beta_new1 = beta_new1, lambda = as.numeric(names(lambs)[[which.max(lls)]]),logLik = attr(rbeta,"logLik"), extra_df = 1)
   }, error=function(errw) {
     warning("reverting to normal glm")
-    fitGLM(y,x,family,w, lambs)
+    fitGLM(y,x,family,w, fams)
   })
   
 }
 
-fitGLM<-function(y,x, family,w,lambs, firth=FALSE, type="AS_mean"){ ## type"MPL_Jeffreys
+fitGLM<-function(y,x, family,w,
+                 fams,
+                 firth=FALSE, type="AS_mean"){ ## type"MPL_Jeffreys
   #if(family!="binomial") stop("needs to be binomial")
-  names(lambs) = lambs;
+ # names(lambs) = lambs;
   if(is.null(colnames(x))){
     colnames(x) = paste("x",1:ncol(x),sep="")
   }
@@ -145,13 +143,13 @@ fitGLM<-function(y,x, family,w,lambs, firth=FALSE, type="AS_mean"){ ## type"MPL_
     func = paste0("y~",paste(colnames(x), collapse="+"))
     df = as.data.frame(x); 
     df$y = if(family=="binomial") factor(y, levels = sort(unique(y), decreasing=T))  else y; 
-    rbetas = lapply(lambs, function(lambda){
+    rbetas = .lapply_nme(fams, function(lambda){
     if(family=="binomial"){
-        fam <- binomial(link = ao2(lambda))
+      
         if(firth){
-          m_mean <- glm(func, data = df, family = fam, method = "brglm_fit", type = type)
+          m_mean <- glm(func, data = df, family = fams[[lambda]], method = "brglm_fit", type = type)
         }else{
-          m_mean <- glm(func, data = df, family = fam)
+          m_mean <- glm(func, data = df, family = fams[[lambda]])
           
         }
         
@@ -161,11 +159,11 @@ fitGLM<-function(y,x, family,w,lambs, firth=FALSE, type="AS_mean"){ ## type"MPL_
         names(beta_new1)= colnames(x)
         const_term  = -1 *coeffs[1];
     }else{
-      fam = gaussian(link = sinh_asinh_link(lambda))
+     # fam = gaussian(link = sinh_asinh_link(lambda))
       if(firth && FALSE){
-        m_mean <- glm(func, data = df, family = fam, method = "brglm_fit", type = type)
+        m_mean <- glm(func, data = df, family = fams[[lambda]], method = "brglm_fit", type = type)
       }else{
-        m_mean <- glm(func, data = df, family = fam)
+        m_mean <- glm(func, data = df, family = fams[[lambda]])
         
       }
       coeffs = coef(m_mean)
@@ -183,7 +181,7 @@ fitGLM<-function(y,x, family,w,lambs, firth=FALSE, type="AS_mean"){ ## type"MPL_
   } ,error=function(e) {
     message(conditionMessage(e)) 
     if(firth==FALSE && family!="gaussian"){
-      return(fitGLM(y,x, family,w,lambs, firth=TRUE, type="AS_mean")) ## type"MPL_Jeffreys
+      return(fitGLM(y,x, family,w,fams, firth=TRUE, type="AS_mean")) ## type"MPL_Jeffreys
         
     }
   })
@@ -670,7 +668,7 @@ transforms = "list",  ## this is the functions
  # cols_incl="list",
   ypreds_all="ypredObj",
   family="character",
- 
+  fams_all = "list",
   UDVP="UDVPObj",
 
 
@@ -787,7 +785,11 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,prev_i2,
   res = lapply(nmesi, function(nme){
     #print(nme)
     phensi1 =  match(nme, names(self$y))
-    family=getOption("fspls.family",self$family[[phensi1]])
+    family=self$family[[phensi1]]
+    
+    fams = self$fams_all[[phensi1]];
+   
+    
     phensi_=subphens[[nme]]
     Wall1 = Wall[[nme]]
    
@@ -800,7 +802,7 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,prev_i2,
     }
 #    useoffset = length(prev_var)>0 && family!="multinomial"
     res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, b_i_name,prev_var, Wall1,
-                              prev_i2,
+                              prev_i2,fams,
                               project=project, strict=strict,useoffset=useoffset)
    
    # data.frame(res1$betas)
@@ -889,16 +891,14 @@ testBetaProj=function(vars_all, transform_x){
 
 ##project variable controls whether the projection of the variable is fitted, or the variable itself
 ## Wall1 is projection from previous
-calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,prev_i2,
+calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,prev_i2,fams,
                          project=TRUE, strict=FALSE, 
                          CHECK=getOption("fspls.check",TRUE),
                         useoffset =TRUE){
-  
   betas1 = prev_i2$betas_proj[[nme]];
   constants1 = prev_i2$constants_proj[[nme]];
   prevLL =prev_i2$logLiks[[nme]];
   prev_df = prev_i2$degsf[[nme]]
-  
   data = self 
   useglm=getOption("useglmnet",FALSE)
   firth = getOption("firth",FALSE);
@@ -1028,12 +1028,12 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
   }else{
     yp1 =   x_trans_prev[nonNA,,drop=FALSE] %*% betas1
   }
+ #  lambs=if(family=="gaussian") getOption("gaussian.link", 0.0) else  getOption("binomial.link", 1.0);
+#   names(lambs)=lambs
+   
   for(kk in 1:ncoly){
-   # cat(paste("cBPAll",nme,kk))
-  # print(kk)
-    lambs=if(family=="gaussian") getOption("gaussian.link", 0.0) else  getOption("binomial.link", 1.0);
-    names(lambs)=lambs
-    nonNAk = nonNA & non_na_x
+  #  print(paste(kk,ncoly))
+      nonNAk = nonNA & non_na_x
     nonNAk1 = non_na_x[nonNA]; ## second subset
     y=ys[,kk][nonNAk]
     nonNAy = !is.na(y)
@@ -1087,10 +1087,10 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
         sm2 = fitOrdinal(y,x,  lambs, family, firth = firth);
     }else if(useglm){
       
-      sm2 =  fitGLMnet(y[nonNAy],x[nonNAy,,drop=F],family,w[nonNAy], lambs)
+      sm2 =  fitGLMnet(y[nonNAy],x[nonNAy,,drop=F],family,w[nonNAy], fams)
     
     }else{
-      sm2 = fitGLM(y,x,family,w, lambs, firth=firth)
+      sm2 = fitGLM(y,x,family,w, fams, firth=firth)
      
     }
     if(zero_model ){
@@ -1452,8 +1452,8 @@ makeModels=function(models, phens1, vars2,k, beam,
   len = length(vars2)
   #models = vector("list", len)
   fams1 = lapply(names(phens1), function(st1)strsplit(st1,"\\.")[[1]][1])
-  family = getOption("fspls.family",fams1) #ypred$family[[1]]
-  names(family)=family
+  #family = getOption("fspls.family",fams1) #ypred$family[[1]]
+  #names(family)=family
   
  # if(family[[1]]=="multinomial") {
 #    useoffset=FALSE
@@ -2730,8 +2730,22 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
     if(one_v_rest) names(y) = gsub("multinomial","binomial",names(y))
    self$family = unlist(lapply(names(y), function(nme) rep(gsub(".multiway","",nme),
                                                            if(is.list(y[[nme]])) length(y[[nme]]) else ncol(y[[nme]]))),recursive=FALSE)
+  
    self$y = unlist(y, recursive=FALSE)
    self$weights = weights
+   self$fams_all = .lapply_nme(self$y, function(fam1){
+     family = strsplit(fam1,"\\.")[[1]][1];
+     fams = NULL;
+     if(family=='binomial'){
+       lambs= getOption("binomial.link", 1.0);names(lambs)=lambs
+       fams = lapply(lambs, function(lambda) if(lambda==1) "binomial" else binomial(link = ao2(lambda)))
+     }else if(family=="gaussian"){
+       lambs= getOption("gaussian.link", 0.0); names(lambs)=lambs
+       fams = lapply(lambs, function(lambda)if(lambda==0) "gaussian" else gaussian(link=sinh_asinh_link(lambda)))
+       
+     } 
+     fams;
+   })
     return(NULL)
    # list(missing=missing_vals, matching=matching_vals)
    #self$weights = weights
@@ -2842,6 +2856,7 @@ updateTransforms=function(transform_x){
     self$prev=list()
 #    self$family=if(!is.null(family)) family else .inferFamily(y)
   self$looc=NULL
+  self$fams_all = NULL;
     self$subset = NULL
     #nrowy = nrow(data[[1]])
     #ncoly = 1
