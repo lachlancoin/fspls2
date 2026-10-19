@@ -512,6 +512,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
           nme_ang1 = names(ang1)
           comb2_filtered = lapply(comb2_news, filter_comb, nme_ang1)
           comb2_news =lapply(nmesH, function(nmeh){
+            #print(nmeh)
             comb20=comb2[[nmeh]]
             dh = datasH[[nmeh]]
             comb_filtered=comb2_filtered[[nmeh]];
