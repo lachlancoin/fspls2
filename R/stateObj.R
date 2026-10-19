@@ -63,7 +63,8 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                       self$angles = c();
                       #self$pvs = pvs
                       self$logLiks = logLiks;
-                      self$degsf=degsf;
+                    
+                   #   print("H");print(self$degsf);
                       self$constants_proj=constants_proj
                       self$constants = NULL
                     self$lambdas = lambdas
@@ -71,6 +72,10 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                       self$tbls = tbls
                       self$Wall = Wall
                                        family = unlist(lapply(names(phensi), function(x) getOption("fspls.family",strsplit(x,"\\.")[[1]][1])))
+                                       self$degsf=degsf;
+                                       
+                        
+                                       
                       names(family)=names(phensi)
                       self$betas_proj=betas_proj
                       self$betas = betas;
@@ -112,7 +117,23 @@ stateObj<-R6::R6Class("stateObj",##represents a state of the model
                         names(self$var_names)[[length(self$var_names)]] = varnames
                         names(self$varnames)[[length(self$varnames)]] = varnames
                         
-                     
+                        if(length(self$degsf)==0){
+                          self$degsf = unlist(.lapply_nme(phensi, function(x){
+                            fam = strsplit(x,"\\.")[[1]][1]
+                            if(fam %in% c("multinomial","ordinal")) return(0);
+                            return(rep(0, length(phensi[[x]])))
+                          }))
+                          
+                        }
+                        if(length(self$logLiks)==0){
+                          self$logLiks = unlist(.lapply_nme(phensi, function(x){
+                            fam = strsplit(x,"\\.")[[1]][1]
+                            if(fam %in% c("multinomial","ordinal")) return(-Inf);
+                            return(rep(-Inf, length(phensi[[x]])))
+                          }))
+                          
+                        }
+                        
 
                       }
 #print(self$betas)

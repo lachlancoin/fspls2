@@ -52,7 +52,7 @@ fitOrdinal<-function(y,x, lambs,family, firth=TRUE, steps = getOption("clm.steps
   if(firth){
     m1r = clm_ao(func, df, lambda = cfs[[max_ind]]$lambda, start = cfs[[max_ind]]$par, steps=1, firth=TRUE)
   }else{
-    mr1 = cfs[[max_ind]]
+    m1r = cfs[[max_ind]]
   }
   const_term = if(family=="binomial") -1*m1r$alpha else m1r$alpha;
   list(beta_new1 = m1r$beta, const_term =const_term, lambda = m1r$lambda, logLik = m1r$logLik,
@@ -161,7 +161,7 @@ fitGLM<-function(y,x, family,w,
         const_term  = -1 *coeffs[1];
     }else{
      # fam = gaussian(link = sinh_asinh_link(lambda))
-      if(firth && FALSE){
+      if(firth && FALSE){ ## no point
         m_mean <- glm(func, data = df, family = fams[[lambda]], method = "brglm_fit", type = type)
       }else{
         m_mean <- glm(func, data = df, family = fams[[lambda]])
@@ -181,9 +181,11 @@ fitGLM<-function(y,x, family,w,
     return(rbeta)
   } ,error=function(e) {
     message(conditionMessage(e)) 
-    if(firth==FALSE && family!="gaussian"){
+    if(firth==FALSE && family!="gaussian" && getOption("revertToFirth", TRUE)){
       return(fitGLM(y,x, family,w,fams, firth=TRUE, type="AS_mean")) ## type"MPL_Jeffreys
         
+    }else{
+      return(NULL);
     }
   })
 }
@@ -898,21 +900,21 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,prev_i2,
     family=self$family[[phensi1]]
     
     fams = self$fams_all[[phensi1]];
-   
-    
     phensi_=subphens[[nme]]
     Wall1 = Wall[[nme]]
-   
+    useglm=getOption("useglmnet",FALSE)
+    
+    if(family=="multinomial" && !useglm){
+      family="binomial";
+    }
     if(length(prev_var)==0) {
       project=FALSE ;#family!="multinomial"
       useoffset=FALSE;
     }
-    if(family=="multinomial"){
-      useoffset=FALSE;
-    }
+    
 #    useoffset = length(prev_var)>0 && family!="multinomial"
     res1=self$calcBetaProjAll(nme,phensi_,family,  k, b_i, b_i_name,prev_var, Wall1,
-                              prev_i2,fams,
+                              prev_i2,fams,useglm=useglm,
                               project=project, strict=strict,useoffset=useoffset)
    
    # data.frame(res1$betas)
@@ -1003,6 +1005,8 @@ testBetaProj=function(vars_all, transform_x){
 ## Wall1 is projection from previous
 calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,prev_i2,fams,
                          project=TRUE, strict=FALSE, 
+                         useglm=getOption("useglmnet",FALSE),
+                         
                          CHECK=getOption("fspls.check",TRUE),
                         useoffset =TRUE){
   betas1 = prev_i2$betas_proj[[nme]];
@@ -1010,7 +1014,6 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
   prevLL =prev_i2$logLiks[[nme]];
   prev_df = prev_i2$degsf[[nme]]
   data = self 
-  useglm=getOption("useglmnet",FALSE)
   firth = getOption("firth",FALSE);
   if(length(prev_var)==0){
     useoffset = FALSE;
@@ -1023,7 +1026,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
   data$updateUDVP(prev_var)
  
   ys =self$y[[nme]]##  if(family %in% c("binomial","ordinal")) (d$y1) else if(family =="multinomial") d$y2 else d$y
-  if(family=="multinomial"){
+  if(family=="multinomial" && useglm){
+    useoffset=FALSE;
     ys = data.frame(list(attr(ys,"factor")))
     names(ys) = nme
   }else if(length(phensi_) < ncol(ys)){
@@ -1143,7 +1147,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
    
   for(kk in 1:ncoly){
   #  print(paste(kk,ncoly))
-      nonNAk = nonNA & non_na_x
+    nonNAk = nonNA & non_na_x
     nonNAk1 = non_na_x[nonNA]; ## second subset
     y=ys[,kk][nonNAk]
     nonNAy = !is.na(y)
@@ -1167,14 +1171,14 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
       sm2 = NULL
     }else if(length(table(y))<=1){
       sm2 = NULL
-    }else if(family=="multinomial"){
+    }else if(family=="multinomial" && !useoffset){
        ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
       #mean_x = apply(x,2, mean,na.rm=TRUE)
       #x = t(t(x) - mean_x)
       #print(apply(x,2,mean)) 
       
-      rdf=if(firth) multinom_nnet(x,y,w) else multinom_ridge(x,y,w)
+      rdf= multinom_ridge(x,y,w)
       if(is.null(rdf)){
         sm2 = NULL
       }else{
@@ -1195,6 +1199,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
     }else if(family=="ordinal" ){
       ty=as.list(table(y))
       tbls[[kk]] = ty[ty>0]
+      lambs= getOption("binomial.link", 1.0);
         sm2 = fitOrdinal(y,x,  lambs, family, firth = firth);
     }else if(useglm){
       
@@ -1208,6 +1213,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
       lambdas[[kk]]=1.0;
       logLiks_new[[kk]] = nullLikelihood(y, w, family);
       degsf[[kk]] =attr( logLiks_new[[kk]],"df")
+      if(is.null(degsf[[kk]])) stop("cannot be NULL");
       beta_new1 = rep(0, ncol(x))
       const_term = 0;  
        if(family=="multinomial"){
@@ -1255,6 +1261,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
          constants[[kk]] = const_term  #-mean_adj*beta_new1
   
   }
+   if(length(degsf)==0) stop("cannot be zero!");
   list( constants = constants, 
        betas_proj = betas_proj,
        tbls=tbls, Wall = Wall2, lambdas = lambdas, degsf = degsf, logLiks = logLiks_new)
@@ -2847,7 +2854,7 @@ cols_incl =function(var_threshs, incl = names(self$norm),g_incl = NULL, excl = l
    self$fams_all = .lapply_nme(self$y, function(fam1){
      family = strsplit(fam1,"\\.")[[1]][1];
      fams = NULL;
-     if(family=='binomial'){
+     if(family=='binomial' || family=="multinomial" || family=="ordinal"){
        lambs= getOption("binomial.link", 1.0);names(lambs)=lambs
        fams = lapply(lambs, function(lambda) if(lambda==1) "binomial" else binomial(link = ao2(lambda)))
      }else if(family=="gaussian"){

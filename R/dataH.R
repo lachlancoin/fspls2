@@ -850,7 +850,8 @@ predefined=function(incl1,prev_signature, sumAngle){
      d = private$data
      
      beam=0
-     prev_i1 = d$makeNextModel(private$models[[k]], prev_i2,b_i_name,phens,k,beam, ypred=NULL, 
+     Wall = prev_i2$Wall
+     prev_i1 = d$makeNextModel(private$models[[k]], prev_i2,b_i_name,phens,k,beam, ypred=NULL, Wall = Wall,
                                project=project, logpthresh =0)
      prev_i1$angle=  angle
      prev_i1$angles = c(prev_i2$angle, angle)
@@ -1681,7 +1682,7 @@ makeAllModels=function(variables,
   phens1 = phens#[[nmes_inds1]]
   nreps = 1:length(variables); names(nreps) = names(variables)
   if(is.null(variables[['full']])) stop("problem")
-  #k=1; nvar=5; beam=1;
+  #k=1; nvar=2; beam=1;
   all_models_full = lapply(nreps, function(k){
     vars_n = variables[[k]]
     models = modelObj$new(k);

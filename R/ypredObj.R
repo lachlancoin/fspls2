@@ -715,17 +715,32 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
     lambdas = prev_kj$lambdas[[kk1]]
     constants = prev_kj$constants_proj[[kk1]]
     if(family=="multinomial"){
-        levs = names(prev_kj$tbls[[kk1]][kk])
       ab =   x_trans %*% betas
+      levs = names(prev_kj$tbls[[kk1]][kk])
       if(is.null(dim(ab)) ){ 
         ab = matrix(1, ncol=length(levs), nrow = length(which(ind_1)))
         dimnames(ab)[[2]] = levs
       }
+      if(length(lambdas)>1){
+        for(jkk in 1:ncol(ab)){
+          ab[,jkk] = if(liab) pao_(ab[,jkk]+ constants[[jkk]], lambdas[[jkk]]) else ab[,jkk]+ constants[[jkk]]
+        }
+      #  ab = t(apply(ab,1,.prob))
+        ab = ab/apply(ab,1,sum)
+      }else{
+     
+        attr(ab, "levs") =levs
+        for(jkk in 1:ncol(ab)){
+          ab[,jkk] = ab[,jkk]+ constants[[jkk]]
+        }
+        if(max(abs(ab))==0) ab =ab+1
+        #print(yp)
+        if(liab) ab=liability(ab)
+      }
+    
       
-      if(max(abs(ab))==0) ab =ab+1
-      attr(ab, "levs") =levs
-      #print(yp)
-      if(liab) ab=liability(ab)
+      
+      
       levs = dimnames( self$ypreds[[kk1]])[[2]]
       mi22 = match(dimnames( self$ypreds[[kk1]])[[2]], dimnames(ab)[[2]])
       self$ypreds[[kk1]][ind_1,is.na(mi22)]=0
