@@ -144,6 +144,7 @@ fitGLM<-function(y,x, family,w,
     df = as.data.frame(x); 
     df$y = if(family=="binomial") factor(y, levels = sort(unique(y), decreasing=T))  else y; 
     rbetas = .lapply_nme(fams, function(lambda){
+    
     if(family=="binomial"){
       
         if(firth){
@@ -172,7 +173,7 @@ fitGLM<-function(y,x, family,w,
       const_term  = coeffs[1];
     }
    
-      list(const_term = const_term, beta_new1 = beta_new1, lambda =lambda, logLik= logLik(m_mean), extra_df = 1)
+      list(const_term = const_term, beta_new1 = beta_new1, lambda =as.numeric(lambda), logLik= logLik(m_mean), extra_df = 1)
     })
     rbeta = rbetas[[which.max(unlist(lapply(rbetas, function(xx) xx$logLik)))]]
   
@@ -328,11 +329,120 @@ lapply(str1, function(t_y){
 }
 
 
+multinom_nnet <- function(x, y, w = NULL, decay = 1e-3, standardise = FALSE,
+                          maxit = 500) {
+  print("NNET")
+  x <- as.matrix(x)
+  orig_names <- colnames(x)
+  if (is.null(orig_names)) orig_names <- paste0("x", seq_len(ncol(x)))
+  if (is.null(w)) w <- rep(1, length(y))
+  
+  #ok <- !is.na(y) & !is.na(w) & complete.cases(x)
+  #x <- x[ok, , drop = FALSE]; y <- y[ok]; w <- w[ok]
+  
+  tbl <- sort(table(y), decreasing = TRUE)
+  tbl <- tbl[tbl > 0]
+  lev <- names(tbl)                       # most frequent class first = reference
+  K   <- length(lev)
+  
+  # Standardise so the ridge penalty treats predictors equally
+  if (standardise) {
+    ctr <- colMeans(x)
+    scl <- apply(x, 2, sd); scl[scl == 0] <- 1
+    xs  <- sweep(sweep(x, 2, ctr), 2, scl, "/")
+  } else {
+    ctr <- rep(0, ncol(x)); scl <- rep(1, ncol(x)); xs <- x
+  }
+  
+  xn <- paste0("x", seq_len(ncol(x)))
+  df <- as.data.frame(xs); names(df) <- xn
+  df$y <- factor(as.character(y), levels = lev)
+  df$w <- w
+  fml <- reformulate(xn, response = "y")
+  
+  m <- nnet::multinom(fml, data = df, weights = w, decay = decay, maxit = maxit,
+                      MaxNWts = 1e7, trace = FALSE)
+  if (m$convergence != 0) warning("multinom did not converge within maxit")
+  
+  cf <- coef(m)
+  if (is.null(dim(cf))) {                 # K = 2: coef() returns a named vector
+    cf <- matrix(cf, nrow = 1, dimnames = list(lev[2], names(cf)))
+  }
+  cf <- cf[, c("(Intercept)", xn), drop = FALSE]
+  
+  # Reference-class form -> sum-to-zero (symmetric) form, as glmnet reports
+  full <- rbind(0, cf)
+  rownames(full) <- c(lev[1], rownames(cf))
+  full <- full[lev, , drop = FALSE]
+  sym  <- sweep(full, 2, colMeans(full))  # K x (p+1)
+  
+  # Back-transform to the original predictor scale
+  beta_orig  <- sweep(sym[, -1, drop = FALSE], 2, scl, "/")
+  const_orig <- sym[, 1] - drop(beta_orig %*% ctr)
+  coefmat <- cbind(const_orig, beta_orig)
+  #colnames(coefmat) <- paste0("X", 0:ncol(x))
+  rownames(coefmat) <- lev
+  
+  # Unpenalised multinomial log-likelihood at the fitted coefficients
+  eta <- cbind(1, x) %*% t(coefmat)
+  P   <- exp(eta - apply(eta, 1, max)); P <- P / rowSums(P)
+  idx <- cbind(seq_len(nrow(P)), match(as.character(df$y), lev))
+  ll  <- sum(w * log(pmax(P[idx], 1e-300)))
+  mi1 = match(rownames(coefmat), levels(y))
+  list(coef = coefmat, constant = coefmat[mi1, 1],
+       beta = t(coefmat[mi1, -1, drop = FALSE]),
+       extra_df = K - 1, logLik = ll, levels = lev,
+       decay = decay, convergence = m$convergence)
+}
 #pv1 = .calcPvalue(x_trans[nonNA ,,drop=FALSE]%*% betas[[kk]],yp1[,kk,drop=FALSE],y, w, family)
+multinom_firth <- function(x, y, w = NULL, type = "AS_mean") {
+  print("FIRTH")
+  
+  x <- as.matrix(x)
+  orig_names <- colnames(x)
+  if (is.null(orig_names)) orig_names <- paste0("x", seq_len(ncol(x)))
+  if (is.null(w)) w <- rep(1, length(y))
+  
+  ok <- !is.na(y) & !is.na(w) & complete.cases(x)
+  x <- x[ok, , drop = FALSE]; y <- y[ok]; w <- w[ok]
+  lev = levels(y)
+  tbl <-table(y)
+                           # most frequent class first = reference
+  K   <- length(levels(y))
+  
+  xn <- paste0("x", seq_len(ncol(x)))            # safe internal names
+  df <- as.data.frame(x); names(df) <- xn
+  df$y <- y
+  df$w <- w
+  fml  <- reformulate(xn, response = "y")
+  m    <- brglm2::brmultinom(fml, data = df, weights = w, type = type, ref = which.max(tbl))
+  
+  cf <- coef(m)                                  # assumed (K-1) x (p+1); check with str(cf)
+  cf <- cf[, c("(Intercept)", xn), drop = FALSE] # fix the column order by name
+  full <- rbind(0, cf)
+  rownames(full) <- c(lev[which.max(tbl)], rownames(cf))
+  full <- full[lev, , drop = FALSE]
+  sym  <- t(sweep(full, 2, colMeans(full)))      # (p+1) x K, sum-to-zero across classes
+  rownames(sym) <- c("(Intercept)", orig_names)
+  
+  eta <- cbind(1, x) %*% sym                     # n x K, columns in `lev` order
+  P   <- exp(eta - apply(eta, 1, max)); P <- P / rowSums(P)
+  ll  <- sum(w * log(P[cbind(seq_len(nrow(P)), match(as.character(df$y), lev))]))
+  
+  list(constant = sym[1, ], beta = sym[-1, , drop = FALSE],
+       extra_df = K - 1, logLik = ll, levels = lev)
+}
 
 
 multinom_ridge<-function(x,y,w,lambda=getOption("lambda")){
   degf = (ncol(x)-1) * (length(levels(y))-1)
+  
+  
+    # y must be a factor; the first level is the reference class by default
+   # d$y <- factor(d$y)
+    
+    
+  
   if(is.null(dim(x)) || ncol(x)==1){
     one_inds = 1:2
     x = cbind(1,x)
@@ -1063,7 +1173,8 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
       #mean_x = apply(x,2, mean,na.rm=TRUE)
       #x = t(t(x) - mean_x)
       #print(apply(x,2,mean)) 
-      rdf=multinom_ridge(x,y,w)
+      
+      rdf=if(firth) multinom_nnet(x,y,w) else multinom_ridge(x,y,w)
       if(is.null(rdf)){
         sm2 = NULL
       }else{
