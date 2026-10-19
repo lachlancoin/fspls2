@@ -1381,6 +1381,7 @@ plotPredictions=function(predictions,
   # modlens =  unlist( lapply(modnames, function(x) if(x=="empty") 0 else length(strsplit(x,";")[[1]])))
   # o = order(modlens)
    #modnames = modnames[o]; modvars = modvars[o]; modlens =modlens[o]
+   if(nrow(toplot)==0) return(NULL)
    combined = rep("", nrow(toplot)); combined[grep("combined", toplot$modelname)] = "combined"
    toplot1 = toplot|> tibble::add_column(combined  )
   # toplot1 =  toplot |> tibble::add_column(variables= factor(toplot$modelname, levels=modnames, labels = modvars), 
