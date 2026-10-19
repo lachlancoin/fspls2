@@ -1682,11 +1682,12 @@ makeAllModels=function(variables,
   phens1 = phens#[[nmes_inds1]]
   nreps = 1:length(variables); names(nreps) = names(variables)
   if(is.null(variables[['full']])) stop("problem")
-  #k=1; nvar=1; beam=1;
+  #k=1; nvar=5; beam=1;
   all_models_full = lapply(nreps, function(k){
     vars_n = variables[[k]]
     models = modelObj$new(k);
-    for(nvar in 1:length(vars_n)){
+    nvars=rev(1:length(vars_n));
+    for(nvar in nvars){
       for(beam in 1:length(vars_n[[nvar]])){
         v_beam = vars_n[[nvar]][[beam]]
         vars2 = v_beam$var_names
