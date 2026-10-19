@@ -1291,11 +1291,19 @@ y=function(phens = self$pheno()[[1]]){
 #' @returns  a ggplot
 plotPredictions=function(predictions,
                          phens = private$phens,keep_cv = FALSE, 
-                         merge_beam = FALSE
+                         merge_beam = FALSE,
+                         evals = self$evaluate(predictions)
+                         
                          ){
    y = self$y(phens)
  preds= predictions
  families = names(y); names(families) = families;
+ if(!keep_cv){
+   evals = subset(evals, cv_index %in% c("merged","full","avg") )
+ }
+   evals = subset(evals,  measure %in% c("AUC","correlation"))|> tibble::add_column(knots=0.5, value=0.5)
+ 
+   evals$model=gsub(";","\n",evals$model);
  plot_results=lapply(families, function(fam){
       y1 = y[[fam]]; 
    if(ncol(y1)==0) return(NULL)
@@ -1306,13 +1314,13 @@ plotPredictions=function(predictions,
   
    #nvar = "1"; cv="full"; beam = names(preds[[1]][[2]])[1]
    toplot=
-   .merge_lapply_nme(preds, "nvar", function(nvar){
+   .merge_lapply_nme(preds, "numvars", function(nvar){
        #print(beam)
        p1 = preds[[nvar]]
       if(!keep_cv){
         p1 = p1[names(p1) %in% c("full","merged","avg")]
       }
-      .merge_lapply_nme(p1, "cv",function(cv){
+      .merge_lapply_nme(p1, "cv_index",function(cv){
         #nvars = names(p1); names(nvars) = nvars;
        #l1 = lapply(nvars, function(nvar){ 
         #print(paste(beam,nvar))
@@ -1364,18 +1372,18 @@ plotPredictions=function(predictions,
          if(is.null(df)|| nrow(df)==0) return(NULL)
        # varname
          df1=df |> 
-           tibble::add_column(datatype=varname[1],varname=varname[2], modelname = modelname, transf=varname[3], pow = varname[4] )
+           tibble::add_column(datatype=varname[1],varname=varname[2], model = modelname, transf=varname[3], pow = varname[4] )
        # print(names(df1))
            return(df1)
        })
      })
    })
-   toplot$nvar = as.numeric(toplot$nvar)
+   toplot$numvars = as.numeric(toplot$numvars)
    toplot$varname = factor(toplot$varname)
-   toplot$modelname=gsub(";","\n",toplot$modelname);
-   toplot$modelname = factor(toplot$modelname, levels = toplot$modelname[!duplicated(toplot$modelname)])
+   toplot$model=gsub(";","\n",toplot$model);
+   toplot$model= factor(toplot$model, levels = toplot$model[!duplicated(toplot$model)])
    #head(toplot)
-   toplot$cv = factor(toplot$cv); levs = levels(toplot$cv); names(levs) =levs
+   toplot$cv_index = factor(toplot$cv_index); levs = levels(toplot$cv_index); names(levs) =levs
    #table(toplot$modelname)
    #nvars = unique(toplot$nvar); names(nvars) = nvars
   # modvars = unlist( lapply(modnames, function(x) rev(strsplit(x,";")[[1]])[1]))
@@ -1423,24 +1431,31 @@ plotPredictions=function(predictions,
   dupls = duplicated(toplot1$type_varname)
 
   toplot1$type_varname = factor(toplot1$type_varname, levels= toplot1$type_varname[!dupls])
-  facet="pheno~modelname";
+  facet="pheno~model";
  
   if(merge_beam){
     facet="combined~nvar"
   }
-  if(length(table(toplot1$pheno))==1){
+  #if(length(table(toplot1$pheno))==1){
     
 # facet="beam~modelname";# "beam~type_varname";
-  }
+  #}
    #toplot1 = toplot |> tidyr::unite("cv_pheno",cv,pheno,sep="_", remove=FALSE)
    plots_all = lapply(levs,function(lev)  {
-     toplot2=subset(toplot1, cv==lev)
+     
+     toplot2=subset(toplot1, cv_index==lev)
      ggp=ggplot(toplot2, aes(x =knots, y=value,color=subpheno, label=beam, size=counts ))+facet_grid(facet);
                    
      if(length(grep("beam", facet))>0){
        ggp = ggp+geom_point();
      }else{
        ggp= ggp+geom_text(family = "sans")
+     }
+     if(!is.null(evals)){
+       evals2 = subset(evals,cv_index==lev &   family==fam) 
+  evals2$model = factor(evals2$model, levels = levels(toplot2$model))
+ #      evals2$model
+      ggp=ggp+geom_text(data=evals2,mapping = aes(x=knots, y=value, label=mid_perc),size=2, color="black")
      }
      ggp+ggtitle(paste(fam,lev));
      })
