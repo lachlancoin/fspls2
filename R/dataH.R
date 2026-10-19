@@ -1699,8 +1699,11 @@ makeAllModels=function(variables,
   nreps = 1:length(variables); names(nreps) = names(variables)
   if(is.null(variables[['full']])) stop("problem")
   #k=1; nvar=2; beam=1;
+  
   all_models_full = lapply(nreps, function(k){
+    print(k)
     vars_n = variables[[k]]
+   if(length(vars_n)==0) return(NULL)  
     models = modelObj$new(k);
     nvars=rev(1:length(vars_n));
     for(nvar in nvars){
@@ -1720,6 +1723,7 @@ makeAllModels=function(variables,
    am =  models$separate();
    am;
   })
+  all_models_full = all_models_full[unlist(lapply(all_models_full, length))>0]
   if(verbose) print("finished making models")
  pres=
   .merge1_new(lapply(all_models_full, function(all_models){
