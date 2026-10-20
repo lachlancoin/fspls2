@@ -324,7 +324,7 @@ plotEval2<-function(eval1,...){
 #' @param linetype column controlling the type of line
 #' @param showranges whether to show 95\% CI as ribbon
 #' @param txtsize size of text
-#' @param logy whether to log y axis
+#' @param transformy transformation on y axis, from ggplot2
 #' @param legend whether to show a legend
 #' @param sep_by list of column names to separate into diff plots
 #' @param scales used in faceting can be free or fixed
@@ -345,7 +345,7 @@ plotEval<-function(eval3,
            color=shape_color,
           linetype=shape,
           showranges=TRUE, ## linetype="fullmodel"
-           txtsize=1,logy=FALSE,legend=FALSE,sep_by="",scales="free",point=TRUE,line=TRUE,
+           txtsize=1,transformy = "identity",legend=FALSE,sep_by="",scales="free",point=TRUE,line=TRUE,
        labelsize=2,
            grid_x = c("cohort","measure"),grid_y = "cv_full",title="", title1=""
           ){
@@ -401,13 +401,13 @@ plotEval<-function(eval3,
  
    ggps =  plotInternal(eval2, sep_by, title1, point, dotsize, shape_nme, color_nme,
                  linetype_nme, text_nme, labelsize, showranges,
-                 grid0_nme, grid1_nme, scales, txtsize, line, logy, showtext, legend);
+                 grid0_nme, grid1_nme, scales, txtsize, line, transformy, showtext, legend);
  ggps
 }
 
 plotInternal<-function(eval5,sep_by,  title1, point, dotsize, shape_nme, color_nme, 
              linetype_nme, text_nme,  labelsize, showranges,
-             grid0_nme, grid1_nme, scales, txtsize,  line, logy, showtext, legend){
+             grid0_nme, grid1_nme, scales, txtsize,  line, transformy, showtext, legend){
   
   if(length(sep_by)==0){
  # ph3 = paste(sort(unique(apply(eval5[,names(eval5) %in% title1, drop=FALSE],1,paste,collapse=","))), collapse=" ")
@@ -436,7 +436,7 @@ plotInternal<-function(eval5,sep_by,  title1, point, dotsize, shape_nme, color_n
   }
   legend_position=if(legend) "bottom" else "none";
   ggp<- ggp+ theme(legend.position = legend_position,legend.title = element_text(size = txtsize));#+theme(,    legend.text = element_text(size = 3))
-  if(logy)ggp<-ggp+ scale_y_log10() 
+  ggp<-ggp+ scale_y_continuous(transform=transformy);#scale_y_log10() 
   return(ggp+ggtitle(title1))
   
 }
@@ -450,7 +450,7 @@ plotInternal<-function(eval5,sep_by,  title1, point, dotsize, shape_nme, color_n
                         paste(title1,paste(sep_by[[1]],ph, sep="=")), 
                         point, dotsize, shape_nme, color_nme,
                    linetype_nme, text_nme, labelsize, showranges,
-                   grid0_nme, grid1_nme, scales, txtsize, line, logy, showtext, legend);
+                   grid0_nme, grid1_nme, scales, txtsize, line, transformy, showtext, legend);
       return(res);
     }
    
@@ -659,7 +659,7 @@ auprc_boot <- function(data, indices) {
 #' @param CHECK check whether inverse function works
 #' @return transformation object
 #' @export
-getTransform<-function(pows = c(1),offset=0.001, log_pows=c(),exp_pows = c(),   n_random=1,perm=FALSE, norm=1,CHECK=FALSE){
+getTransform<-function(pows = c(1),offset=0, log_pows=c(),exp_pows = c(),   n_random=1,perm=FALSE, norm=1,CHECK=FALSE){
   if(n_random <1) warning(" recommended to have at least one random permutation");
   if(!( 1 %in% pows)) warning("recommended to have a pow of 1, which is the untransformed y ")
   funcs = list()
@@ -742,7 +742,7 @@ powfunc<-function(x,pow, norm=1, offset=0.0001){
 ##this gets transformations for x variable
 ##invfunc applied to y; func applied to x
 .getTransformFuncs<-function(pows,
-                             offset=0.1, norm=1,CHECK=FALSE){
+                             offset=0, norm=1,CHECK=FALSE){
   names(pows)=pows
   transf=list(invfunc=paste0("function(y,seed) invpowfunc(y,seed, ",norm,", ",offset,")"),
               func=paste0("function(x,seed) powfunc(x,seed, ",norm,", ",offset,")"),params=as.list(pows))

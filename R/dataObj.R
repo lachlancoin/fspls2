@@ -273,17 +273,18 @@ lapply(str1, function(t_y){
  # print(dim(x_)); print(dim(Wall2));
   if(ncol(x_)==0) return(x_);
    ##projection first and then transformation 
-    t2 = data.frame(vapply(1:ncol(x_), function(jj){
-      t1 = transf[[jj]]$func(x_[,1:jj] %*% Wall2[1:jj,jj,drop=FALSE], transf[[jj]]$param) 
-     as.vector(t1)
-    }, rep(0, nrow(x_))))
+  x_t = x_ %*%Wall2
+  for(jj in 1:ncol(x_t)){
+    x_t[,jj] = transf[[jj]]$func(x_t[,jj], transf[[jj]]$param)
+  }
    
   
-  if(nrow(x_)==1) t2 = t(t2)
-  names(t2) = names(transf)
-  as.matrix(t2)
+  colnames(x_t) = names(transf)
+  as.matrix(x_t)
   ##t2 %*% beta_new2
 }
+
+
 .getZetaBinary<-function(x,y, w){
   levsy =sort(unique(y[!is.na(y)]))
   yn = .mkBinary(y)
@@ -885,7 +886,6 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,prev_i2,
     #print(nme)
     phensi1 =  match(nme, names(self$y))
     family=self$family[[phensi1]]
-    
     fams = self$fams_all[[phensi1]];
     phensi_=subphens[[nme]]
     Wall1 = Wall[[nme]]
@@ -1006,7 +1006,6 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
     useoffset = FALSE;
     project=FALSE;
   }
-  
   nonNA = self$looc$incl[,k]
   vars1 = c(prev_var,list(b_i)) 
   names(vars1)[length(vars1)]  = paste(b_i_name,collapse=".")
@@ -1093,10 +1092,14 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
             if( length(inds111)){
               warning(paste("no longer orthogonal but might be due to transformation giving large SD", max(abs(x5)), dimnames(x_)[[2]][ncol(x_)], " vs " ,paste(names(inds111),collase=",")), sd(x1_[,1], sd(d3[,inds111[1]])))
             }
-          x3=x_ %*%Wall2 #- meanx %*% Wall2
+          x3=x_ %*%Wall2 #- meanx %*% Wall2  Wall2 makes x_ orthogonal
           #plot(x3[,ncol(x3)], x1_[,1])
-          chck=sum(abs(x3[,ncol(x3)]-mean(x3[,ncol(x3)])-(x1_[,1] - mean(x1_[,1]))))
+          corm = cor(as.matrix(x3))
+          xt = .eval1_(x_, Wall2, transf, family, CHECK=T);
+         # max(abs(x3 -xt))
+          chck=max(abs(corm[row(corm) != col(corm)]))
           if(chck>1e-5){
+        
             warning(paste("problem with Wall",chck))
           }
          # cbind(x_[,1:ncol(x_)-1], x1)
@@ -1117,9 +1120,9 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
   #    transform_func_y =self$transforms[[b_i[[3]]]][[1]]
   #}
  # 
-   x_trans  =  .eval1_(x_,  Wall2, transf, family)
+   x_trans  =  .eval1_(x_,  Wall2, transf, family)  # this is projecting into orthogonal space,transformations in orthogonal space
    x_trans_prev  =  x_trans[,-ncol(x_trans),drop=F];
-   #x_trans_prev = .eval1_(x_[,-ncol(x_),drop=FALSE],  Wall1, transf[-ncol(x_)], family)
+ #  x_trans_prev = .eval1_(x_[,-ncol(x_),drop=FALSE],  Wall1, transf[-ncol(x_)], family)
    
 #x_trans=  t(t(x_trans) -apply(x_trans,2,mean)  )
 #   sum(abs(transf1$func(x1_, transf1$param[1])-x_trans[,ncol(x_trans)] - ( mean(x1_[,1]) - mean(x_trans[,ncol(x_trans)]))))
@@ -1177,7 +1180,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
         sm2 = list(const_term = rdf$const, beta_new1 =  beta1, lambda=1, logLik = rdf$logLik, 
                    extra_df = length(tbls[[kk]])-1)
       }
-    }else if(ncol(x)==1 && var(x)==0 ){
+    }else if(ncol(x)==1 && varx[[1]]==0 ){
       sm2 = NULL
     
     }else if(length(which(nonNAy))==0){
@@ -1249,6 +1252,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
   
   }
    if(length(degsf)==0) stop("cannot be zero!");
+   ## results are in the projected space
   list( constants = constants, 
        betas_proj = betas_proj,
        tbls=tbls, Wall = Wall2, lambdas = lambdas, degsf = degsf, logLiks = logLiks_new)

@@ -696,12 +696,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
     betas=prev_kj$betas_proj[[kk1]]
    
     if(length(prev_kj$var)==0){
-      if(family=="multinomial"){
-        x_trans =matrix(0, nrow = length(which(ind_1)) ,ncol = nrow( betas))
-        
-      }else{
-        x_trans =matrix(0, nrow = length(which(ind_1)) ,ncol = ncol( betas))
-      }
+          x_trans =matrix(0, nrow = length(which(ind_1)) ,ncol = nrow( betas))
     }else{
    
       x_trans=.eval1_(x_[ind_1,,drop=FALSE], prev_kj$Wall[[kk1]], transforms, family)
