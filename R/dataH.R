@@ -1292,6 +1292,7 @@ y=function(phens = self$pheno()[[1]]){
 plotPredictions=function(predictions,
                          phens = private$phens,keep_cv = FALSE, 
                          merge_beam = FALSE,
+                         show=c("AUC","correlation"),
                          evals = self$evaluate(predictions)
                          
                          ){
@@ -1301,7 +1302,7 @@ plotPredictions=function(predictions,
  if(!keep_cv){
    evals = subset(evals, cv_index %in% c("merged","full","avg") )
  }
-   evals = subset(evals,  measure %in% c("AUC","correlation"))|> tibble::add_column(knots=0.5, value=0.5)
+   evals = subset(evals,  measure %in% show)|> tibble::add_column(knots=0.5, value=0.5)
  
    evals$model=gsub(";","\n",evals$model);
  plot_results=lapply(families, function(fam){
@@ -1312,7 +1313,7 @@ plotPredictions=function(predictions,
      strsplit(intToUtf8(96+1:26),"")[[1]],
               strsplit(intToUtf8(64+1:26),"")[[1]])
   
-   #nvar = "1"; cv="full"; beam = names(preds[[1]][[2]])[1]
+   #nvar = "1"; cv="merged"; beam = 1
    toplot=
    .merge_lapply_nme(preds, "numvars", function(nvar){
        #print(beam)
@@ -1330,6 +1331,7 @@ plotPredictions=function(predictions,
         .merge_lapply(beam_inds, "beam",function(beam){
           modelname=names(p2)[beam]
           if(modelname=="combined") modelname = paste("combined",nvar, sep=":")
+          if(cv=="merged") modelname = paste("merged",nvar,beam,sep=":")
        #   print(paste(nvar, cv, beam,fam))
          p3 = p2[[beam]]
            p4 = p3[[fam]]

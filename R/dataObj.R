@@ -2102,11 +2102,13 @@ evaluate=function(predictions,phens,flags,
  # liab = .readFlag(flags,"liab",TRUE)  ## whether to evaluate with liability , default is true
   
   numvars1 = names(predictions); names(numvars1) = numvars1
- evals_all = .merge1_new(lapply(predictions, function(pred_nvar){
-   df2 =  .merge1_new(lapply(pred_nvar, function(pred_nvar_cv){
+ evals_all = .merge1_new(.lapply_nme(predictions, function(nvar){
+   pred_nvar = predictions[[nvar]];
+   df2 =  .merge1_new(.lapply_nme(pred_nvar, function(cv_index){
+     pred_nvar_cv = pred_nvar[[cv_index]];
     # print("HH")
      beams = 1:length(pred_nvar_cv); names(beams) = names(pred_nvar_cv)
-      .merge1_new(lapply(beams, function(beam){
+      df22=.merge1_new(lapply(beams, function(beam){
       #  print(beam)
         pred_nvar_cv_beam = pred_nvar_cv[[beam]]
         pred2 = pred_nvar_cv_beam
@@ -2115,8 +2117,13 @@ evaluate=function(predictions,phens,flags,
         ypred$ypreds = pred2
         ##note the NAs are already embedded in the prediction
        res33= ypred$calcRMSV(self$y, nonNA, flip=FALSE, betas=betas) |> tibble::add_column(beam=beam)
+       if(cv_index=="merged"){
+         res33$model = paste("merged",nvar,beam,sep=":")
+       }
        res33
       }), addName ="model" )
+     
+      df22
     }),addName="cv_index")
    #cv_inds = names(pred_nvar);names(cv_inds) = cv_inds;
    
