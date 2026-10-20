@@ -272,26 +272,13 @@ lapply(str1, function(t_y){
   #if(is.null(dim(beta_new2))) beta_new2 =as.matrix(beta_new2, nrow = ncol(x_), ncol = 1)
  # print(dim(x_)); print(dim(Wall2));
   if(ncol(x_)==0) return(x_);
-  if(getOption("projectAfterTransform",FALSE)){ ## PRETTY SURE THIS IS WRONG
-    
-    x2 = data.frame(vapply(1:ncol(x_), function(jj){
-      t1 = transf[[jj]]$func(x_[,jj], transf[[jj]]$param)
-     # t1 = transf[[jj]]$func(x_[,1:jj] %*% Wall2[1:jj,jj,drop=FALSE], transf[[jj]]$param) 
-      as.vector(t1)
-    }, rep(0, nrow(x_))))
-    t2 = data.frame(vapply(1:ncol(x_), function(jj){
-
-       t1 = as.matrix(x2[,1:jj,drop=FALSE]) %*% Wall2[1:jj,jj,drop=FALSE]
-      as.vector(t1)
-    }, rep(0, nrow(x_))))
-   
-  }else{ ##projection first and then transformation 
+   ##projection first and then transformation 
     t2 = data.frame(vapply(1:ncol(x_), function(jj){
       t1 = transf[[jj]]$func(x_[,1:jj] %*% Wall2[1:jj,jj,drop=FALSE], transf[[jj]]$param) 
      as.vector(t1)
     }, rep(0, nrow(x_))))
    
-  }
+  
   if(nrow(x_)==1) t2 = t(t2)
   names(t2) = names(transf)
   as.matrix(t2)

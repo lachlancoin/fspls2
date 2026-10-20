@@ -1341,9 +1341,10 @@ plotPredictions=function(predictions,
          }
          if(length(grep("gaussian",fam))>0){
            df = .merge1_new(lapply(coln, function(cn1){
-             df1=data.frame(list(prediction=p4[,cn1], value=y1[,cn1], text=""))
-             text_df = round(cor(df1$prediction, df1$value,use="pairwise.complete.obs"),2)
-            rbind(df1,data.frame( list(prediction = mean(df1$prediction, na.rm=T), value = mean(df1$value, na.rm=T),text=text_df))) 
+             data.frame(list(prediction=p4[,cn1], value=y1[,cn1], text=""))
+             
+            # text_df = round(cor(df1$prediction, df1$value,use="pairwise.complete.obs"),2)
+            #rbind(df1,data.frame( list(prediction = mean(df1$prediction, na.rm=T), value = mean(df1$value, na.rm=T),text=text_df))) 
            }), addName="pheno")
            
          }else if(ncol(y1)==1){
@@ -1395,12 +1396,23 @@ plotPredictions=function(predictions,
    toplot1 = toplot|> tibble::add_column(combined  )
   # toplot1 =  toplot |> tibble::add_column(variables= factor(toplot$modelname, levels=modnames, labels = modvars), 
   #                                         nvar =as.numeric(as.character(factor(toplot$modelname, levels=modnames, labels = modlens ))))
-   if(length(grep("gaussian",fam))>0){
+  beams = unique(toplot1$beam); names(beams)=beams
+    if(length(grep("gaussian",fam))>0){
      plots_all = lapply(levs,function(lev){
-       ss1 = subset(toplot1, cv==lev)
-       ggp2 = ggplot(subset(ss1, text=="") , aes(x =value, y=prediction,color=pheno, shape=beam ))+facet_grid("pheno~nvar")+geom_point()
-       ggp2+ggplot2::geom_label(data=subset(ss1,text!=""), aes(x=value, y=prediction, color=pheno, label=text))
+       lapply(beams, function(beam){
+       ss1 = subset(toplot1, cv_index==lev  & beam==beam)
+       ggp2 = ggplot(subset(ss1, text=="") , aes(x =value, y=prediction,color=pheno, shape=beam ))+facet_grid("pheno~numvars")+geom_point()
+      
+       evals2 = subset(evals,cv_index==lev &   family==fam & beam ==beam) 
+       #evals2$model = factor(evals2$model, levels = levels(toplot2$model))
+       #      evals2$model
+       ggp2=ggp2+geom_text(data=evals2,mapping = aes(x=knots, y=value, label=mid_perc),size=4, color="black")
+     
+       ggp2+ggtitle(paste("family:",fam,"cv_index:",lev,"beam:",beam));
+       
+       #+ggplot2::geom_label(data=subset(ss1,text!=""), aes(x=value, y=prediction, color=pheno, label=text))
        })
+     })
   
      
    }else{
@@ -1442,23 +1454,24 @@ plotPredictions=function(predictions,
   #}
    #toplot1 = toplot |> tidyr::unite("cv_pheno",cv,pheno,sep="_", remove=FALSE)
    plots_all = lapply(levs,function(lev)  {
-     
-     toplot2=subset(toplot1, cv_index==lev)
+     lapply(beams, function(beam){
+     toplot2=subset(toplot1, cv_index==lev & beam==beam)
      ggp=ggplot(toplot2, aes(x =knots, y=value,color=subpheno, label=beam, size=counts ))+facet_grid(facet);
                    
-     if(length(grep("beam", facet))>0){
-       ggp = ggp+geom_point();
-     }else{
+    
        ggp= ggp+geom_text(family = "sans")
-     }
+     
      if(!is.null(evals)){
-       evals2 = subset(evals,cv_index==lev &   family==fam) 
+       evals2 = subset(evals,cv_index==lev &   family==fam & beam==beam) 
   evals2$model = factor(evals2$model, levels = levels(toplot2$model))
  #      evals2$model
       ggp=ggp+geom_text(data=evals2,mapping = aes(x=knots, y=value, label=mid_perc),size=2, color="black")
      }
-     ggp+ggtitle(paste(fam,lev));
+     #ggp+ggtitle(paste(fam,lev,beam));
+     ggp+ggtitle(paste("family:",fam,"cv_index:",lev,"beam:",beam));
+     
      })
+   })
    }
     plots_all
    })
