@@ -2,6 +2,81 @@
 random_identifier = "\\.rand\\."  ## this identifies random variables;
 
 
+#' Infer the statistical families of the phenotypes
+#' @param df5 is the output of dh$plotData
+#' @param violin violin plots
+#' @returns ggplots 
+#' @export
+plotData<-function(df5,gene=NULL, violin=FALSE){
+  if(!is.null(gene)){
+    df5 = subset(df5, gene==gene)
+  }
+  df6=subset(df5, family=="gaussian")
+  df7=(subset(df5, family!="gaussian"))
+  # color= if(length(unique(df4$dataset))>1) "dataset" else #"pheno"
+ # facet= if(!is.null(df4[['transform']]) ) "transform~pheno" else "pheno"
+  df7$y = factor(df7$y, ordered=TRUE)
+  lens = c(length(table(df5$gene)), length(table(df5$dataset)))
+  wrap=TRUE;
+  title=""
+  if(lens[1]>1 & lens[2]>1){
+    facet="gene~dataset"
+    wrap = FALSE
+  }else if(lens[2]>1){
+    title= df5$gene[1]
+    facet="dataset"
+  }else{
+    title = df5$dataset[[1]]
+    facet="gene"
+  }
+  ggp = NULL; ggp1 = NULL
+  if(nrow(df7)>0){
+    
+    ggp<-ggplot(df7, aes(x=y, y=value, color=y, shape=data, linetype=data));#+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
+    if(violin){
+      ggp<-ggp+ggplot2::geom_violin()+geom_point()
+    }else{
+      ggp<-ggp+ggplot2::geom_boxplot()
+    }
+   
+  }
+  
+  if(nrow(df6)>0){
+    prbs=c(0.33,0.5,0.66)
+    df6_1 =df6 |> unite("comb",gene,data,family,pheno,dataset,sep="__")
+    comb1=unique(df6_1$comb); names(comb1)=comb1
+    quants=.merge1_new(lapply(comb1,function(c1){
+      df6_2 = subset(df6_1, comb==c1)
+      df6_2$y = as.numeric(as.character(df6_2$y))
+      df6_2 = df6_2[order(df6_2$y),]
+      yv = unique(df6_2$y)
+      names(yv)=yv
+      .merge1_new(lapply(yv, function(yv1){
+        df6_3 = subset(df6_2, y<=yv1)
+        q1=quantile(df6_3$value,na.rm=TRUE,probs = prbs)
+        df_=data.frame(t(data.frame(q1)))
+        df_
+      }),addName="y")
+    }), addName="comb")
+    quants1 = quants |> separate("comb", sep="__", into=c("gene","data","family","pheno1","dataset"))
+    names(quants1) = gsub("\\.","",names(quants1))
+    quants1$y = as.numeric(quants1$y)
+    #gsub("X50", "median expression", names(quants1))
+    ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=gene, fill=gene,shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
+    ggp1<-ggp1+geom_line()+geom_ribbon(alpha=0.1)
+    ggp1<-ggp1+labs(y="median gene expression for y<=yval", x="yval")
+  }
+  if(wrap){
+    ggp<-ggp+facet_wrap(facet,scales = "free")+ggtitle(title)
+    ggp1<-ggp1+facet_wrap(facet,scales = "free")+ggtitle(title)
+  }else{
+    ggp<-ggp+facet_grid(facet,scales = "free")+ggtitle(title)
+    ggp1<-ggp1+facet_wrap(facet,scales = "free")+ggtitle(title)
+  }
+  
+  list("binomial"=ggp,"gaussian"=ggp1)
+}
+
 filter_comb<-function(comb2_new, nme_ang1){
   #comb2_filtered = lapply(comb2_news, function(comb2_new){
     #  nme_new = names(comb2_new); names(nme_new)=sub("empty","",nme_new);# nme_new=sub("empty","",nme_new)
@@ -229,7 +304,7 @@ plots_all = .merge1_new(lapply(typs, function(typ1){
    
      sv = sparse_variance(m1$matrix)
      na_cnt = colSums(m1$matrixNA)/nrow(m1$matrixNA)
-     m2 = lapply(m1, function(m11) m11[,!is.na(sv) & sv>min_variance & na_cnt<=max_na_proportion, drop=FALSE])
+     m2 = lapply(m1, function(m11) m11[,!is.na(sv) & sv>=min_variance & na_cnt<=max_na_proportion, drop=FALSE])
   m2
   })
   
@@ -882,7 +957,6 @@ predefined=function(incl1,prev_signature, sumAngle){
     family= getFamily(y),
          dbDir=NULL
    ){
-       
     super$initialize(nme,dims =lapply(d$data, dim),  flags=flags, dbDir=dbDir);
        colnames(y) = gsub("\\.","_",colnames(y))  ## no . allowed
       for(k in 1:length(data)){
@@ -905,7 +979,7 @@ predefined=function(incl1,prev_signature, sumAngle){
     hasNA=.readFlag(flags,"hasNA", TRUE)
     preprocessed=.readFlag(flags,"preprocessed", FALSE)
     max_na_proportion =.readFlag(flags,"max_na_proportion",0.99)
-    min_variance =.readFlag(flags,"max_na_proportion",0.001)
+    min_variance =.readFlag(flags,"min_variance",-1)
     
     mat = .getAllSparseMatrices(d$dataset,hasNA=hasNA, convertToBigMatrix=convertToBigMatrix,min_variance = min_variance, max_na_proportion=max_na_proportion)
     
@@ -1275,7 +1349,7 @@ counts_y=function(){
 #' @returns list of matrices
 y=function(phens = self$pheno()[[1]]){
   y1 = private$data$y
-  out1=.lapply_nme(y1, function(nme) {
+  out1=.lapply_nme(phens, function(nme) {
    
     y2 = y1[[nme]]
     y2[,colnames(y2) %in% phens[[nme]],drop=FALSE]
@@ -1289,22 +1363,25 @@ y=function(phens = self$pheno()[[1]]){
 #' @param update whether to update
 #' @param liab return liability score, or probability (for binomial, ordinal multinomial)
 #' @returns  a ggplot
-plotPredictions=function(predictions,
+plotPredictions=function(predictions,evals=NULL,
                          phens = private$phens,keep_cv = FALSE, 
-                         merge_beam = FALSE,
-                         evals = self$evaluate(predictions)
+                         merge_beam = FALSE, liab=attr(predictions,"liab")
+                       
                          
                          ){
    y = self$y(phens)
  preds= predictions
  families = names(y); names(families) = families;
- if(!keep_cv){
-   evals = subset(evals, cv_index %in% c("merged","full","avg") )
+ if(!is.null(evals)){
+     if(!keep_cv ){
+       evals = subset(evals, cv_index %in% c("merged","full","avg") )
+     }
+       evals = subset(evals,  measure %in% c("AUC","correlation"))|> tibble::add_column(knots=0.5, value=0.5)|> tidyr::unite("mid_perc1",measure,mid_perc, sep=":")
+   
+       evals$model=gsub(";","\n",evals$model);
  }
-   evals = subset(evals,  measure %in% c("AUC","correlation"))|> tibble::add_column(knots=0.5, value=0.5)
- 
-   evals$model=gsub(";","\n",evals$model);
  plot_results=lapply(families, function(fam){
+   family=strsplit(fam,"\\.")[[1]][[1]]
       y1 = y[[fam]]; 
    if(ncol(y1)==0) return(NULL)
    coln = 1:ncol(y1); names(coln) =colnames(y1) 
@@ -1333,12 +1410,14 @@ plotPredictions=function(predictions,
        #   print(paste(nvar, cv, beam,fam))
          p3 = p2[[beam]]
            p4 = p3[[fam]]
+           
         varname=attr(p3,"variable");  ## also attr(p3,"betas)
         if(is.null(varname))varname = c("",nvar,"","")
-         coln1 = 1:ncol(p4); 
-         if(is.null(names(coln1))){
-         names(coln1)=if(ncol(p4) == ncol(y1) && !is.null(colnames(y1))) colnames(y1) else 1:ncol(p4) 
-         }
+         coln1 =colnames(p4); names(coln1) = colnames(p4);
+        
+         #if(is.null(names(coln1))){
+         #names(coln1)=if(ncol(p4) == ncol(y1) && !is.null(colnames(y1))) colnames(y1) else 1:ncol(p4) 
+         #}
          if(length(grep("gaussian",fam))>0){
            df = .merge1_new(lapply(coln, function(cn1){
              data.frame(list(prediction=p4[,cn1], value=y1[,cn1], text=""))
@@ -1346,12 +1425,38 @@ plotPredictions=function(predictions,
             # text_df = round(cor(df1$prediction, df1$value,use="pairwise.complete.obs"),2)
             #rbind(df1,data.frame( list(prediction = mean(df1$prediction, na.rm=T), value = mean(df1$value, na.rm=T),text=text_df))) 
            }), addName="pheno")
+         }else if(!liab){
+           df = .merge1_new(lapply(coln, function(cn1){
+             # print(cn1)
+             ap =tryCatch({
+               getAreaPlot( p4[,cn1], y1[,cn1])
+             },error=function(ew){
+               return(NULL)
+             })
+             ap
+           }), addName = "pheno")
+         
+         }else if(family=="ordinal"){
            
+           df = .merge1_new(lapply(1:length(coln1), function(xi){
+             cn1 = as.numeric(strsplit(coln1[[xi]],"\\|")[[1]])
+             ap = tryCatch({
+               y2 = rep(NA, nrow(y1))
+               y2[y1[,1]<=cn1[[1]]] = 1;
+               y2[y1[,1]>=cn1[[2]]] = 2
+               getAreaPlot( p4[,xi], y2)
+             },error=function(ew){
+               return(NULL)
+             })
+             if(is.null(ap)) return(ap)
+             ap |> tibble::add_column(pheno = coln1[[xi]])
+           }))
          }else if(ncol(y1)==1){
+           coln1 = 1:length(coln1)
            df = .merge1_new(lapply(coln1, function(cn1){
            #  print(cn1)
              ap = tryCatch({
-               y2 = ifelse(y1[,1]<cn1, 1, 2)
+               y2 = ifelse(y1[,1]<as.numeric(cn1), 1, 2)
                getAreaPlot( p4[,cn1], y2)
              },error=function(ew){
                return(NULL)
@@ -1359,6 +1464,7 @@ plotPredictions=function(predictions,
             ap
            }), addName = "pheno")
          }else{
+           
            df = .merge1_new(lapply(coln, function(cn1){
             # print(cn1)
             ap =tryCatch({
@@ -1379,12 +1485,23 @@ plotPredictions=function(predictions,
        })
      })
    })
+   if(is.null(toplot)) return(NULL)
    toplot$numvars = as.numeric(toplot$numvars)
    toplot$varname = factor(toplot$varname)
    toplot$model=gsub(";","\n",toplot$model);
    toplot$model= factor(toplot$model, levels = toplot$model[!duplicated(toplot$model)])
    #head(toplot)
    toplot$cv_index = factor(toplot$cv_index); levs = levels(toplot$cv_index); names(levs) =levs
+   if(family=="ordinal"){
+     if(!liab){
+       toplot$pheno = factor(toplot$subpheno,ordered=TRUE)
+     }else{
+     levs2 = unique(as.character(toplot$pheno));
+     toplot$pheno = factor(toplot$pheno, levels=levs2[order(unlist(lapply(levs2, function(xi)as.numeric(strsplit(xi,"\\|")[[1]][1]))))])
+     }
+  }else{
+   toplot$pheno = factor(toplot$pheno,ordered=TRUE)
+  }
    #table(toplot$modelname)
    #nvars = unique(toplot$nvar); names(nvars) = nvars
   # modvars = unlist( lapply(modnames, function(x) rev(strsplit(x,";")[[1]])[1]))
@@ -1402,12 +1519,10 @@ plotPredictions=function(predictions,
        lapply(beams, function(beam){
        ss1 = subset(toplot1, cv_index==lev  & beam==beam)
        ggp2 = ggplot(subset(ss1, text=="") , aes(x =value, y=prediction,color=pheno, shape=beam ))+facet_grid("pheno~numvars")+geom_point()
-      
+      if(!is.null(evals)){
        evals2 = subset(evals,cv_index==lev &   family==fam & beam ==beam) 
-       #evals2$model = factor(evals2$model, levels = levels(toplot2$model))
-       #      evals2$model
-       ggp2=ggp2+geom_text(data=evals2,mapping = aes(x=knots, y=value, label=mid_perc),size=4, color="black")
-     
+       ggp2=ggp2+geom_text(data=evals2,mapping = aes(x=knots, y=value, label=mid_perc1),size=4, color="black")
+      }
        ggp2+ggtitle(paste("family:",fam,"cv_index:",lev,"beam:",beam));
        
        #+ggplot2::geom_label(data=subset(ss1,text!=""), aes(x=value, y=prediction, color=pheno, label=text))
@@ -1435,15 +1550,15 @@ plotPredictions=function(predictions,
      
    toplot1$subpheno = factor(toplot1$subpheno, levels = levs_s);
      }
-   pheno_levs = unique(toplot$pheno);
+  # pheno_levs = unique(toplot$pheno);
   
-   toplot1$pheno = factor(toplot1$pheno, levels = pheno_levs)
+  # toplot1$pheno = factor(toplot1$pheno, levels = pheno_levs)
    #toplot1$modelname=as.numeric(toplot1$modelname)
   toplot1 = toplot1 |> unite(type_varname, "datatype", "varname",sep="::", remove=FALSE)
   dupls = duplicated(toplot1$type_varname)
 
   toplot1$type_varname = factor(toplot1$type_varname, levels= toplot1$type_varname[!dupls])
-  facet="pheno~model";
+   ggp=facet="pheno~model";
  
   if(merge_beam){
     facet="combined~nvar"
@@ -1454,6 +1569,13 @@ plotPredictions=function(predictions,
   #}
    #toplot1 = toplot |> tidyr::unite("cv_pheno",cv,pheno,sep="_", remove=FALSE)
    plots_all = lapply(levs,function(lev)  {
+     
+     
+     facet=if(lev=="merged") "pheno ~numvars" else "pheno~model";
+     
+     #if(merge_beam){
+     #  facet="combined~numvars"
+     #}
      lapply(beams, function(beam){
      toplot2=subset(toplot1, cv_index==lev & beam==beam)
      ggp=ggplot(toplot2, aes(x =knots, y=value,color=subpheno, label=beam, size=counts ))+facet_grid(facet);
@@ -1463,9 +1585,16 @@ plotPredictions=function(predictions,
      
      if(!is.null(evals)){
        evals2 = subset(evals,cv_index==lev &   family==fam & beam==beam) 
+       if(family=="ordinal"){
+       
+         evals2$pheno = factor(evals2$subpheno, levels = levels(toplot2$pheno))
+         evals2 = subset(evals2, !is.na(pheno))
+       }
+      
   evals2$model = factor(evals2$model, levels = levels(toplot2$model))
  #      evals2$model
-      ggp=ggp+geom_text(data=evals2,mapping = aes(x=knots, y=value, label=mid_perc),size=2, color="black")
+
+      ggp=ggp+geom_text(data=evals2,mapping = aes(x=knots, y=value, label=mid_perc1),size=2, color="black")
      }
      #ggp+ggtitle(paste(fam,lev,beam));
      ggp+ggtitle(paste("family:",fam,"cv_index:",lev,"beam:",beam));
@@ -1508,79 +1637,39 @@ extractPredictions=function(all_modelsh,
                                      transform_x = transform_x, liab= liab,coeffs= coeffs,minv=0, maxv=1e6,
                                      merge=TRUE)
  attr(predictions0,"trainedOn")=all_modelsh$trainedOn
+ attr(predictions0, "liab")=liab
      predictions0 # 
 },
 
 #' @description plot all data for selected variables
 #' @param variables object returned by fspls.select
 #' @param all_types use all types?
-#' @param violin violin plots
 #' @param assoc use association
 #' @param update whether to use attributes from bariables to update this object, default is FALSE
 #' @param max_model_length the maximum model length to consider
 #' @param order allows for a reordering of variables
 #' @returns  a table with results
-plotData=function(variables, all_types=FALSE, violin=FALSE, assoc=FALSE, update=FALSE,
+plotData=function(variables, all_types=FALSE,  assoc=FALSE, update=FALSE,
                   max_model_length=1000, max_beam = 1, order=NULL){
   
   attrs = attributes(variables)
   if(update) self$update(attrs$phens, attrs$flags, transform_x =  attrs$transform_x)
   
-  vars_all=super$integrate(variables, max_model_length=max_model_length, max_beam = max_beam, order=order)
-
+#  vars_all=super$integrate(variables, max_model_length=max_model_length, max_beam = max_beam, order=order)
+  phens1 = private$phens
   df4= #.merge1_new( 
    # lapply(private$datas, function(d) 
-      private$data$plotData(vars_all, phens1 = private$phens, all_types=all_types, transform_x = private$transform_x, 
+      private$data$plotData(variables, phens1, all_types=all_types, transform_x = private$transform_x, 
                             violin=violin, assoc=assoc)
                #     addName="dataset")
-  df4 = df4|>tibble::add_column(dataset=private$nme);
-  facet= if(!is.null(df4[['transform']]) ) "transform~pheno" else "pheno"
+  df4$y = as.numeric(as.character(df4$y))
+    df4 = df4|>tibble::add_column(dataset=private$nme);
   #df4$y = factor(df4$y)
-  gene_levs = unlist(lapply(unlist(vars_all[[1]]$variables,recursive=FALSE), function(x) x[[2]]))
-  gene_levs = gene_levs[!duplicated(gene_levs)]
-  df4$gene = factor(df4$gene, levels = gene_levs)
-  df5=df4|> separate(col="pheno",sep="\\.", into=c("family","pheno"),fill="right",extra="drop")
-  df6=subset(df5, family=="gaussian")
-  df7=(subset(df5, family!="gaussian"))
-  # color= if(length(unique(df4$dataset))>1) "dataset" else #"pheno"
-  ggp = NULL; ggp1 = NULL
-  if(nrow(df7)>0){
-    ggp<-ggplot(df7, aes(x=y, y=value, color=y, shape=data, linetype=data))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
-    if(violin){
-      ggp<-ggp+ggplot2::geom_violin()+geom_point()
-    }else{
-      ggp<-ggp+ggplot2::geom_boxplot()
-    }
-    ggp<-ggp+facet_wrap("gene")
-  }
  
-  if(nrow(df6)>0){
-    prbs=c(0.33,0.5,0.66)
-    df6_1 =df6 |> unite("comb",gene,data,family,pheno,dataset,sep="__")
-    comb1=unique(df6_1$comb); names(comb1)=comb1
-    quants=.merge1_new(lapply(comb1,function(c1){
-      df6_2 = subset(df6_1, comb==c1)
-      df6_2$y = as.numeric(as.character(df6_2$y))
-      df6_2 = df6_2[order(df6_2$y),]
-      yv = unique(df6_2$y)
-      names(yv)=yv
-      .merge1_new(lapply(yv, function(yv1){
-        df6_3 = subset(df6_2, y<=yv1)
-        q1=quantile(df6_3$value,na.rm=TRUE,probs = prbs)
-        df_=data.frame(t(data.frame(q1)))
-        df_
-      }),addName="y")
-    }), addName="comb")
-    quants1 = quants |> separate("comb", sep="__", into=c("gene","data","family","pheno1","dataset"))
-    names(quants1) = gsub("\\.","",names(quants1))
-    quants1$y = as.numeric(quants1$y)
-    #gsub("X50", "median expression", names(quants1))
-    ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=gene, fill=gene,shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
-    ggp1<-ggp1+geom_line()+geom_ribbon(alpha=0.1)
-    ggp1<-ggp1+facet_wrap("gene")+labs(y="median gene expression for y<=yval", x="yval")
-  }
+
+  df5=df4|> separate(col="pheno",sep="\\.", into=c("family","pheno"),fill="right",extra="drop")
   
-  list("binomial"=ggp,"gaussian"=ggp1)
+  df5
 },
 
 #' @description update the weights based on predictions from the model
@@ -1761,7 +1850,7 @@ makeAllModels=function(variables,
  
   all_modelsh=list(models=all_models_full, flags = flags,
                    phens = phens,  trainedOn=private$nme,
-                   transform_x = private$transform_x)#, pres = pres)
+                   transform_x = private$transform_x, pres = pres)
   super$saveModels(all_modelsh);
   #combined_models
   all_modelsh

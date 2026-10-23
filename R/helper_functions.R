@@ -1347,10 +1347,12 @@ getModels=function(models, index="full"){
 }
 
 getAreaPlot<-function(yp, y1,title = "", input = list()){
-  levs = sort( unique(y1[!is.na(y1)]))
-  if(length(levs)<=1) return(NULL)
+  nonNA = !is.na(y1) & !is.na(yp)
+  levs = sort( unique(y1[nonNA]))
+  if(length(levs)==0) return(NULL)
   names(levs)=levs
   knots=sort(unique(unlist(lapply(levs, function(t){
+    #print(t)
     inds = y1==t
     cdf=ecdf(yp[inds])
     kn=stats::knots(cdf)
@@ -1388,16 +1390,19 @@ getAreaPlot<-function(yp, y1,title = "", input = list()){
   df
 }
 summariseAreaPlot<-function(df){
+if(length(levels( df$subpheno))<=1) return(NULL)
 pw = df |>
     dplyr::distinct(subpheno, knots, .keep_all = TRUE) |>
     pivot_wider(names_from="subpheno", id_cols="knots")
   diff=0
   diff_v = apply(pw, 1, function(v)abs(v[2]-v[1]))
+  if(nrow(pw)<2 || ncol(pw)<3) return(NULL)
   for(k in 2:nrow(pw)){
+    print(k)
     delta = (pw[k,1]-pw[k-1,1])
     diff = diff+((pw[k-1,2] + pw[k,2] - (pw[k-1,3] + pw[k,3]))/2) * delta
   }
-  area=diff
+  karea=diff
   
 
  

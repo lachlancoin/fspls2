@@ -782,7 +782,10 @@ convert=function(b_i1){
     stop(paste("could not find",b_i1[[1]]))
   }
   var_ind = which(dimnames(self$data[[data_ind]])[[2]]==b_i1[2])
-  if(length(var_ind)==0) return(NULL)
+  if(length(var_ind)==0){
+   var_ind = NA
+    warning(paste("could not find",b_i1[[2]],"in", b_i1[[1]]))
+  }
   trans_ind=match(b_i1[[3]],names(self$transforms))
   pow_ind = match(b_i1[[4]], names(self$transforms[[trans_ind]]$params))
   c(data_ind, var_ind, trans_ind, pow_ind)
@@ -1212,8 +1215,9 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
          beta_new1 = matrix(0, nrow=1, ncol = length(const_term));
          colnames(beta_new1) = names(const_term);
        }else if(family=="ordinal"){
-         const_term = rep(0, length(unique(y[nonNAy]))-1)
-         
+         levsy = levels(factor(y[nonNAy], ordered=TRUE))
+         const_term = rep(0, length(levsy)-1) ## need to use all y to get
+        names(const_term) = unlist(lapply(2:length(levsy), function(iii) paste(levsy[iii-1], levsy[iii], sep="|")))
        }
     }else if(is.null(sm2)){
       
@@ -1818,7 +1822,7 @@ getNonNAInds=function(inds){
     apply(df,1,min)!=0
 },
 
-plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=FALSE, transform_x = NULL, violin=FALSE, assoc=FALSE){
+plotData=function(variables, phens1 , all_types=FALSE, transform_x = NULL, violin=FALSE, assoc=FALSE){
   phensi = self$phensi(phens1)
   
   nmei = names(phensi); names(nmei) = nmei
@@ -1837,9 +1841,17 @@ plotData=function(vars_all1, phens1 = vars_all1$phens, all_types=FALSE, transfor
     if(length(y3)==0) y3 = y2
     paste(nmei,colnames(y3),sep=".")
   }))
-  variables = vars_all1[[1]]$variables
-  names(variables)=NULL
-  vars = unlist(variables, recursive=FALSE)
+ # variables = vars_all1[[1]]$variables
+  #names(variables)=NULL
+  vars = unlist(lapply(variables, function(v1){
+    unlist(lapply(v1, function(v2){
+      unlist(lapply(v2, function(v3){
+        v3$var_names
+      }), recursive=FALSE)
+    }), recursive=FALSE, use.names=FALSE)
+  }), recursive=FALSE, use.names=FALSE)
+  names(vars) = unlist(lapply(vars, function(x) paste(x[1:2], collapse=".")))
+  #vars = unlist(variables, recursive=FALSE)
   vars = vars[!duplicated(names(vars))]
   incls = names(self$data); names(incls)=incls
   
@@ -1967,6 +1979,7 @@ nmesm =names(all_models3)
 names(nmesm) = nmesm;
 #nmem="full"; ij=1
 res1 =  lapply(nmesm, function(nmem){
+#  print(nmem)
   nmem_ind = if(nmem=="full") ncol(self$looc$incl) else as.numeric(nmem)
    nonNA = self$looc$incl[,nmem_ind] ## only predict on OOF
       len = length(all_models3[[nmem]])
@@ -2008,23 +2021,26 @@ if(length(nmesm1)>1 && merge){ ##merging only
     rm1 = lapply(nmesp, function(nmep){
       family=strsplit(nmep,"\\.")[[1]][1]
       y = self$y[[nmep]]
-      
-      if(family=="ordinal"){
-        
-    #    y = attr(y, "factor")
+      if(family=="ordinal" && liab){
         yi = y[,1]
-        levs1 = min(yi,na.rm=TRUE):max(yi,na.rm=TRUE)
+        levsy = levels(factor(yi, ordered=TRUE))
+       levs1 = unlist(lapply(2:length(levsy), function(iii) paste(levsy[(iii-1):iii],collapse="|")))
+        #levs1=colnames(res1$full[[1]][[nmep]])
+        #levs1 = min(yi,na.rm=TRUE):max(yi,na.rm=TRUE)
         names(levs1) = levs1
-        result = matrix(NA,nrow = length(y), ncol = length(levs1)-1) #ncol =length(unique(y[,1]))-1 )
-        dimnames(result) = list(rownames(y),levs1[-length(levs1)])
+        result = matrix(NA,nrow = length(y), ncol = length(levs1)) #ncol =length(unique(y[,1]))-1 )
+        dimnames(result) = list(rownames(y),levs1)
         for(nmem in nmesm1){
-        #  print(nmem)
+         # print(nmem)
           subinds1 = which(!self$looc$incl[,as.numeric(nmem)])
+          mi2 = match(colnames(res1[[nmem]][[mi]][[nmep]]), levs1)
+         # print(mi2)
           if(mi <= length(res1[[nmem]])){
-            result[subinds1,] =  res1[[nmem]][[mi]][[nmep]][subinds1,];
+            result[subinds1,mi2[!is.na(mi2)]] =  res1[[nmem]][[mi]][[nmep]][subinds1,!is.na(mi2)];
           }
         }
-        return(data.frame(result));
+        df_out = data.frame(result); names(df_out) = colnames(result);
+       return (df_out)
       }
     
       
@@ -2046,7 +2062,8 @@ if(length(nmesm1)>1 && merge){ ##merging only
     })
     rm1[unlist(lapply(rm1, length))>0]
       })
-  res1$merged =  res_merged[unlist(lapply(res_merged, length))>0]
+  tokeep = unlist(lapply(res_merged, length))>0;
+  if(length(tokeep)>0) res1$merged =  res_merged[tokeep]
   
 }
 
@@ -2092,7 +2109,8 @@ if(!is.null(coeff)){
 
 
 evaluate=function(predictions,phens,flags,
-                          ypred=self$ypred(phens, liab = TRUE),
+                  liab = attr(predictions,"liab"),
+                          ypred=self$ypred(phens, liab=liab),
                           incl_cv_models =TRUE,
                            verbose=FALSE
                          ){
@@ -2100,26 +2118,31 @@ evaluate=function(predictions,phens,flags,
   self$updateLOOC(phens,flags)
   nonNA = rep(TRUE, self$nrow)
  # liab = .readFlag(flags,"liab",TRUE)  ## whether to evaluate with liability , default is true
-  
+  #nvar=length(predictions);cv_index="merged"; beam=1;
+  #nvar=5; cv_index=12; beam=1
   numvars1 = names(predictions); names(numvars1) = numvars1
- evals_all = .merge1_new(lapply(predictions, function(pred_nvar){
-   df2 =  .merge1_new(lapply(pred_nvar, function(pred_nvar_cv){
-    # print("HH")
+ evals_all = .merge1_new(.lapply_nme(predictions, function(nvar){
+   pred_nvar = predictions[[nvar]];
+  # print(nvar)
+   df2 =  .merge1_new(.lapply_nme(pred_nvar, function(cv_index){
+     pred_nvar_cv = pred_nvar[[cv_index]]
+     #print(paste("HH",cv_index, nvar))
      beams = 1:length(pred_nvar_cv); names(beams) = names(pred_nvar_cv)
       .merge1_new(lapply(beams, function(beam){
-      #  print(beam)
+      #  print(paste("nvar,cv_index,beam",nvar,cv_index,beam))
         pred_nvar_cv_beam = pred_nvar_cv[[beam]]
         pred2 = pred_nvar_cv_beam
         betas=attr(pred2,"betas"); variables =attr(pred2,"variables")
         if(nrow(pred2[[1]])<length(nonNA)) stop(paste("dimension mismatch", nrow(pred2[[1]]), self$nrow))
         ypred$ypreds = pred2
         ##note the NAs are already embedded in the prediction
-       res33= ypred$calcRMSV(self$y, nonNA, flip=FALSE, betas=betas) |> tibble::add_column(beam=beam)
-       res33
+       res33= ypred$calcRMSV(self$y, nonNA, flip=FALSE, betas=betas, nvar = nvar, cv_index = cv_index, beam = beam)
+       if(is.null(res33)) return(res33)
+       res33 |> tibble::add_column(beam=beam)
       }), addName ="model" )
     }),addName="cv_index")
    #cv_inds = names(pred_nvar);names(cv_inds) = cv_inds;
-   
+    if(is.null(df2)) return(NULL)
   #cv_inds = cv_inds[] 
     df3=subset(df2, cv_index!="full" & cv_index!="merged")
     
