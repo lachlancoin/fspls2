@@ -1365,9 +1365,11 @@ y=function(phens = self$pheno()[[1]]){
 #' @returns  a ggplot
 plotPredictions=function(predictions,evals=NULL,
                          phens = private$phens,keep_cv = FALSE, 
-                         merge_beam = FALSE, liab=attr(predictions,"liab")
+
+                         merge_beam = FALSE, liab=attr(predictions,"liab"),
+     
+                         show=c("AUC","correlation")
                        
-                         
                          ){
    y = self$y(phens)
  preds= predictions
@@ -1376,10 +1378,13 @@ plotPredictions=function(predictions,evals=NULL,
      if(!keep_cv ){
        evals = subset(evals, cv_index %in% c("merged","full","avg") )
      }
-       evals = subset(evals,  measure %in% c("AUC","correlation"))|> tibble::add_column(knots=0.5, value=0.5)|> tidyr::unite("mid_perc1",measure,mid_perc, sep=":")
+       evals = subset(evals,  measure %in% show)|> tibble::add_column(knots=0.5, value=0.5)|> tidyr::unite("mid_perc1",measure,mid_perc, sep=":")
    
        evals$model=gsub(";","\n",evals$model);
+ 
+
  }
+ 
  plot_results=lapply(families, function(fam){
    family=strsplit(fam,"\\.")[[1]][[1]]
       y1 = y[[fam]]; 
@@ -1389,7 +1394,7 @@ plotPredictions=function(predictions,evals=NULL,
      strsplit(intToUtf8(96+1:26),"")[[1]],
               strsplit(intToUtf8(64+1:26),"")[[1]])
   
-   #nvar = "1"; cv="full"; beam = names(preds[[1]][[2]])[1]
+   #nvar = "1"; cv="merged"; beam = 1
    toplot=
    .merge_lapply_nme(preds, "numvars", function(nvar){
        #print(beam)
@@ -1407,6 +1412,7 @@ plotPredictions=function(predictions,evals=NULL,
         .merge_lapply(beam_inds, "beam",function(beam){
           modelname=names(p2)[beam]
           if(modelname=="combined") modelname = paste("combined",nvar, sep=":")
+          if(cv=="merged") modelname = paste("merged",nvar,beam,sep=":")
        #   print(paste(nvar, cv, beam,fam))
          p3 = p2[[beam]]
            p4 = p3[[fam]]

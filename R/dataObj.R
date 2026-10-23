@@ -2123,6 +2123,7 @@ evaluate=function(predictions,phens,flags,
   numvars1 = names(predictions); names(numvars1) = numvars1
  evals_all = .merge1_new(.lapply_nme(predictions, function(nvar){
    pred_nvar = predictions[[nvar]];
+
   # print(nvar)
    df2 =  .merge1_new(.lapply_nme(pred_nvar, function(cv_index){
      pred_nvar_cv = pred_nvar[[cv_index]]
@@ -2130,16 +2131,25 @@ evaluate=function(predictions,phens,flags,
      beams = 1:length(pred_nvar_cv); names(beams) = names(pred_nvar_cv)
       .merge1_new(lapply(beams, function(beam){
       #  print(paste("nvar,cv_index,beam",nvar,cv_index,beam))
+
         pred_nvar_cv_beam = pred_nvar_cv[[beam]]
         pred2 = pred_nvar_cv_beam
         betas=attr(pred2,"betas"); variables =attr(pred2,"variables")
         if(nrow(pred2[[1]])<length(nonNA)) stop(paste("dimension mismatch", nrow(pred2[[1]]), self$nrow))
         ypred$ypreds = pred2
         ##note the NAs are already embedded in the prediction
+
        res33= ypred$calcRMSV(self$y, nonNA, flip=FALSE, betas=betas, nvar = nvar, cv_index = cv_index, beam = beam)
        if(is.null(res33)) return(res33)
        res33 |> tibble::add_column(beam=beam)
+
+       if(cv_index=="merged"){
+         res33$model = paste("merged",nvar,beam,sep=":")
+       }
+       res33
       }), addName ="model" )
+     
+      df22
     }),addName="cv_index")
    #cv_inds = names(pred_nvar);names(cv_inds) = cv_inds;
     if(is.null(df2)) return(NULL)
