@@ -418,13 +418,21 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
     names(rms)=c("low","mid","high")
   }else if(type_i %in% c("AUC_all","AUPRC_all","area_all")){
     if(fam=="ordinal"){
-      levs = if(liab) unlist(lapply(colnames(yp), function(xi)as.numeric(strsplit(xi,"\\|")[[1]][1]))) else sort(unique(y1))[-1]
-      lev_inds = 1:length(levs)
-      names(lev_inds)=levs
+      levs0 = colnames(yp)
+      levs_lower = if(liab) unlist(lapply(colnames(yp), function(xi)as.numeric(strsplit(xi,"\\|")[[1]][1]))) else sort(unique(y1))[-1]
+      levs_upper = if(liab) unlist(lapply(colnames(yp), function(xi)as.numeric(strsplit(xi,"\\|")[[1]][2]))) else sort(unique(y1))[-1]+1
+      
+      lev_inds = 1:length(levs0)
+      names(lev_inds)=if(liab) colnames(yp) else levs
       rms_l = .merge1_new(lapply(lev_inds, function(kj){
-        gt =y1<=levs[kj]  ##interpret as probability of being less or equal to  count
-        if(length(which(gt))==0) return(NULL)
-        y2 = ifelse(gt,1,0)
+        gt =  ##interpret as probability of being less or equal to  count
+        gt1 =y1>=levs_upper[kj]  ##interpret as probability of being less or equal to  count
+        
+        if(length(which(gt))==0 || length(which(gt))==1) return(NULL)
+        y2 = rep(NA,length(y1))
+        y2[y1<=levs_lower[kj]]=0;
+        y2[y1>=levs_upper[kj]]=1;
+      
         ypkj = if(liab)yp[,kj] else yp[,1]
        
         
@@ -875,12 +883,9 @@ calcRMSV=function(y, nonNA,    flip=FALSE, betas=NULL,
     names(ycol_inds) = dimnames(y2)[[2]][ycols]
     rms_1=lapply(ycol_inds, function(ycol_ind){
       beta1 = if(is.null(beta)) NA else beta[nrow(beta),ycol_ind]
-      #print(ycol_ind)
       ycol = ycols[ycol_ind]
       y1 =  y2[,ycol]
       yp =if(fam=="ordinal" ) yp2 else yp2[,ycol_ind,drop=FALSE] 
-    #  yp = inverse_func(yp)
-      
       nonNAy = nonNA & !is.na(yp[,1])  &  !is.na(y1)
       names(types_i) = types_i
      aa2= .merge1_new(

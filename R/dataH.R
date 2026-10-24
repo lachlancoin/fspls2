@@ -1,21 +1,49 @@
 #private = self[[".__enclos_env__"]]$private
 random_identifier = "\\.rand\\."  ## this identifies random variables;
 
+getPvals<-function(df7){
+  df5_ = df7 |> unite(family_gene_data, family, gene, dataset, remove=FALSE)
+  fgd = unique(df5_$family_gene_data); names(fgd) = fgd;
+  res_df = .merge1_new(lapply(fgd, function(fgd1){
+    df1 = subset(df5_, family_gene_data==fgd1)
+    model=glm("value ~y", data=df1)
+    su =summary(model)
+    pv = sprintf("%5.3g",su$coefficients[2,4])
+    beta = sprintf("%5.3g",su$coefficients[2,1])
+    yl= sort(unique(df1$y))
+    
+   # print(df1$y)
+    data.frame(list(pv=pv, beta=beta,
+                    
+                    y = yl[round(length(yl)/2)], value =median(df1$value,na.rm=TRUE),
+                    family = df1$family[[1]], gene = as.character(df1$gene[[1]]), dataset = df1$dataset[[1]]))
+  }));#,addName="family_gene_data");
+  res_df$gene = factor(res_df$gene, levels = levels(df5$gene));
+  #res_df$y = factor(res_df$y, levels = levels(df5$y))
+  res_df
+}
 
 #' Infer the statistical families of the phenotypes
 #' @param df5 is the output of dh$plotData
 #' @param violin violin plots
 #' @returns ggplots 
 #' @export
-plotData<-function(df5,gene=NULL, violin=FALSE){
-  if(!is.null(gene)){
-    df5 = subset(df5, gene==gene)
-  }
+plotData<-function(plot_data,violin=FALSE){
+  df5=plot_data
+  names(df5) = sub("name","gene",names(df5))
+  
+  df5$gene = gsub("_"," ",df5$gene)
+  df5$gene = gsub(" ","\n",df5$gene)
+  
+  df5$gene = factor(df5$gene, levels = df5$gene[!duplicated(df5$gene)])
+  
   df6=subset(df5, family=="gaussian")
   df7=(subset(df5, family!="gaussian"))
+  pv6 = getPvals(df6)
+  pv7 = getPvals(df7)
   # color= if(length(unique(df4$dataset))>1) "dataset" else #"pheno"
  # facet= if(!is.null(df4[['transform']]) ) "transform~pheno" else "pheno"
-  df7$y = factor(df7$y, ordered=TRUE)
+
   lens = c(length(table(df5$gene)), length(table(df5$dataset)))
   wrap=TRUE;
   title=""
@@ -31,14 +59,17 @@ plotData<-function(df5,gene=NULL, violin=FALSE){
   }
   ggp = NULL; ggp1 = NULL
   if(nrow(df7)>0){
+    df7$y = factor(df7$y, ordered=TRUE)
+    pv7$y = factor(pv7$y, levels = levels(df7$y))
     
-    ggp<-ggplot(df7, aes(x=y, y=value, color=y, shape=data, linetype=data));#+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
+    ggp<-ggplot(df7, aes(x=y, y=value, color=y));#+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
     if(violin){
       ggp<-ggp+ggplot2::geom_violin()+geom_point()
     }else{
       ggp<-ggp+ggplot2::geom_boxplot()
     }
-   
+    ggp<-ggp+ggplot2::geom_text(data=pv7,
+                                 mapping = aes(x=y, y=value,  label=pv), color="black")
   }
   
   if(nrow(df6)>0){
@@ -64,6 +95,8 @@ plotData<-function(df5,gene=NULL, violin=FALSE){
     #gsub("X50", "median expression", names(quants1))
     ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=gene, fill=gene,shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
     ggp1<-ggp1+geom_line()+geom_ribbon(alpha=0.1)
+    ggp1<-ggp1+ggplot2::geom_text(mapping = aes(x=y, y=value, label=pv), color="black",data = pv6)
+    
     ggp1<-ggp1+labs(y="median gene expression for y<=yval", x="yval")
   }
   if(wrap){
@@ -1899,11 +1932,13 @@ evaluate=function(predictions){ ## different folds with same variables
   flags = private$flags; phens = private$phens;
  phens = private$phens
  trainedOn = attr(predictions,"trainedOn");
-  eval2 =  private$data$evaluate(predictions, phens,flags, verbose=verbose) |> tibble::add_column(data=private$nme, trainedOn=trainedOn)#|> tibble::add_column(trainedOn=private$nam)
-    
+  eval2 =  private$data$evaluate(predictions, phens,flags, verbose=verbose) 
   if(is.null(eval2)) return(NULL)
+
  
-  eval4 = eval2 |> tibble::add_column(variable= unlist(lapply(eval2$model, function(x){
+  eval4 = eval2  |> 
+   tibble::add_column(data=private$nme, trainedOn=trainedOn) |>
+     tibble::add_column(variable= unlist(lapply(eval2$model, function(x){
     if(x=="cv" || x=="") return("");
     x1 =rev(strsplit(x,";")[[1]])[1]
     x1
