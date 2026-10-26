@@ -29,6 +29,16 @@ modelObj<-R6::R6Class("modelObj",
                           if(nme1=="")nme1="empty"
                             self$models[[nme1]]
                          },
+                         pvals = function(nv=1){
+                           nvar = unlist(self$nvar)
+                           nvars = as.numeric(names(table(nvar)));
+                           names(nvars) = nvars
+                           
+                           pvs = lapply(self$models[nvars==nv], function(mod){
+                             mod$calcPvalue()
+                           })
+                          unlist( pvs[lapply(pvs, length)>0])
+                         },
                          separate=function(){
                            nvar = unlist(self$nvar)
                            nvars = as.numeric(names(table(nvar)));
@@ -37,7 +47,11 @@ modelObj<-R6::R6Class("modelObj",
                            #  print(nv)
                                 beams = self$beams[nvar==nv]
                                 mods = self$models[nvar==nv]
-                                lapply(mods, function(x) x$simplify())
+                                r=lapply(mods, function(x) {
+                                  res =x$simplify();
+                                  res$pv= x$calcPvalue();
+                                  res
+                                  })
                            })
                           # 
                            

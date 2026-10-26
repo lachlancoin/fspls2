@@ -15,10 +15,10 @@ getPvals<-function(df7){
    # print(df1$y)
     data.frame(list(pv=pv, beta=beta,
                     
-                    y = yl[round(length(yl)/2)], value =median(df1$value,na.rm=TRUE),
+                    y = max(yl), value =median(df1$value,na.rm=TRUE),
                     family = df1$family[[1]], gene = as.character(df1$gene[[1]]), dataset = df1$dataset[[1]]))
   }));#,addName="family_gene_data");
-  res_df$gene = factor(res_df$gene, levels = levels(df5$gene));
+  res_df$gene = factor(res_df$gene, levels = levels(df5_$gene));
   #res_df$y = factor(res_df$y, levels = levels(df5$y))
   res_df
 }
@@ -28,8 +28,9 @@ getPvals<-function(df7){
 #' @param violin violin plots
 #' @returns ggplots 
 #' @export
-plotData<-function(plot_data,violin=FALSE){
+plotData<-function(plot_data, facet="gene~dataset",flip  = TRUE,violin=TRUE){
   df5=plot_data
+  if(flip) facet ="dataset~gene";
   names(df5) = sub("name","gene",names(df5))
   
   df5$gene = gsub("_"," ",df5$gene)
@@ -37,7 +38,7 @@ plotData<-function(plot_data,violin=FALSE){
   
   df5$gene = factor(df5$gene, levels = df5$gene[!duplicated(df5$gene)])
   
-  df6=subset(df5, family=="gaussian")
+  df6=subset(df5, family=="gaussian" | family=="ordinal")
   df7=(subset(df5, family!="gaussian"))
   pv6 = getPvals(df6)
   pv7 = getPvals(df7)
@@ -48,7 +49,7 @@ plotData<-function(plot_data,violin=FALSE){
   wrap=TRUE;
   title=""
   if(lens[1]>1 & lens[2]>1){
-    facet="gene~dataset"
+ 
     wrap = FALSE
   }else if(lens[2]>1){
     title= df5$gene[1]
@@ -73,8 +74,9 @@ plotData<-function(plot_data,violin=FALSE){
   }
   
   if(nrow(df6)>0){
+    separator="______________"
     prbs=c(0.33,0.5,0.66)
-    df6_1 =df6 |> unite("comb",gene,data,family,pheno,dataset,sep="__")
+    df6_1 =df6 |> unite("comb",gene,family,pheno,dataset,sep=separator)
     comb1=unique(df6_1$comb); names(comb1)=comb1
     quants=.merge1_new(lapply(comb1,function(c1){
       df6_2 = subset(df6_1, comb==c1)
@@ -89,25 +91,39 @@ plotData<-function(plot_data,violin=FALSE){
         df_
       }),addName="y")
     }), addName="comb")
-    quants1 = quants |> separate("comb", sep="__", into=c("gene","data","family","pheno1","dataset"))
+    
+    quants1 = quants |> separate("comb", sep=separator, into=c("gene","family","pheno1","dataset"))
     names(quants1) = gsub("\\.","",names(quants1))
     quants1$y = as.numeric(quants1$y)
     #gsub("X50", "median expression", names(quants1))
-    ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=gene, fill=gene,shape=data, linetype=dataset))+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
+    quants1$gene=factor(quants1$gene, levels = levels(df6$gene))
+    ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=gene, fill=gene,shape=dataset, linetype=dataset))
     ggp1<-ggp1+geom_line()+geom_ribbon(alpha=0.1)
-    ggp1<-ggp1+ggplot2::geom_text(mapping = aes(x=y, y=value, label=pv), color="black",data = pv6)
+    ggp1<-ggp1+ggplot2::geom_text(data=pv6,
+                                mapping = aes(x=y, y=value, ymin=value, ymax=value, label=pv), color="black")
+   # ggp1<-ggp1+ggplot2::geom_text(mapping = aes(x=y, y=value, label=pv), color="black",data = pv6)
     
     ggp1<-ggp1+labs(y="median gene expression for y<=yval", x="yval")
+    
+    ggp2<-ggplot(df6, aes(x=y, y = value, color=gene, fill=gene, shape = dataset))+geom_point()
+    ggp2<-ggp2+ggplot2::geom_text(data=pv6,
+                                  mapping = aes(x=y, y=value, label=pv), color="black")
+    
   }
   if(wrap){
     ggp<-ggp+facet_wrap(facet,scales = "free")+ggtitle(title)
     ggp1<-ggp1+facet_wrap(facet,scales = "free")+ggtitle(title)
+    ggp2<-ggp2+facet_wrap(facet,scales = "free")+ggtitle(title)
+    
   }else{
     ggp<-ggp+facet_grid(facet,scales = "free")+ggtitle(title)
-    ggp1<-ggp1+facet_wrap(facet,scales = "free")+ggtitle(title)
+    ggp1<-ggp1+facet_grid(facet,scales = "free")+ggtitle(title);#+scale_y_continuous(transform="log")
+    ggp2<-ggp2+facet_grid(facet,scales = "free")+ggtitle(title);
   }
-  
-  list("binomial"=ggp,"gaussian"=ggp1)
+ 
+ resu =  list("binomial"=ggp,"gaussian"=ggp1, "gaussian1"=ggp2)
+ if(flip) resu = lapply(resu, function(r1)r1+ggplot2::coord_flip())
+ resu
 }
 
 filter_comb<-function(comb2_new, nme_ang1){
@@ -1528,7 +1544,8 @@ plotPredictions=function(predictions,evals=NULL,
    toplot$numvars = as.numeric(toplot$numvars)
    toplot$varname = factor(toplot$varname)
    toplot$model=gsub(";","\n",toplot$model);
-   toplot$model= factor(toplot$model, levels = toplot$model[!duplicated(toplot$model)])
+   levels = toplot$model[!duplicated(toplot$model)]
+   toplot$model= factor(toplot$model, levels=levels)
    #head(toplot)
    toplot$cv_index = factor(toplot$cv_index); levs = levels(toplot$cv_index); names(levs) =levs
    if(family=="ordinal"){
@@ -1842,11 +1859,11 @@ makeAllModels=function(variables,
   #k=1; nvar=2; beam=1;
   
   all_models_full = lapply(nreps, function(k){
-    print(k)
+    #print(k)
     vars_n = variables[[k]]
    if(length(vars_n)==0) return(NULL)  
     models = modelObj$new(k);
-    nvars=rev(1:length(vars_n));
+    nvars=(1:length(vars_n));
     for(nvar in nvars){
       for(beam in 1:length(vars_n[[nvar]])){
         v_beam = vars_n[[nvar]][[beam]]
@@ -1874,7 +1891,14 @@ makeAllModels=function(variables,
        if(length(am1$degsf[[fam]])==0){
          return(       data.frame(list(logLiks=unlist(am1$logLiks[[fam]]))))
        }
-       data.frame(list(logLiks=unlist(am1$logLiks[[fam]]), 
+       pvs = unlist(am1$pv[[fam]])
+       logLiks =unlist(am1$logLiks[[fam]])
+       #print(logLiks);
+      
+       if(length(pvs)==0) pvs = rep(NA, length(logLiks));
+       #print(pvs);
+       data.frame(list(logLiks=logLiks, 
+                       pvs = pvs,
                            degf=  unlist(am1$degsf[[fam]])))
      })
   

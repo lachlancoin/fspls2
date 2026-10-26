@@ -1986,9 +1986,10 @@ if(length(nmesm1)>1 && merge){ ##merging only
         for(nmem in nmesm1){
          # print(nmem)
           subinds1 = which(!self$looc$incl[,as.numeric(nmem)])
-          mi2 = match(colnames(res1[[nmem]][[mi]][[nmep]]), levs1)
          # print(mi2)
           if(mi <= length(res1[[nmem]])){
+            mi2 = match(colnames(res1[[nmem]][[mi]][[nmep]]), levs1)
+            
             result[subinds1,mi2[!is.na(mi2)]] =  res1[[nmem]][[mi]][[nmep]][subinds1,!is.na(mi2)];
           }
         }

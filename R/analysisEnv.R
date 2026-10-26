@@ -718,7 +718,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
      #non_rand = grep(random_identifier, names(ang1),inv=TRUE)
      #dupls = rep(FALSE, length(ang1))
      
-     exclusion_in_beam = strsplit(getOption("exclusion_in_beam","0"),":")[[1]]  ## can be a number of max
+     exclusion_in_beam = strsplit(as.character(getOption("exclusion_in_beam","0")),":")[[1]]  ## can be a number of max
      if(exclusion_in_beam[1]=="max" && beam>1){  ## excludes any overlapping signature
        if(length(gp1)>0){
          gp11=min(gp1) ## keep one random
@@ -741,7 +741,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
       # vn_all1 = unique(unlist(vn_all))
       
        while(TRUE){
-        if(verbose) print(paste("thinning", length(vn_all), length(ang1)))
+        if(verbose) print(paste("thinning1", length(vn_all), length(ang1)))
            inds_to_keep = 1:min(beam, length(vn_all))
            rem_all = lapply(inds_to_keep, function(i){
              vn1 = vn_all[[i]]
@@ -764,7 +764,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
        len = length(ang1[[1]]$var_names)
        exclusion_in_beam = min(len-1, as.numeric(exclusion_in_beam[1]))
        if(len>1){
-         if(verbose) print("thinning signature ")
+         if(verbose) print("thinning signature 2 ")
          non_rand = grep(random_identifier, names(ang1),inv=TRUE)
          dupls1 = 1:length(ang1)
          toincl = 1:(len-exclusion_in_beam)
