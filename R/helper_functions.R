@@ -355,8 +355,8 @@ plotEval<-function(eval3,
   
   eval3$beam = factor(eval3$beam, levels =beam_levs  )
   
-  eval3$sign = as.character(eval3$sign)
-  eval3$sign = factor(eval3$sign, levels = c(-1,0,1), labels=c("-","","+"))
+  #eval3$sign = as.character(eval3$sign)
+  #eval3$sign = factor(eval3$sign, levels = c(-1,0,1), labels=c("-","","+"))
     #  eval3 = eval3[,names(eval3) %in% c(shape_color,sep_by, linetype, text, dotsize, color, title1, grid0, grid1, "numvars","mid","low","high"),drop=FALSE]
   
   

@@ -23,6 +23,11 @@ modelObj<-R6::R6Class("modelObj",
                            self$nvar[[nme]] = varlen
                            self$beams[[nme]]= beam
                          },
+                         get1=function(var_names){
+                           nme1 = paste(var_names, collapse=";")
+                           if(nme1=="")nme1="empty"
+                           self$models[[nme1]]
+                         },
                          get = function(prev_i2, b_i_name){
                            pn = if(is.null(prev_i2)) c() else names(prev_i2$var_names);
                            nme1 = paste(c(pn, paste(b_i_name, collapse=".")), collapse=";")

@@ -782,9 +782,15 @@ dataH<-R6::R6Class("dataH",
 
 
    findPrev=function(comb20, expt_id, var_names, k){
+     prev_i1 = private$models[[k]]$get1(var_names);
      if(length(var_names)==0){
-       ##initial 
-       empty=initialStateObj(private$phens)
+        b_i_name=c()
+       Wall =NULL;
+       project=.readFlag(private$flags,"project",TRUE)
+       useoffset=.readFlag(private$flags,"useoffset",TRUE); beam=1;
+       empty  = private$data$makeNextModel(private$models[[k]],NULL,b_i_name,phens,k,beam, ypred=NULL, Wall = Wall,
+                                 project=project, logpthresh =0)
+     #  empty1=initialStateObj(private$phens)
        return(empty)
      }
      if(is.null(private$sigs)){
@@ -873,8 +879,6 @@ res_inner2=function(comb_,prev_i2, k, expt_id){
   phens = private$phens;
   flags = private$flags;
   nme_comb = names(comb_); names(nme_comb) = nme_comb
-  #nme_c1 = nme_comb[[1]]; nme_p1 = names(comb_[[nme_c1]])[[1]]; ik=1
-  #print("HHHHHHH")
   res_inner1=lapply(nme_comb, function(nme_c1){
     nmesp1 = names(comb_[[nme_c1]]); names(nmesp1) = nmesp1
     lapply(nmesp1, function(nme_p1){

@@ -925,7 +925,7 @@ calcRMSV=function(y, nonNA,    flip=FALSE, betas=NULL,
           df12
         }), num_cols="value", addName="measure")
      if(is.null(aa2)) return(NULL)
-      aa2|> tibble::add_column(nsamps = nsamps, cv=flip, beta = beta1, sign = sign(beta1))
+      aa2|> tibble::add_column(nsamps = nsamps, cv=flip) #, beta = beta1, sign = sign(beta1))
     })
     
     rms_2 = .fixBeforeMerge(rms_1)

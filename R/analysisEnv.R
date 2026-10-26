@@ -659,7 +659,8 @@ analysisEnv<-R6::R6Class("analysisEnv",
    vars_l = vars_l_todo$vars_l
    todo1 = vars_l_todo$todo1
    #logpvs =if(useAngles) angles_ else  -1* unlist(lapply(ang1, function(a1)a1[["cum_ll"]]))
-   logpvs_all = if(useAngles) unlist(lapply(ang1, function(a1)a1[["cum_angle"]])) else  -1*unlist(lapply(ang1, function(a1)a1[["cum_ll"]]))
+   angles_all=unlist(lapply(ang1, function(a1)a1[["cum_angle"]]))
+   logpvs_all = if(useAngles) angles_all else  -1*unlist(lapply(ang1, function(a1)a1[["cum_ll"]]))
   # ord = order(logpvs)
   # names(ord) = names(logpvs)
    ord_all = order(logpvs_all)
@@ -667,6 +668,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
    #logpvs = logpvs[ord_all]
    logpvs_all = logpvs_all[ord_all]
    angles_ = angles_[ord_all]
+   angles_all = angles_all[ord_all]
    stop_random1 = FALSE; stop_random2 = FALSE;
    if(!is.null(stop_y)){
      gp1=grep(stop_y, names(logpvs_all))

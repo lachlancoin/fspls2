@@ -921,7 +921,11 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,prev_i2,
         }
         res1$betas = res1$Wall %*%res1$betas_proj  ## assuming no projection
     }else{
+      
       res1$betas_proj = as.matrix( data.frame(res1$betas_proj))
+      if(nrow(res1$betas_proj)==0){
+        res1$betas_proj = matrix(nrow=0, ncol=1)
+      }
       res1$betas = res1$Wall %*% res1$betas_proj
     }
  
@@ -1123,10 +1127,14 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
   #    transform_func_y =self$transforms[[b_i[[3]]]][[1]]
   #}
  # 
+  if(zero_model){
+    x_trans = x_;
+    x_trans_prev = x_[,-1,drop=F]
+  }else{
    x_trans  =  .eval1_(x_,  Wall2, transf, family)  # this is projecting into orthogonal space,transformations in orthogonal space
    x_trans_prev  =  x_trans[,-ncol(x_trans),drop=F];
  #  x_trans_prev = .eval1_(x_[,-ncol(x_),drop=FALSE],  Wall1, transf[-ncol(x_)], family)
-   
+  }
 #x_trans=  t(t(x_trans) -apply(x_trans,2,mean)  )
 #   sum(abs(transf1$func(x1_, transf1$param[1])-x_trans[,ncol(x_trans)] - ( mean(x1_[,1]) - mean(x_trans[,ncol(x_trans)]))))
   
@@ -1207,12 +1215,12 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
       logLiks_new[[kk]] = nullLikelihood(y, w, family);
       degsf[[kk]] =attr( logLiks_new[[kk]],"df")
       if(is.null(degsf[[kk]])) stop("cannot be NULL");
-      beta_new1 = rep(0, ncol(x))
+      beta_new1 = c()
       const_term = 0;  
        if(family=="multinomial"){
          const_term = rep(0, length(unique(y[nonNAy])))
          names(const_term) = unique(y[nonNAy]);
-         beta_new1 = matrix(0, nrow=1, ncol = length(const_term));
+         beta_new1 = matrix(0, nrow=0, ncol = length(const_term));
          colnames(beta_new1) = names(const_term);
        }else if(family=="ordinal"){
          levsy = levels(factor(y[nonNAy], ordered=TRUE))
@@ -1576,12 +1584,13 @@ makeModels=function(models, phens1, vars2,k, beam,
   b_i_name=c()
   #transform_x1=transform_x[[var_transf[[1]]]]
  # nme_c1 = var_transf[[1]]
-  Wall =lapply(subphens, function(f) matrix(nrow=0, ncol=0))
+  #Wall =NULL;##
   prev_i2 = self$makeNextModel(models, NULL,b_i_name,subphens,k, beam,
                               ypred=ypred, project=project,useoffset=useoffset,
-                      Wall=Wall,
+                      Wall=NULL,
                               logpthresh =logpthresh)
   jk=1
+  Wall = prev_i2$Wall;
  rmsv=if(checkRMSV) self$checkRMSV(subphens,prev_i2, ypred, nonNA,verbose=verbose) else NULL
   while(jk<=len){
     b_i_name = vars2[[jk]]
@@ -1922,7 +1931,7 @@ extractPredictions=function(all_models_full,phens, flags,
 },
 ##beams, nrep
 getPredictions=function(all_models3, phens, numvar, numvar_ind,liab,
-                        ypred = self$ypred(phens, liab=liab),
+                        ypred = self$ypred(phens, liab=liab),                      
                         coeff= NULL,
                         merge=TRUE
                     
@@ -2073,7 +2082,7 @@ evaluate=function(predictions,phens,flags,
   nonNA = rep(TRUE, self$nrow)
  # liab = .readFlag(flags,"liab",TRUE)  ## whether to evaluate with liability , default is true
   #nvar=length(predictions);cv_index="merged"; beam=1;
-  #nvar=5; cv_index=12; beam=1
+  #nvar=1; cv_index=1; beam=1
   numvars1 = names(predictions); names(numvars1) = numvars1
  evals_all = .merge1_new(.lapply_nme(predictions, function(nvar){
    pred_nvar = predictions[[nvar]];
