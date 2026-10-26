@@ -788,7 +788,7 @@ dataH<-R6::R6Class("dataH",
        Wall =NULL;
        project=.readFlag(private$flags,"project",TRUE)
        useoffset=.readFlag(private$flags,"useoffset",TRUE); beam=1;
-       empty  = private$data$makeNextModel(private$models[[k]],NULL,b_i_name,phens,k,beam, ypred=NULL, Wall = Wall,
+       empty  = private$data$makeNextModel(private$models[[k]],NULL,b_i_name,private$phens,k,beam, ypred=NULL, Wall = Wall,
                                  project=project, logpthresh =0)
      #  empty1=initialStateObj(private$phens)
        return(empty)
@@ -1545,6 +1545,7 @@ plotPredictions=function(predictions,evals=NULL,
      })
    })
    if(is.null(toplot)) return(NULL)
+   if(is.null(toplot$pheno)) toplot$pheno= toplot$subpheno
    toplot$numvars = as.numeric(toplot$numvars)
    toplot$varname = factor(toplot$varname)
    toplot$model=gsub(";","\n",toplot$model);

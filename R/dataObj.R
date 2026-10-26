@@ -884,6 +884,7 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,prev_i2,
   }
   nmesi = names(subphens)
   names(nmesi) = nmesi
+  multinom_=FALSE;
  #nme=nmesi[[1]]
   res = lapply(nmesi, function(nme){
     #print(nme)
@@ -893,9 +894,11 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,prev_i2,
     phensi_=subphens[[nme]]
     Wall1 = Wall[[nme]]
     useglm=getOption("useglmnet",FALSE)
-    
-    if(family=="multinomial" && !useglm){
-      family="binomial";
+    if(family=="multinomial"){
+      if(!useglm){
+          family="binomial";
+      }
+      multinom_ = TRUE;
     }
     if(length(prev_var)==0) {
       project=FALSE ;#family!="multinomial"
@@ -908,23 +911,39 @@ calcBetaProj1=function(subphens,k,b_i,b_i_name, prev_var, Wall,prev_i2,
                               project=project, strict=strict,useoffset=useoffset)
    
    # data.frame(res1$betas)
+   # print(paste("FAMILY", family))
     if(family=="multinomial"){
      # betas_new = res1$betas
           
         res1$constants = res1$constants[[1]] 
         res1$tbls = res1$tbls[[1]] 
+        
+        #print(res1$betas_proj);
+        if(length(b_i)==0){ ##zero model
+        
+          res1$betas_proj = matrix(nrow=0, ncol =length(res1$tbls) )
+          colnames(res1$betas_proj) = names(res1$tbls)
+        }else{
+        
         res1$betas_proj = res1$betas_proj[[1]]
         if(!is.matrix(res1$betas_proj)){
           res1$betas_proj = matrix(res1$betas_proj, nrow =1 , ncol = length(res1$betas_proj))
           colnames(res1$betas_proj) = names(res1$constants)
 #        }
         }
+        }
+        if(ncol(res1$betas_proj)!=length(res1$tbls)) stop("mismatch")
         res1$betas = res1$Wall %*%res1$betas_proj  ## assuming no projection
     }else{
       
       res1$betas_proj = as.matrix( data.frame(res1$betas_proj))
+      
       if(nrow(res1$betas_proj)==0){
         res1$betas_proj = matrix(nrow=0, ncol=1)
+      }
+      if(length(b_i)==0 && multinom_){ ##zero model
+        res1$betas_proj = matrix(nrow=0, ncol =length(res1$tbls) )
+        colnames(res1$betas_proj) = names(res1$tbls)
       }
       res1$betas = res1$Wall %*% res1$betas_proj
     }
