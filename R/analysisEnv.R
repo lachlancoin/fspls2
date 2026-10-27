@@ -1,24 +1,13 @@
-random_identifier = "\\.rand\\."  ## this identifies random variables;
+random_identifier = "rand" #\\.rand\\."  ## this identifies random variables;
 
 
 #' Extracts all the variables selected from the variables object. Useful when using beam>1 
 #' @param variables a variables object
 #' @export
 extract_all_variables<-function(variables){
-df2 = .merge1_new(lapply(variables, function(var){
-   # names(var) = unlist(lapply(names(var), function(x) strsplit(x,"_")[[1]][2]))
-     .merge1_new(lapply(var, function(var1){
-       var1n = 1:length(var1); names(var1n) = names(var1)
-       .merge1_new(lapply(var1n, function(beam){
-         var2 = var1[[beam]]
-         vn = var2$var_names[[length(var2$var_names)]]
-         df =  data.frame(list(varname=vn[2],data = vn[1] , transform=vn[3], param=vn[4],
-                               beam = beam,ll = var2$cum_ll,
-                               angle=var2$angle, cumulative_angle=var2$cum_angle))
-        df
-       }), addName="model")
-     }), addName = "nvar")
-   }), addName="nrep")
+df2 = .merge1_new(lapply(variables, function(v){
+    .merge1_new(v)
+}), addName="nrep")
 return(tibble::as_tibble(df2))  
 }
 
@@ -214,37 +203,25 @@ fspls.select<-function(datasH, flags,
      })
    })
 }
-.mergeResInner<-function(res_inner1){
+.mergeResInner<-function(res_inner1){ ## still used? 
   nme_comb = names(res_inner1[[1]]);names(nme_comb) = nme_comb
-  #nme_c1 = nme_comb[[1]]; nme_p1 = names(res_inner1[[1]][[nme_c1]])[1]
+#  nme_c1 = nme_comb[[1]]; nme_p1 = names(res_inner1[[1]][[nme_c1]])[1] ; ri = res_inner1[[1]]
   
-  res_inner=lapply(nme_comb, function(nme_c1){
+  nxt_vars = .merge1_new(lapply(nme_comb, function(nme_c1){
     nmesp1 = names(res_inner1[[1]][[nme_c1]]);names(nmesp1) = nmesp1
-    lapply(nmesp1, function(nme_p1){
-      varnames = unique(unlist(lapply(res_inner1, function(ri) names(ri[[nme_c1]][[nme_p1]]))))
-     
-      #varnames = comb$names; names(varnames) = varnames
-      if(length(varnames)==0) return(NULL)
-      names(varnames) = varnames
-      nxt_vars = lapply(varnames, function(vn){
-        nv = lapply(res_inner1, function(ri){
-          ri[[nme_c1]][[nme_p1]][[vn]]
-        })
-        nv=nv[unlist(lapply(nv, length))>0]
-        logliks=unlist(lapply(nv, function(nv1)unlist(nv1$logLiks)))
-        nv2 = list(var_names =nv[[1]]$var_names,
-                 angle = sum(unlist(lapply(nv, function(nv1) unlist(nv1$angle)))),
-              cum_angle =sum(unlist(lapply(nv, function(nv1) unlist(nv1$angles)))),
-            #cum_pv= .sumChisq(unlist(lapply(nv, function(nv1) unlist(nv1$pvs)))),
-            cum_ll = sum(logliks))
-      })
+    .merge1_new(lapply(nmesp1, function(nme_p1){
+      r_comb = .merge1_new(lapply(res_inner1, function(ri){
+        ri[[nme_c1]][[nme_p1]] #|> unite("name1",data_type, names, remove=F,sep=".")
+      }), addName="dataset")
+      r_comb1 = r_comb |> pivot_wider( id_cols=c(names, data_type), names_from="dataset", values_from=value) #
+      r_comb1[,1:2] |> tibble::add_column(value= apply(r_comb1[,-(1:2)],1,sum))
+      
+      }), addName="param")
       # cumpv_all= .sumChisq(unlist(lapply(nv, function(nv1)unlist(nv1$pvs_all))))
-  nxt_vars = nxt_vars[unlist(lapply(nxt_vars, length))>0]
-  if(length(nxt_vars)==0) return(NULL)
-  ll_list = unlist(lapply(nxt_vars, function(nv) nv$cum_ll))
-  nxt_vars[order(ll_list, decreasing=TRUE)] 
-    })
-  })
+  
+    }), addName="transf")
+  nxt_vars 
+ 
 }
 .extractFullModels<-function(all_models, full_model_only=FALSE){
   subinds = which(unlist(lapply(all_models$models, function(x) length(grep('full', names(x)))))>0)
@@ -349,47 +326,19 @@ analysisEnv<-R6::R6Class("analysisEnv",
      
       res
     },
-    topAngles = function(vars_l_todo, k1, comb2_news = NULL, verbose=FALSE,stop_y=random_identifier,minvars =0){
+    topAngles = function(vars_l_todo, k1, comb2_news, verbose=FALSE,stop_y=random_identifier,minvars =0){
       vars_l = vars_l_todo$vars_l
+      angles_all = .merge1_new(comb2_news, addName="dataset") 
+      angles_all =   pivot_wider(angles_all, id_cols=c(partialname, model, varname, signature,names, data, transform, param,prev), names_from="dataset", values_from=value)
+      angles_all = angles_all[,1:9] |> tibble::add_column(value= apply(angles_all[,-(1:9)],1,sum))
+       o = order(angles_all$value, decreasing=FALSE)
+      ang1=angles_all[o,] 
+      #unite("partialname", data_type, names, transf, sep=".", remove=FALSE) |> unite("varname", data_type,names, transf,param,sep="." ,remove=FALSE)  |> unite("model",prev,varname,sep=";", remove=FALSE) 
+     # ang1$model =  gsub("^empty;", "",ang1$model)
+
+    
+      ang1 = subset(ang1,!duplicated(ang1$partialname))
       
-      nme_l = names(vars_l); names(nme_l) = nme_l
-      angles_all = lapply(nme_l, function(nme_l1){
-        vars_l1 = vars_l[[nme_l1]]
-        varnames = vars_l1$var_names; 
-        #if(!is.null(varnames) && is.null(names(varnames))) names(varnames) = lapply(varnames, paste, collapse=".")
-        if(length(comb2_news)>0){
-          #  if(length(varnames)==0) varnames = "empty"
-          res_inner1 = lapply(comb2_news, function(c2n) c2n[[nme_l1]])
-        }else{
-          res_inner1 = private$sigs$loadPvals(private$expt_id(), varnames,k1) ## reconstruct ri
-        }
-        nxt_vars1=.mergeResInner(res_inner1)
-        nxt_vars1 =nxt_vars1[unlist(lapply(nxt_vars1, length))>0]
-        if(length(nxt_vars1)==0) return(NULL)
-        nxt_vars1
-      })
-      
-      angles_all = angles_all[unlist(lapply(angles_all, length))>0]
-      if(length(angles_all)==0){
-        return(list())
-        # length(vars_l_todo$todo1)==length(vars_l_todo_new$todo1)){ 
-        ## to account for continuing via shortening todo rather than adding variable
-      #  vars_l_todo = list(stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1[-1], moveNext=FALSE)
-      #  return(vars_l_todo)
-      }
-      aa=unlist(angles_all, recursive=FALSE)
-      ab = unlist(aa,recursive=FALSE)
-      ang1 = unlist(ab,recursive=FALSE)
-      vn = unlist(lapply(ang1, function(a1)paste(names(a1[["var_names"]]), collapse=";")), recursive=FALSE)
-      names(ang1) = vn 
-      
-      logpvs_all =  unlist(lapply(ang1, function(a1)a1[["cum_angle"]])) 
-      ord_all = order(logpvs_all)
-      ang1 = ang1[ord_all]
-      
-      dupls=(unlist(lapply(ang1, function(a1) paste(sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:3],collapse="::")))), collapse=";;"))))
-      ang1 = ang1[!duplicated(dupls)]
-      return(ang1);
      
     },
    
@@ -480,26 +429,20 @@ analysisEnv<-R6::R6Class("analysisEnv",
     vars_all = list();
     while(length(vars_l_todo$todo1)>0 ){
       comb2_news =try(lapply(nmesH, function(nmeh){
-        #print(nmeh)
         dh = datasH[[nmeh]]
         comb20=comb2[[nmeh]]
-        comb_new  = dh$multiAnglesAndPv(comb20 , k1,expt_id, vars_l_todo)
-        comb21 =  lapply(comb_new, function(x) x$pvs)
-        #private$savePvals(k1, dh$name(), vars_l_todo$vars_l,comb21)# no need to save here, just keep
-        comb21
+        dh$multiAnglesAndPv(comb20 , k1,expt_id, vars_l_todo)
+       
       }))
       if(inherits(comb2_news,"try-error")){
         print(comb2_news) #error
         warning("error so not continuing to extend model")
         break;
       } 
-    
-     
-     # if(verbose) print(ang1)
       if(!useAngles){
-        ang1 = private$topAngles( vars_l_todo, k1,comb2_news=if(useDB) NULL else comb2_news, verbose=verbose );
-        rand_ind=grep(random_identifier, names(ang1))
-        non_rand_ind = grep(random_identifier, names(ang1), inv=TRUE)
+        ang1 = private$topAngles( vars_l_todo, k1,comb2_news, verbose=verbose );
+        rand_ind=which(ang1$transform=="rand")
+        non_rand_ind = which(ang1$transform!="rand")
         if(length(non_rand_ind)==0){
           if(nvar <minvars) warning("no non-random indices, breaking. You can try to increase topn or useAngles=TRUE")
           break;
@@ -507,18 +450,18 @@ analysisEnv<-R6::R6Class("analysisEnv",
         if(nvar < minvars && min(rand_ind)==1){
           rand_ind = rand_ind[rand_ind>min(non_rand_ind)]
         }
-          minv = min(length(ang1), topn, rand_ind)
-          ang1 = ang1[1:minv]
-          nme_ang1 = names(ang1)
-          comb2_filtered = lapply(comb2_news, filter_comb, nme_ang1)
+          minv = min(nrow(ang1), topn, rand_ind)
+          ang1 = head(ang1,minv)
+        
+          comb2_filtered = lapply(comb2_news, function(xx){
+            xx[match(ang1$model,xx$model),]
+#            subset(xx, model %in% ang1$model)
+          })
           comb2_news =lapply(nmesH, function(nmeh){
-            #print(nmeh)
-            comb20=comb2[[nmeh]]
             dh = datasH[[nmeh]]
             comb_filtered=comb2_filtered[[nmeh]];
-            
-            comb_new=dh$calcPvs(comb20,comb_filtered, k1, expt_id)
-            lapply(comb_new, function(x) x$pvs)
+            comb_new=dh$calcPvs(comb_filtered, k1, expt_id)
+           comb_new
           })
        #   ang1 = private$topAngles( vars_l_todo, k1,comb2_new=if(useDB) NULL else comb2_news, verbose=verbose );
        #   cum_pvs = unlist(lapply(ang1, function(x) x$cum_pv))
@@ -529,13 +472,13 @@ analysisEnv<-R6::R6Class("analysisEnv",
     # grep(random_identifier, names(ang2))
       
       vars_l_todo_new= self$nextVars( vars_l_todo,  k1,logpvthresh,beam, 
-                                        comb2_news=if(useDB) NULL else comb2_news, 
+                                        comb2_news,
                                       #  ang1=ang1,
                                         
                                         stop_y = if(nvar<minvars) NULL else stop_y, 
-                                      verbose=verbose, 
-                                      useAngles=useAngles)
-      if(verbose) print(paste("stop",vars_l_todo_new$stop, "todo",length(vars_l_todo_new$todo1), "nvar",length(vars_l_todo_new$vars_l[[1]]$var)))
+                                      verbose=verbose)
+      if(verbose) print(vars_l_todo_new$vars_l)
+      if(verbose) print(paste("stop",vars_l_todo_new$stop, "todo",length(vars_l_todo_new$todo1)))
       if(vars_l_todo_new$moveNext){
        
         comb2 = comb2_news
@@ -544,12 +487,12 @@ analysisEnv<-R6::R6Class("analysisEnv",
      
       vars_l_todo = vars_l_todo_new
       
-      nvar = length(vars_l_todo$vars_l[[1]]$var)
+      nvar = vars_l_todo$vars_l$nvar[[1]]
       
+      if(is.na(nvar)) break;
       
       if(verbose) print(names(vars_l_todo$vars_l))
       if(nvar>0) vars_all[[nvar]] = vars_l_todo$vars_l
-
       if(nvar>=maxvars ) break;
     }
     if(length(vars_all)>0) names(vars_all) = paste("nvar",1:length(vars_all),sep="_")
@@ -579,14 +522,16 @@ analysisEnv<-R6::R6Class("analysisEnv",
     }), recursive=FALSE), recursive=FALSE)
     
     # var_thresh = var_thresh[match(names(var_thresh), train_nme)]
-    empty=initialStateObj(phens)
+    #empty=initialStateObj(phens)
+    
+    empty = data.frame(list(partialname="empty", model="empty", sumAngle=0, varname="empty", signature="", names="empty", data="", transform="", param="", prev="", value=0, nvar=0, beam=1))
     
     vars_l_todo =
       list(
         todo1 = todo1,
         jj=0,
         logpv=logpv,
-        vars_l = list(empty=empty),
+        vars_l = empty,
         stop=FALSE)
       
     
@@ -651,52 +596,54 @@ analysisEnv<-R6::R6Class("analysisEnv",
  #' @param stop_y should be random_identifier
  #' @return object outlining what is left to do
  nextVars=function(vars_l_todo,  k1,
-                   logpvthresh,beam,  comb2_news = NULL,stop_y=random_identifier, verbose=FALSE,
-                                   useAngles=FALSE){
-   ang1 = private$topAngles(vars_l_todo, k1, comb2_news, verbose=verbose)
-   angles_ = unlist(lapply(ang1, function(a1)a1[["angle"]]))
+                   logpvthresh,beam,  comb2_news,stop_y=random_identifier, verbose=FALSE
+                                  ){
+#   value_string = if(useAngles) "value" else "pvals"
+   
+   angles_all = .merge1_new(comb2_news, addName="dataset") 
+   angles_all$value = angles_all$value+angles_all$sumAngle
+   #subset(angles_all, model=="log_pre.ABCD2.pow.1;log_pre.AL391280_2.pow.1")
+  # angles_all |> dplyr::summarise(n = dplyr::n(), .by = c(partialname, model, varname, signature, names, data_type, transf, param, prev, nvar, dataset)) |>
+  #   dplyr::filter(n > 1L)
+   
+    angles_all =  pivot_wider( angles_all ,id_cols=c(partialname, model, varname,names, data,  signature,transform, param,prev, nvar), names_from="dataset", values_from=value)
+   angles_all = angles_all[,1:10] |> tibble::add_column(value= apply(angles_all[,-(1:10)],1,sum))
+   o = order(angles_all$value, decreasing=FALSE)
+   ang1=angles_all[o,] 
+   
+  # ang1 = private$topAngles(vars_l_todo, k1, comb2_news, verbose=verbose)
+  # angles_ = unlist(lapply(ang1, function(a1)a1[["angle"]]))
    flags=private$flags; 
    vars_l = vars_l_todo$vars_l
    todo1 = vars_l_todo$todo1
    #logpvs =if(useAngles) angles_ else  -1* unlist(lapply(ang1, function(a1)a1[["cum_ll"]]))
-   angles_all=unlist(lapply(ang1, function(a1)a1[["cum_angle"]]))
-   logpvs_all = if(useAngles) angles_all else  -1*unlist(lapply(ang1, function(a1)a1[["cum_ll"]]))
+   #angles_all=unlist(lapply(ang1, function(a1)a1[["cum_angle"]]))
+   #logpvs_all = if(useAngles) angles_all else  -1*unlist(lapply(ang1, function(a1)a1[["cum_ll"]]))
   # ord = order(logpvs)
   # names(ord) = names(logpvs)
-   ord_all = order(logpvs_all)
-   ang1 = ang1[ord_all]
+   #ord_all = order(logpvs_all)
+   #ang1 = ang1[ord_all]
    #logpvs = logpvs[ord_all]
-   logpvs_all = logpvs_all[ord_all]
-   angles_ = angles_[ord_all]
-   angles_all = angles_all[ord_all]
+   #logpvs_all = logpvs_all[ord_all]
+   #angles_ = angles_[ord_all]
+   #angles_all = angles_all[ord_all]
    stop_random1 = FALSE; stop_random2 = FALSE;
    if(!is.null(stop_y)){
-     gp1=grep(stop_y, names(logpvs_all))
-     gp=grep(stop_y, names(logpvs_all), inv=TRUE)
+     gp1=grep(stop_y,ang1$transform)
+     gp=grep(stop_y, ang1$transform, invert=TRUE)
      
-     if(FALSE){
-    # stop_random =  min(logpvs[gp1], na.rm=TRUE) < min(logpvs[gp], na.rm=TRUE) 
-     stop_random1= min(angles_[gp1]) < min(angles_[gp])
-     stop_random2= min(logpvs_all[gp1], na.rm=TRUE) < min(logpvs_all[gp], na.rm=TRUE)
-     }else{
+     
        stop_random1 = min(gp1)<min(gp); stop_random2 = stop_random1
-     }
+    
      
      
      
      # stop_random= min(gp1)<=min(gp)
      
-     if(verbose){
-       print(paste(stop_random1,stop_random2,min(gp1), min(gp))) #verbose
-       print(paste("COMPARING TO RANDOM!!!!! useAngles=", useAngles)) #verbose
-      # print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))  #verbose
-       print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp]))))  #verbose
-       print("cumulative ")  #verbose
-       print(unlist(list(rand=min(logpvs_all[gp1]),nonrand= min(logpvs_all[gp]))))  #verbose
-     }
-     if(!useAngles && verbose) {
+   
+     if( verbose) {
        #print(unlist(list(rand=min(logpvs[gp1]),nonrand= min(logpvs[gp]))))  #verbose
-       print(unlist(list(rand=min(angles_[gp1]),nonrand= min(angles_[gp])))) #verbose
+       print((list(rand=ang1[min(gp1),],nonrand= ang1[min(gp),]))) #verbose
      }
      
    }
@@ -722,66 +669,21 @@ analysisEnv<-R6::R6Class("analysisEnv",
      
      exclusion_in_beam = strsplit(as.character(getOption("exclusion_in_beam","0")),":")[[1]]  ## can be a number of max
      if(exclusion_in_beam[1]=="max" && beam>1){  ## excludes any overlapping signature
-       if(length(gp1)>0){
-         gp11=min(gp1) ## keep one random
-         
-        ang1 = ang1[1:gp11]
-        logpvs_all = logpvs_all[1:gp11]
-        #logpvs = logpvs[1:gp11]
-       }
-       to_ignore = if(length(exclusion_in_beam)>1) exclusion_in_beam[2] else 0;
-       len1 = length(ang1[[1]]$var_names);
-       to_ignore = min(len1-1, to_ignore);
-   #    print("ignore"); print(to_ignore)
-       if(to_ignore>0){
-         to_ignore1 = 1:to_ignore
-        vn_all = lapply(ang1, function(a1) sort(unlist(lapply(a1$var_names[-to_ignore1], function(vv1)paste(vv1[1:3], collapse="::")))))
-       }else{
-         vn_all = lapply(ang1, function(a1) sort(unlist(lapply(a1$var_names, function(vv1)paste(vv1[1:3], collapse="::")))))
-         
-       }
-      # vn_all1 = unique(unlist(vn_all))
-      
-       while(TRUE){
-        if(verbose) print(paste("thinning1", length(vn_all), length(ang1)))
-           inds_to_keep = 1:min(beam, length(vn_all))
-           rem_all = lapply(inds_to_keep, function(i){
-             vn1 = vn_all[[i]]
-             
-             sort(unique(unlist(lapply(vn1, function(x) i+grep(x, vn_all[-(1:i)])))))
-           })
-           rem_all1 = sort(unique(unlist(rem_all)))
-           if(length(which(inds_to_keep %in% rem_all1))==0){
-             break;
-           }
-           ang1 = ang1[-rem_all1]
-           vn_all = vn_all[-rem_all1]
-           #logpvs = logpvs[-rem_all1]
-           logpvs_all =logpvs_all[-rem_all1]
-       }
-     duplicated=which(duplicated(unlist(vn_all[inds_to_keep])))   
-     if(length(duplicated)>0) stop("not supposed to have duplicates") 
+       #### REDO
+       
+    # duplicated=which(duplicated(unlist(vn_all[inds_to_keep])))   
+    # if(length(duplicated)>0) stop("not supposed to have duplicates") 
       
      }else if(exclusion_in_beam[1] !="max" && !is.na(as.numeric(exclusion_in_beam[1])) && as.numeric(exclusion_in_beam[1])>0 && beam>1){  ##KEEPS DIFFERENT N-1 signatures
-       len = length(ang1[[1]]$var_names)
-       exclusion_in_beam = min(len-1, as.numeric(exclusion_in_beam[1]))
-       if(len>1){
-         if(verbose) print("thinning signature 2 ")
-         non_rand = grep(random_identifier, names(ang1),inv=TRUE)
-         dupls1 = 1:length(ang1)
-         toincl = 1:(len-exclusion_in_beam)
-         dupls1[non_rand]=(unlist(lapply(ang1[non_rand], function(a1) paste(sort(unlist(lapply(a1$var_names[toincl], function(vv1)paste(vv1[1:2],collapse="::")))), collapse=";;"))))
-         
-         ang1 = ang1[!duplicated(dupls1)]
-       }
+       
      }
     # last_non_rand = grep(random_identifier, names(ang1))[1]-1
     # if(is.na(last_non_rand)) last_non_rand = beam;     
   #   topn = .readFlag(flags,'topn', 20);
    #  num_pvals = min(topn, 20)
-     ang1 = ang1[grep(random_identifier, names(ang1), inv=T)]
-     tokeep=1:min(length(ang1), beam)
-     ang1 = ang1[tokeep]#last_non_rand,
+     ang1 = subset(ang1,transform!="rand")
+     tokeep=1:min(nrow(ang1), beam)
+     ang1 = ang1[tokeep,,drop=F] |> tibble::add_column(beam = 1:length(tokeep))#last_non_rand,
      
      
      todo1 = vars_l_todo$todo1;
@@ -789,13 +691,14 @@ analysisEnv<-R6::R6Class("analysisEnv",
      if(todo1[[1]]$incl$nvar>= todo1[[1]]$incl$max){
        todo1 = todo1[-1]
      }
+     #ang1$sumAngle = ang1$sumAngle+ang1$value
      vars_l_todo = list(stop=FALSE, vars_l = ang1, todo1 = todo1, moveNext=TRUE)
      #if(length(grep(random_identifier, names(vars_l_todo$vars_l)))>0) stop("!!");
      
      return(vars_l_todo)
    }
    todo1=vars_l_todo$todo1[-1]
-   vars_l_todo_new = list( stop=length(todo1)==1, vars_l = vars_l, todo1 = todo1, jj = vars_l_todo$jj+1, moveNext=FALSE)
+   vars_l_todo_new = list( stop=length(todo1)==0, vars_l = vars_l, todo1 = todo1, jj = vars_l_todo$jj+1, moveNext=FALSE)
    return(vars_l_todo_new)
  },
  

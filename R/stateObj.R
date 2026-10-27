@@ -1,7 +1,7 @@
 
 initialStateObj<-function(phens){
   Wall0 =lapply(phens, function(f) matrix(nrow=0,ncol=0))
-  stateObj$new(phens,NULL,  NULL,NULL,NULL,NULL,NULL, NULL,NULL, var=c(), varnames=c(), Wall =Wall0)
+  empty = stateObj$new(phens,NULL,  NULL,NULL,NULL,NULL,NULL, NULL,NULL, var=c(), varnames=c(), Wall =Wall0)
 }
 
 #.calcWall_2<-function(data,  var){

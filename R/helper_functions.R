@@ -1910,12 +1910,11 @@ pw = df |>
   
 }
 .lrt<-function(ll1,ll2,  df1,df2,
+               diff_ll = ll1-ll2,
+               diff = df1-df2,
               totweight=1,log.p=FALSE){
-  if(is.null(ll2)) ll2 = ll1;
- # df1 =  attr(ll1,"df")[1] 
-#  df2 = attr(ll2,"df")[1]
-  if(df2>df1) stop(paste("df2 should be bigger than df1 ",df2,df1))
-  pchisq((2*(ll1 - ll2))/(totweight),df1-df2,lower.tail=FALSE,log.p=log.p)
+  if(diff<0) stop(paste("df2 should be bigger than df1 ",diff))
+  pchisq((2*(diff_ll))/(totweight),diff,lower.tail=FALSE,log.p=log.p)
 }
 .norm1<-function(g){
   sqrt(sum((g - mean(g, na.rm =TRUE))^2, na.rm =TRUE))

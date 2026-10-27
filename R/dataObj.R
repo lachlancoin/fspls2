@@ -49,13 +49,14 @@ fitOrdinal<-function(y,x, lambs,family, firth=TRUE, steps = getOption("clm.steps
   
   cfs= clm_ao_path(func, df,lambs, firth=FALSE, steps=steps)
   max_ind = which.max(unlist(lapply(cfs, function(x) x$logLik)))
+  logLik = cfs[[max_ind]]$logLik ## without firth for log lik
   if(firth){
     m1r = clm_ao(func, df, lambda = cfs[[max_ind]]$lambda, start = cfs[[max_ind]]$par, steps=1, firth=TRUE)
   }else{
     m1r = cfs[[max_ind]]
   }
   const_term = if(family=="binomial") -1*m1r$alpha else m1r$alpha;
-  list(beta_new1 = m1r$beta, const_term =const_term, lambda = m1r$lambda, logLik = m1r$logLik,
+  list(beta_new1 = m1r$beta, const_term =const_term, lambda = m1r$lambda, logLik = logLik,
                extra_df = 1)
  
    
@@ -1269,6 +1270,25 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
              beta_new1= sm2$beta_new1;
              const_term = sm2$const_term
       }
+    if(length(prevLL)>0 && length(prevLL) == length(logLiks_new) && logLiks_new[[kk]]<prevLL[[kk]]){ ## make sure logLiks improved, same as is.null(sm2)
+      warning("setting coeff for this variable to zero since logLik did not improve")
+      lambdas[[kk]]=1.0;
+      logLiks_new[[kk]] = prevLL[[kk]];
+      degsf[[kk]] = prev_df[[kk]];
+      if(family=="multinomial"){
+        beta_new1 = cbind(betas1, rep(0, nrow(betas1)))  ## add zero row
+      }else{
+        beta_new1 = rep(0, ncol(x))
+      }
+      
+      const_term = constants1[[kk]];
+      
+      if(useoffset && family!="multinomial"){
+        beta_new1[1] = 1;
+      }
+    }
+    
+    
       if(useoffset ){ #project){
 
        ##betas[[kk]] = if(family=="multinomial") Wall1 %*% beta_new1 else   (Wall1 %*% beta_new1)[,1]
@@ -1277,7 +1297,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
       }else{
         betas_proj[[kk]] = beta_new1
       }
-    
+      
     
          constants[[kk]] = const_term  #-mean_adj*beta_new1
   
@@ -1484,7 +1504,7 @@ coeffs =
              
              linkfun=  binomial(link = ao_link(lambda1, reflected = TRUE))
            }else{
-             linkfun=  gaussian(link=sinh_asinh_link(lambda))
+             linkfun=  gaussian(link=sinh_asinh_link(lambda1))
              
            }
            

@@ -12,7 +12,11 @@ modelObj<-R6::R6Class("modelObj",
                            self$models  =list()
                            self$nvar =list();
                            self$beams = list();
+                           
+                           
+                           
                          },
+                        
                          set=function(prev_i1,beam){
                            varlen = length(prev_i1$var_names);
                            
