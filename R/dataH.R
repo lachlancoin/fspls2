@@ -31,9 +31,10 @@ getPvals<-function(df7){
 #' @returns ggplots 
 #' @export
 plotData<-function(plot_data, facet="gene~dataset",flip  = TRUE,violin=TRUE){
-  .lapply_nme(plot_data, function(family){
-    fam = strsplit("family","\\.")[[1]];
-  df5=plot_data[[family]]
+  families = unique(plot_data$family); names(families)=families;
+  lapply(families, function(family){
+    fam = strsplit(family,"\\.")[[1]][[1]];
+  df5=subset(plot_data, family==fam)
   if(flip) facet ="dataset~gene";
   names(df5) = sub("name","gene",names(df5))
   

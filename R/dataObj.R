@@ -1892,11 +1892,9 @@ plotData=function(variables, phens1 , all_types=FALSE, transform_x = NULL, violi
  # variables = vars_all1[[1]]$variables
   #names(variables)=NULL
   vars = unlist(lapply(variables, function(v1){
-    unlist(lapply(v1, function(v2){
-      unlist(lapply(v2, function(v3){
-        v3$var_names
-      }), recursive=FALSE)
-    }), recursive=FALSE, use.names=FALSE)
+   lapply(v1, function(v2){
+     strsplit(v2$varname,"\\.")[[1]]
+    })
   }), recursive=FALSE, use.names=FALSE)
   names(vars) = unlist(lapply(vars, function(x) paste(x[1:2], collapse=".")))
   #vars = unlist(variables, recursive=FALSE)
