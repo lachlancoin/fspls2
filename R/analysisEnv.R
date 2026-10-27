@@ -11,7 +11,23 @@ df2 = .merge1_new(lapply(variables, function(v){
 return(tibble::as_tibble(df2))  
 }
 
-
+#' Extracts all the model weights from all_model object
+#' @param all_model obtained from makeAllModels
+#' @export
+extractBetas<-function(all_model, cv_index="full", beam=1, family="binomial"){
+  models_by_len = all_model$models[[cv_index]][-1]
+  max_len = length(models_by_len)
+  res = lapply(models_by_len, function(x){
+    r1 = x[[beam]]$betas[[family]]
+    if(ncol(r1) < max_len){
+      r1 = rbind(r1, matrix(0, ncol =ncol(r1), nrow = max_len -nrow(r1)))
+    }
+    r1
+  })
+  if(max(unlist(lapply(res, ncol)))==1) res = data.frame(res)
+  names(res) = names(models_by_len)
+  res
+}
 
 plot_traj<-function(comb_plot, y="value"  ,facet="data~maxsig", keep_best=10, txtsize=5, step=2){ #y="cumulative";
   if(!is.null(comb_plot$nrep)){
