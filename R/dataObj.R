@@ -1165,14 +1165,14 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
   }
  #  lambs=if(family=="gaussian") getOption("gaussian.link", 0.0) else  getOption("binomial.link", 1.0);
 #   names(lambs)=lambs
-   
+  nonNAk = nonNA & non_na_x
+  w = data$weights[nonNAk]
   for(kk in 1:ncoly){
   #  print(paste(kk,ncoly))
-    nonNAk = nonNA & non_na_x
     nonNAk1 = non_na_x[nonNA]; ## second subset
     y=ys[,kk][nonNAk]
     nonNAy = !is.na(y)
-    w = data$weights[nonNAk]
+    
     beta_new1=0;
     const_term=0
     
@@ -1301,6 +1301,17 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
     
          constants[[kk]] = const_term  #-mean_adj*beta_new1
   
+  }
+  if(family=="multinomial" && useoffset){
+    ypreds1 = betas_proj %*% x_trans[nonNAk,,drop=F]
+    ys = data.frame(list(attr(self$y[[nme]],"factor")))
+    rdf= multinom_ridge(ypreds,ys[nonNAk,1],w)
+    beta1 = rdf$beta;
+    ##need to think how we deal with different lambda for each comparison
+    betas_proj = beta1 %*% betas_proj;
+    warning("we should implement second weights to integrate to multinomial using nnet or multinom_ridge");
+    
+    
   }
    if(length(degsf)==0) stop("cannot be zero!");
    ## results are in the projected space
