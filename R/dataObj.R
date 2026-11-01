@@ -1271,7 +1271,7 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
              const_term = sm2$const_term
       }
     if(length(prevLL)>0 && length(prevLL) == length(logLiks_new) && logLiks_new[[kk]]<prevLL[[kk]]){ ## make sure logLiks improved, same as is.null(sm2)
-      warning("setting coeff for this variable to zero since logLik did not improve")
+      warning(paste("setting coeff for this variable to zero since logLik did not improve", family,kk))
       lambdas[[kk]]=1.0;
       logLiks_new[[kk]] = prevLL[[kk]];
       degsf[[kk]] = prev_df[[kk]];
@@ -1922,16 +1922,16 @@ plotData=function(variables, phens1 , all_types=FALSE, transform_x = NULL, violi
   df4
 },
 
-ypred=function(phens1, liab=TRUE){
+ypred=function(phens1, prob=TRUE){
   family = unlist(lapply(names(phens1), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1])))
-  ypr = ypredObj$new(self,self$phensi(phens1),family=family,liab =liab)
+  ypr = ypredObj$new(self,self$phensi(phens1),family=family,prob =prob)
   ypr
 },# inverse_func_strs = jsonlite::fromJSON(.readFlag(flags,"transform_x_inverse",'{"y":"function(y) y"}'))
 #all_models_y = all_models$y; inverse_func_str = jsonlite::fromJSON(flags1$transform_x_inverse)[[1]]; self = datasAll$datas[[1]]
 
 extractPredictions=function(all_models_full,phens, flags, 
                             transform_x = jsonlite::fromJSON(flags$transform_x),
-                            liab=FALSE,merge=TRUE,
+                            prob=FALSE,merge=TRUE,
                             minv = .readFlag(flags,"min",0),
                             maxv = .readFlag(flags,"max",1e6),
                             coeffs = NULL 
@@ -1957,8 +1957,8 @@ extractPredictions=function(all_models_full,phens, flags,
     all_models3 = lapply(all_models_full, function(x) x[[numvar]])
     coeff = coeffs[[numvar]]
   
-   ab=self$getPredictions(all_models3, phens, numvar,numvar_ind,  liab,
-                          ypred = self$ypred(phens, liab),
+   ab=self$getPredictions(all_models3, phens, numvar,numvar_ind,  prob,
+                          ypred = self$ypred(phens, prob),
                           coeff=coeff, merge = merge)
     ab
   })
@@ -1967,8 +1967,8 @@ extractPredictions=function(all_models_full,phens, flags,
 
 },
 ##beams, nrep
-getPredictions=function(all_models3, phens, numvar, numvar_ind,liab,
-                        ypred = self$ypred(phens, liab=liab),                      
+getPredictions=function(all_models3, phens, numvar, numvar_ind,prob,
+                        ypred = self$ypred(phens, prob=prob),                      
                         coeff= NULL,
                         merge=TRUE
                     
@@ -2020,7 +2020,7 @@ if(length(nmesm1)>1 && merge){ ##merging only
     rm1 = lapply(nmesp, function(nmep){
       family=strsplit(nmep,"\\.")[[1]][1]
       y = self$y[[nmep]]
-      if(family=="ordinal" && liab){
+      if(family=="ordinal" && prob){
         yi = y[,1]
         levsy = levels(factor(yi, ordered=TRUE))
        levs1 = unlist(lapply(2:length(levsy), function(iii) paste(levsy[(iii-1):iii],collapse="|")))
@@ -2069,7 +2069,7 @@ if(length(nmesm1)>1 && merge){ ##merging only
 
 if(!is.null(coeff)){
   nreps = names(res1); names(nreps) =nreps
-  ypreds = lapply(1:max(unlist(lapply(res1, length))),function(x) self$ypred(phens, liab)) 
+  ypreds = lapply(1:max(unlist(lapply(res1, length))),function(x) self$ypred(phens, prob)) 
   res3 = lapply(nreps, function(nrep){
     res2 = res1[[nrep]]
     res2 = res2[unlist(lapply(res2, length))>0]
@@ -2090,7 +2090,7 @@ if(!is.null(coeff)){
         preds = ypreds[incl1][[1]]$ypreds
       }else{
         preds = try(ypred$updateEnsemble(ypreds[incl1], coeff1, nonNA,
-                                         colnames=names(res2),liab=liab, flip=flip))
+                                         colnames=names(res2),prob=prob, flip=flip))
       }
       if(inherits(preds,"try-error")){
         warning("error with updating ensemble")
@@ -2109,17 +2109,17 @@ if(!is.null(coeff)){
 
 
 evaluate=function(predictions,phens,flags,
-                  liab = attr(predictions,"liab"),
-                          ypred=self$ypred(phens, liab=liab),
+                  prob = attr(predictions,"prob"),
+                          ypred=self$ypred(phens, prob=prob),
                           incl_cv_models =TRUE,
                            verbose=FALSE
                          ){
   d = self
   self$updateLOOC(phens,flags)
   nonNA = rep(TRUE, self$nrow)
- # liab = .readFlag(flags,"liab",TRUE)  ## whether to evaluate with liability , default is true
+ # prob = .readFlag(flags,"prob",TRUE)  ## whether to evaluate with probility , default is true
   #nvar=length(predictions);cv_index="merged"; beam=1;
-  #nvar=1; cv_index=1; beam=1
+ # nvar=1; cv_index='full'; beam=1
   numvars1 = names(predictions); names(numvars1) = numvars1
  evals_all = .merge1_new(.lapply_nme(predictions, function(nvar){
    pred_nvar = predictions[[nvar]];
@@ -2134,7 +2134,7 @@ evaluate=function(predictions,phens,flags,
         if(nrow(pred2[[1]])<length(nonNA)) stop(paste("dimension mismatch", nrow(pred2[[1]]), self$nrow))
         ypred$ypreds = pred2
 
-       res33= ypred$calcRMSV(self$y, nonNA, flip=FALSE, betas=betas, nvar = nvar, cv_index = cv_index, beam = beam)
+       res33= ypred$calcRMSV(self$y, nonNA, flip=FALSE, nvar = nvar, cv_index = cv_index, beam = beam)
        if(is.null(res33)) return(res33)
        res33=res33 |> tibble::add_column(beam=beam)
 

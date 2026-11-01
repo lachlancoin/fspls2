@@ -225,6 +225,9 @@ length(unique(eval1$`data:family`))
   }
   eval3
 }
+
+
+
 plot_outliers1<-function(df,x="x",y="y", group="group",labelsize=2){
   #plot(comb12$pval, comb12$angle)
   
@@ -312,6 +315,43 @@ plotEval2<-function(eval1,...){
     eval3 = subset(eval1, experiment_id==expt)
     plotEval(eval3,...)
   })
+}
+
+
+#'  Plot the results from evaluateAll
+#' @param eval1 a tibble or data frame from evaluateAll method from dataH
+#' @param cv_index can be full, avg or merged, or a numerical index
+#' @param measure the measure to be included, eg AUC
+#' @param values_from which values to include, can be low, mid, high or mid_perc
+#' @returns formatted table
+#' @export
+printPretty<-function(eval1, minvars =1){
+  eval1 = subset(eval1, cv_index %in% c("avg","merged","full"))
+  eval1 = subset(eval1, numvars>=minvars)
+  eval3 = eval1[,match(c("mid","low","high"),names(eval1))];
+  range=apply(eval3, 1,function(xx) {
+    
+    if(is.na(xx[1])) return("NA")
+  
+    #if(xx[3]>100*xx[1] || xx[2}<100*xx[1]) return("NA(-Inf, Inf)")
+    if(is.na(xx[2])) return(gsub("\\s+","",sprintf("%4.2g",xx[1])));
+    gsub("\\s+","",sprintf("%4.2g (%4.2g-%4.2g)", xx[1], xx[2], xx[3]))
+#    paste(xx1[1],paste0("(",paste(xx1[-1], collapse="-"),")"))
+  })
+  eval1 = tibble::add_column(eval1, range=range)
+  id_cols = c("subpheno","pheno","cv_index","beam","measure","family", "data");
+  res = pivot_wider(eval1,id_cols=id_cols,values_from=range, names_from="numvars")
+  res2 = pivot_wider(eval1,id_cols=id_cols,values_from=variable, names_from="numvars")
+  model = apply(res2[,-(1:length(id_cols))],1, function(xx) paste(xx[!is.na(xx)],collapse=";"))
+  res3 = res |> tibble::add_column(model,.after = "data")
+  #cvs = unique(eval1$cv_index); names(cvs) = cvs; cvs = cvs[cvs%in% c("avg","merged","full")]
+  families = unique(res$family); names(families) = families;
+  res_out=lapply(families, function(fam){
+    res4= subset(res3, family==fam)
+    res5 = res4 |> dplyr::arrange(cv_index, pheno, subpheno,data,measure)
+    res5
+  })
+   res_out
 }
 
 #'  Plot the results from evaluateAll
