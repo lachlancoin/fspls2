@@ -44,10 +44,10 @@ calcVar<-function(yp,y,family="gaussian"){
 }
 #head(.logistic(-1*m1$coeff*x + m1$zeta[1]))
 ## this currently returns probablity less than or equal to
-liability1<-function(yp,const, liab=TRUE){
+liability1<-function(yp,const, prob=TRUE){
   ab = as.matrix(data.frame(lapply(const,function(v){
-    if(liab) .logistic(yp-v) else yp-v  ## according to description of polr in R help
-   # if(liab) .logistic(v-yp) else v-yp  ## according to description of polr in R help
+    if(prob) .logistic(yp-v) else yp-v  ## according to description of polr in R help
+   # if(prob) .logistic(v-yp) else v-yp  ## according to description of polr in R help
   })) )
   dimnames(ab)[[2]] = names(const)
   if(TRUE) return(ab)
@@ -81,7 +81,7 @@ liability<-function(xM){ ## use with glmnet output
 
 .calcYpred_multinom<-function(prev_kj, data, ind_1,levs,
                               kk=1,
-                              liab=TRUE,
+                              prob=TRUE,
                               vars1 = prev_kj$var,
                               betas =  prev_kj$betas,
                               transforms = NULL,
@@ -121,7 +121,7 @@ liability<-function(xM){ ## use with glmnet output
   levs = names(prev_kj$tbls[[kk]])
   attr(yp, "levs") =levs
   #print(yp)
-  if(!liab) return(yp)
+  if(!prob) return(yp)
   liability(yp)
 }
 
@@ -129,7 +129,7 @@ liability<-function(xM){ ## use with glmnet output
 
 .calcYpred_ord<-function(prev_kj, data, ind_1,levs,
                          kk=1,
-                         liab=TRUE,
+                         prob=TRUE,
                          transforms = NULL,
                          betas1=prev_kj$betas[[kk]],
                          const =prev_kj$constants_proj[[kk]][[1]]){
@@ -142,7 +142,7 @@ liability<-function(xM){ ## use with glmnet output
   
   if(length(vars1)==0){
     attr(yp, "levs") =levs
-    return(liability1(yp, const, liab=liab))
+    return(liability1(yp, const, prob=prob))
 #    return(if(liab) liability1(yp, constants) else yp)
   }
   
@@ -171,7 +171,7 @@ liability<-function(xM){ ## use with glmnet output
   attr(yp, "levs") =levs
   if(typeof(yp)=="S4") yp = as.matrix(yp)
   #if(!liab) return(yp)
-  liability1(yp, const, liab=liab)
+  liability1(yp, const, prob=prob)
 }
 
 
@@ -179,7 +179,7 @@ liability<-function(xM){ ## use with glmnet output
 
 .calcYpred_binomial<-function(prev_kj, data, ind_1,
                                kk=1,kk1="",
-                              liab=TRUE,
+                              prob=TRUE,
                               transforms = NULL,
                               betas1 = prev_kj$betas[[kk1]],
                               constants= prev_kj$constants_proj[[kk1]]){
@@ -193,7 +193,7 @@ liability<-function(xM){ ## use with glmnet output
   
   if(length(vars1)==0 ){
     #print(dim(yp)); print(constants)
-    return(if(liab) .logistic(yp+constants[[1]]) else yp)
+    return(if(prob) .logistic(yp+constants[[1]]) else yp)
   }
   
   #betas =  prev_kj$betas
@@ -234,7 +234,7 @@ liability<-function(xM){ ## use with glmnet output
     #  yp = yp+ unlist(prev_kj$constants_proj)
   }
   # print(yp)
-  if(!liab) return(yp)
+  if(!prob) return(yp)
   .logistic(yp)
 }
 
@@ -372,7 +372,7 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
 ##flip is doing NAs nont nonNAs
 #   .scoreInternal(yp[nonNA,,drop=FALSE], y1[nonNA],w1[nonNA], type_i, fam,thresh)
 
-.scoreInternal<-function(yp,y1, w1, type_i, fam,thresh,liab=TRUE){
+.scoreInternal<-function(yp,y1, w1, type_i, fam,thresh,prob=TRUE){
   
   minlength = 1;
   if(type_i=="AUC" && fam=="ordinal") type_i = "AUC_all"
@@ -418,22 +418,28 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
     names(rms)=c("low","mid","high")
   }else if(type_i %in% c("AUC_all","AUPRC_all","area_all")){
     if(fam=="ordinal"){
-      levs0 = colnames(yp)
-      levs_lower = if(liab) unlist(lapply(colnames(yp), function(xi)as.numeric(strsplit(xi,"\\|")[[1]][1]))) else sort(unique(y1))[-1]
-      levs_upper = if(liab) unlist(lapply(colnames(yp), function(xi)as.numeric(strsplit(xi,"\\|")[[1]][2]))) else sort(unique(y1))[-1]+1
-      
+      if(prob){
+        levs0 = colnames(yp);
+        levs_lower = unlist(lapply(colnames(yp), function(xi)as.numeric(strsplit(xi,"\\|")[[1]][1]))) 
+        levs_upper =unlist(lapply(colnames(yp), function(xi)as.numeric(strsplit(xi,"\\|")[[1]][2]))) 
+      }else{
+        levs0 = sort(unique(y1));
+        levs_lower = levs0[-length(levs0)];
+        levs_upper = levs0[-1];
+      }
+    
       lev_inds = 1:length(levs0)
-      names(lev_inds)=if(liab) colnames(yp) else levs
+      names(lev_inds)=if(prob) colnames(yp) else levs0
       rms_l = .merge1_new(lapply(lev_inds, function(kj){
-        gt =  ##interpret as probability of being less or equal to  count
-        gt1 =y1>=levs_upper[kj]  ##interpret as probability of being less or equal to  count
+        #gt =  ##interpret as probability of being less or equal to  count
+        #gt1 =y1>=levs_upper[kj]  ##interpret as probability of being less or equal to  count
         
-        if(length(which(gt))==0 || length(which(gt))==1) return(NULL)
+        #if(length(which(gt1))==0 || length(which(gt1))==1) return(NULL)
         y2 = rep(NA,length(y1))
         y2[y1<=levs_lower[kj]]=0;
         y2[y1>=levs_upper[kj]]=1;
       
-        ypkj = if(liab)yp[,kj] else yp[,1]
+        ypkj = if(prob)yp[,kj] else yp[,1]
        
         
         if(type_i=="area_all") return(data.frame(value= 1*(.calcArea(ypkj,y2)), submeasure=c("low","mid","high")))
@@ -503,7 +509,7 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
   }
   rms
 }
-.initYpred1<-function(y, phensi, family, liab){
+.initYpred1<-function(y, phensi, family, prob){
   #inds1 = 1:maxn
   #names(inds1)=inds1
   nmey =names(phensi)
@@ -526,7 +532,7 @@ calcRMS<-function( predy,yTs, family , CI =FALSE, rmsea=TRUE, rel=FALSE){
          }))
          rr = do.call(rbind, replicate(length(yi),rr1, simplify=FALSE))
          dimnames(rr) = list(dimnames(y[[1]])[[1]],levs1)
-       }else if(family[[i]]=="ordinal" && liab){
+       }else if(family[[i]]=="ordinal" && prob){
          yi= yi[,1]
            levs1 = levels(factor(yi, ordered=T))
            levs2 = unlist(lapply(2:length(levs1), function(i3) paste(levs1[i3-1], levs1[i3], sep="|")))
@@ -563,9 +569,9 @@ ypredObj<-R6::R6Class("ypredObj", public = list(
   types_="list",
   phensi="numeric",
   nrow="numeric",
-  liab="boolean",
+  prob="boolean",
   
-  initialize=function(data, phensi,  liab=TRUE,
+  initialize=function(data, phensi,  prob=TRUE,
                       family = unlist(lapply(names(phensi), function(str)getOption("fspls.family",strsplit(str,"\\.")[[1]][1]))),
                      
                       types_=getOption("fspls.types", 
@@ -573,11 +579,11 @@ ypredObj<-R6::R6Class("ypredObj", public = list(
    # rms_prev = 99999
   wname=NULL
   rmsv=NULL
-  self$liab = liab
+  self$prob = prob
   self$phensi = phensi
   self$family=family
   self$types_ = types_
-  self$ypreds=.initYpred1(data$y, phensi, family, liab)
+  self$ypreds=.initYpred1(data$y, phensi, family, prob)
  # self$params=params
   self$wname=wname
   #self$ypreds=ypreds
@@ -595,7 +601,7 @@ ypredObj<-R6::R6Class("ypredObj", public = list(
 #  ypred$updateYP(data, prev, nonNA, !within)  
 #},
 ## use inv_transform on y  
-updateEnsemble=function(ypreds1, coeff1, nonNA, colnames,liab=FALSE,flip=TRUE){
+updateEnsemble=function(ypreds1, coeff1, nonNA, colnames,prob=FALSE,flip=TRUE){
   nmes = names(coeff1); names(nmes)=nmes
   
   if(is.null(nonNA)){
@@ -650,13 +656,13 @@ updateEnsemble=function(ypreds1, coeff1, nonNA, colnames,liab=FALSE,flip=TRUE){
               return(fam$linkinv(mat %*% coeff2[,i]+interc[i]))
             }
             if(family=="ordinal"){
-              if(!liab) return( mat %*% coeff2[,i])
+              if(!prob) return( mat %*% coeff2[,i])
               aop=1-ao_probs(mat,interc, coeff2[,i],  lambda[[i]], type="cum")
               return(aop); 
             }
             if(family=="binomial"){
               ab =  mat %*% coeff2[,i]+interc[i]
-              if(!liab) return(ab)
+              if(!prob) return(ab)
               return(pao_(ab, lambda[[i]]))
             }
             
@@ -675,7 +681,7 @@ updateEnsemble=function(ypreds1, coeff1, nonNA, colnames,liab=FALSE,flip=TRUE){
 },
 updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
   prev_i1=full_model
-  liab = self$liab
+  prob = self$prob
   ypred = self
   prev_kj = prev_i1 
   phensi=self$phensi
@@ -705,7 +711,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
   calcYpred=function(prev_kj, d, ind_1,  kk1, kk,na_x, 
                      family = self$family[[kk]]){  ## kk1 in model space 
     transforms = d$getTransforms(prev_kj$var )
-    liab=self$liab
+    prob=self$prob
     x_ = d$extractData(prev_kj$var, adjust=FALSE)
     betas=prev_kj$betas_proj[[kk1]]
    
@@ -732,7 +738,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
       }
       if(length(lambdas)>1){
         for(jkk in 1:ncol(ab)){
-          ab[,jkk] = if(liab) pao_(ab[,jkk]+ constants[[jkk]], lambdas[[jkk]]) else ab[,jkk]+ constants[[jkk]]
+          ab[,jkk] = if(prob) pao_(ab[,jkk]+ constants[[jkk]], lambdas[[jkk]]) else ab[,jkk]+ constants[[jkk]]
         }
       #  ab = t(apply(ab,1,.prob))
         ab = ab/apply(ab,1,sum)
@@ -744,7 +750,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
         }
         if(max(abs(ab))==0) ab =ab+1
         #print(yp)
-        if(liab) ab=liability(ab)
+        if(prob) ab=liability(ab)
       }
     
       
@@ -767,7 +773,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
       
       
       
-      if(liab){
+      if(prob){
         #mi1 = match(names(constk), colnames(self$ypreds[[kk1]]))
         mi2 = match(colnames(self$ypreds[[kk1]]),names(constk))
         constk1 = constk[mi2] ##can give rise to NA columns
@@ -807,7 +813,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
     }else if(family=="binomial"){
       ab = x_trans %*% betas
       for(jkk in 1:ncol(ab)){
-        ab[,jkk] = if(liab) pao_(ab[,jkk]+ constants[[jkk]], lambdas[[jkk]]) else ab[,jkk]+ constants[[jkk]]
+        ab[,jkk] = if(prob) pao_(ab[,jkk]+ constants[[jkk]], lambdas[[jkk]]) else ab[,jkk]+ constants[[jkk]]
       }
       
         self$ypreds[[kk1]][ind_1,] =ab
@@ -850,7 +856,7 @@ updateYP=function(d,full_model,  nonNA,flip=TRUE, ignore.na=FALSE){
      yp1
    })
  },
-calcRMSV=function(y, nonNA,    flip=FALSE, betas=NULL,
+calcRMSV=function(y, nonNA,    flip=FALSE, 
                   nvar = NA, cv_index = NA, beam =NA
                   ){
   phensi = self$phensi
@@ -864,7 +870,7 @@ calcRMSV=function(y, nonNA,    flip=FALSE, betas=NULL,
   #nme_p1 = nme_phens[[1]]
   res_phens=lapply(nme_phens, function(nme_p1){
     #print(nme_p1)
-    beta = if(is.null(betas))NULL else betas[[nme_p1]]
+   # beta = if(is.null(betas))NULL else betas[[nme_p1]]
     family=  getOption("fspls.family",strsplit(nme_p1,"\\.")[[1]][1])
     fam = family
     mtype = match(family,names(types_))
@@ -882,7 +888,7 @@ calcRMSV=function(y, nonNA,    flip=FALSE, betas=NULL,
     yp2 = if(is.null(ind_1))ypreds1 else  ypreds1[ind_1,,drop=FALSE] 
     names(ycol_inds) = dimnames(y2)[[2]][ycols]
     rms_1=lapply(ycol_inds, function(ycol_ind){
-      beta1 = if(is.null(beta)) NA else beta[nrow(beta),ycol_ind]
+    #  beta1 = if(is.null(beta)) NA else beta[nrow(beta),ycol_ind]
       ycol = ycols[ycol_ind]
       y1 =  y2[,ycol]
       yp =if(fam=="ordinal" ) yp2 else yp2[,ycol_ind,drop=FALSE] 
@@ -900,7 +906,7 @@ calcRMSV=function(y, nonNA,    flip=FALSE, betas=NULL,
             
           }else{
           rms =tryCatch({
-            .scoreInternal(yp[nonNAy,,drop=FALSE], y1[nonNAy],w1[nonNAy], type_i, fam,thresh, liab=self$liab)
+            .scoreInternal(yp[nonNAy,,drop=FALSE], y1[nonNAy],w1[nonNAy], type_i, fam,thresh, prob=self$prob)
           },error=function(w){
            print("warning");
             print(w);
@@ -927,7 +933,8 @@ calcRMSV=function(y, nonNA,    flip=FALSE, betas=NULL,
      if(is.null(aa2)) return(NULL)
       aa2|> tibble::add_column(nsamps = nsamps, cv=flip) #, beta = beta1, sign = sign(beta1))
     })
-    
+    rms_1 = rms_1[unlist(lapply(rms_1, length))>0];
+    if(length(rms_1)==0) return(NULL)
     rms_2 = .fixBeforeMerge(rms_1)
     df3=.merge1_new(rms_2,num_cols="value", addName="pheno")
     if(!("subpheno" %in% names(df3)) && !is.null(df3)){

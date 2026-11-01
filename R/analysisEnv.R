@@ -410,7 +410,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
   #' @param vars_l_todo an object representing what is left to do
   #' @returns vars_l_todo object
   select_k=function(datasH, k1,
-                   means_y_k = NULL
+                   means_y_k = NULL,
+                   minvars = .readFlag(private$flags,"min",0),
+                   maxvars = .readFlag(private$flags,"max",1e6)
                                  ){
     force=FALSE
     vars_l_todo = self$getTodo(private$flags, private$phens);
@@ -423,8 +425,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     verbose = .readFlag(flags,"verbose",FALSE);
     if(verbose)print(paste("fold",k1))
     expt_id = private$expt_id();
-    maxvars = .readFlag(flags,"max",1e6)
-    minvars = .readFlag(flags,"min",0)
+  
     stop_y = random_identifier
     logpvthresh = log(.readFlag(flags,"pthresh",0.5))
     beam= .readFlag(flags,"beam",1)
@@ -740,13 +741,20 @@ analysisEnv<-R6::R6Class("analysisEnv",
      if(!is.null(vars_all)) return(vars_all)
   
     means_y = if(avg_mean_y) private$means_y(datasH) else NULL;
-   
-   variables1 <- lapply(nreps, function(k1) {  ## can use mclapply here
-     
-     means_y_k =if(avg_mean_y) means_y[[k1]] else NULL
-      self$select_k(datasH,k1,   means_y_k =means_y_k)
-     
-   })
+    #full first
+    variables1 =lapply(nreps[length(nreps)], function(k1) { 
+      self$select_k(datasH,k1,   means_y_k =if(avg_mean_y) means_y[[k1]] else NULL)
+      
+    })
+    maxvars = length(variables1[[1]]); minvars = maxvars;
+    if(length(nreps)>1){
+          variables_cvs <- lapply(nreps[-length(nreps)], function(k1) {  ## can use mclapply here
+            self$select_k(datasH,k1,   means_y_k =if(avg_mean_y) means_y[[k1]] else NULL, 
+                          minvars = minvars, maxvars = maxvars)
+           
+         })
+        variables1 = c(variables_cvs, variables1);
+    }
    
 #   vars_all=super$integrate(variables1)
 
