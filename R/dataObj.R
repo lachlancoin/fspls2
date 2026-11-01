@@ -209,23 +209,19 @@ fitGLM<-function(y,x, family,w,
   if(nrow(res_final)==0) return(res_final)
   error_high = (res_final$high-res_final$mid)^2
   error_low = (res_final$mid-res_final$mid)^2
-  
-  for(j  in 2:length(res4)){
+  mhl = .lapply_nme(res4, function(j){
     indsi2 = match(join1,joins[[j]])
-    error_high = error_high +( res4[[j]]$high[indsi2] -  res4[[j]]$mid[indsi2])^2
-    error_low = error_low +( res4[[j]]$low[indsi2] -  res4[[j]]$mid[indsi2])^2
-    
-    res_final$mid =  res_final$mid + res4[[j]]$mid[indsi2]
-    
-    
-    
-  }
-  error_low = sqrt(error_low) / length(res4);
-  error_high = sqrt(error_high) / length(res4);
+    list(mid = res4[[j]]$mid[indsi2], 
+        low =  ( res4[[j]]$low[indsi2] -  res4[[j]]$mid[indsi2])^2,
+         high =  ( res4[[j]]$high[indsi2] -  res4[[j]]$mid[indsi2])^2)
+  })
   
-  res_final$mid = res_final$mid/length(res4)
-  res_final$low = res_final$mid - error_low;
-  res_final$high = res_final$mid +error_high
+  res_final$mid =   apply(data.frame(lapply(mhl, function(xx) xx$mid)),1,mean, na.rm=T)
+  df_low = data.frame(lapply(mhl, function(xx) xx$low)) 
+  df_high = data.frame(lapply(mhl, function(xx) xx$high)) 
+  res_final$low = res_final$mid - sqrt(apply(df_low,1,sum,na.rm=TRUE))/apply(df_low,1, function(xx) length(which(!is.na(xx))))
+  res_final$high = res_final$high - sqrt(apply(df_high,1,sum,na.rm=TRUE))/apply(df_high,1, function(xx) length(which(!is.na(xx))))
+  
   
   #res_final$cv_index = rep("avg", nrow(res_final))
   res_final$cv_index = rep("avg", nrow(res_final))
