@@ -209,23 +209,19 @@ fitGLM<-function(y,x, family,w,
   if(nrow(res_final)==0) return(res_final)
   error_high = (res_final$high-res_final$mid)^2
   error_low = (res_final$mid-res_final$mid)^2
-  
-  for(j  in 2:length(res4)){
+  mhl = .lapply_nme(res4, function(j){
     indsi2 = match(join1,joins[[j]])
-    error_high = error_high +( res4[[j]]$high[indsi2] -  res4[[j]]$mid[indsi2])^2
-    error_low = error_low +( res4[[j]]$low[indsi2] -  res4[[j]]$mid[indsi2])^2
-    
-    res_final$mid =  res_final$mid + res4[[j]]$mid[indsi2]
-    
-    
-    
-  }
-  error_low = sqrt(error_low) / length(res4);
-  error_high = sqrt(error_high) / length(res4);
+    list(mid = res4[[j]]$mid[indsi2], 
+        low =  ( res4[[j]]$low[indsi2] -  res4[[j]]$mid[indsi2])^2,
+         high =  ( res4[[j]]$high[indsi2] -  res4[[j]]$mid[indsi2])^2)
+  })
   
-  res_final$mid = res_final$mid/length(res4)
-  res_final$low = res_final$mid - error_low;
-  res_final$high = res_final$mid +error_high
+  res_final$mid =   apply(data.frame(lapply(mhl, function(xx) xx$mid)),1,mean, na.rm=T)
+  df_low = data.frame(lapply(mhl, function(xx) xx$low)) 
+  df_high = data.frame(lapply(mhl, function(xx) xx$high)) 
+  res_final$low = res_final$mid - sqrt(apply(df_low,1,sum,na.rm=TRUE))/apply(df_low,1, function(xx) length(which(!is.na(xx))))
+  res_final$high = res_final$high - sqrt(apply(df_high,1,sum,na.rm=TRUE))/apply(df_high,1, function(xx) length(which(!is.na(xx))))
+  
   
   #res_final$cv_index = rep("avg", nrow(res_final))
   res_final$cv_index = rep("avg", nrow(res_final))
@@ -1165,14 +1161,14 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
   }
  #  lambs=if(family=="gaussian") getOption("gaussian.link", 0.0) else  getOption("binomial.link", 1.0);
 #   names(lambs)=lambs
-   
+  nonNAk = nonNA & non_na_x
+  w = data$weights[nonNAk]
   for(kk in 1:ncoly){
   #  print(paste(kk,ncoly))
-    nonNAk = nonNA & non_na_x
     nonNAk1 = non_na_x[nonNA]; ## second subset
     y=ys[,kk][nonNAk]
     nonNAy = !is.na(y)
-    w = data$weights[nonNAk]
+    
     beta_new1=0;
     const_term=0
     
@@ -1301,6 +1297,17 @@ calcBetaProjAll=function(nme,phensi_,family, k,b_i,b_i_name, prev_var, Wall1,pre
     
          constants[[kk]] = const_term  #-mean_adj*beta_new1
   
+  }
+  if(family=="multinomial" && useoffset){
+    ypreds1 = betas_proj %*% x_trans[nonNAk,,drop=F]
+    ys = data.frame(list(attr(self$y[[nme]],"factor")))
+    rdf= multinom_ridge(ypreds,ys[nonNAk,1],w)
+    beta1 = rdf$beta;
+    ##need to think how we deal with different lambda for each comparison
+    betas_proj = beta1 %*% betas_proj;
+    warning("we should implement second weights to integrate to multinomial using nnet or multinom_ridge");
+    
+    
   }
    if(length(degsf)==0) stop("cannot be zero!");
    ## results are in the projected space
