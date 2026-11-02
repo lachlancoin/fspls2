@@ -346,7 +346,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
       vars_l = vars_l_todo$vars_l
       angles_all = .merge1_new(comb2_news, addName="dataset") 
       angles_all =   pivot_wider(angles_all, id_cols=c(partialname, model, varname, signature,names, data, transform, param,prev), names_from="dataset", values_from=value)
-      angles_all = angles_all[,1:9] |> tibble::add_column(value= apply(angles_all[,-(1:9)],1,sum))
+      angles_all = angles_all[,1:9] |> tibble::add_column(value= apply(angles_all[,-(1:9)],1,sum,na.rm=T))
        o = order(angles_all$value, decreasing=FALSE)
       ang1=angles_all[o,] 
       #unite("partialname", data_type, names, transf, sep=".", remove=FALSE) |> unite("varname", data_type,names, transf,param,sep="." ,remove=FALSE)  |> unite("model",prev,varname,sep=";", remove=FALSE) 
@@ -445,6 +445,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     # nmesH = names(datasH); names(nmesH) = nmesH;
     vars_all = list();
     while(length(vars_l_todo$todo1)>0 ){
+      if(verbose)print(paste("nvar",nvar))
       comb2_news =try(lapply(nmesH, function(nmeh){
         dh = datasH[[nmeh]]
         comb20=comb2[[nmeh]]
@@ -469,9 +470,18 @@ analysisEnv<-R6::R6Class("analysisEnv",
         }
           minv = min(nrow(ang1), topn, rand_ind)
           ang1 = head(ang1,minv)
+      
         
-          comb2_filtered = lapply(comb2_news, function(xx){
-            xx[match(ang1$model,xx$model),]
+          comb2_filtered = .lapply_nme(comb2_news, function(xx_nme){
+            xx = comb2_news[[xx_nme]]
+            mi2=match(ang1$model,xx$model);
+            
+            if(length(which(is.na(mi2)))>0) {
+              model_nme=ang1$model[which(is.na(mi2))]
+              print(model_nme)
+              stop(paste("problem", xx_nme))
+            }
+            xx[mi2,]
 #            subset(xx, model %in% ang1$model)
           })
           comb2_news =lapply(nmesH, function(nmeh){
@@ -624,7 +634,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
   #   dplyr::filter(n > 1L)
    
     angles_all =  pivot_wider( angles_all ,id_cols=c(partialname, model, varname,names, data,  signature,transform, param,prev, nvar), names_from="dataset", values_from=value)
-   angles_all = angles_all[,1:10] |> tibble::add_column(value= apply(angles_all[,-(1:10)],1,sum))
+   angles_all = angles_all[,1:10] |> tibble::add_column(value= apply(angles_all[,-(1:10)],1,sum,na.rm=T))
    o = order(angles_all$value, decreasing=FALSE)
    ang1=angles_all[o,] 
    
@@ -747,8 +757,11 @@ analysisEnv<-R6::R6Class("analysisEnv",
       
     })
     maxvars = length(variables1[[1]]); minvars = maxvars;
+    print(maxvars)
     if(length(nreps)>1){
-          variables_cvs <- lapply(nreps[-length(nreps)], function(k1) {  ## can use mclapply here
+          variables_cvs <- lapply(nreps[-length(nreps)], function(k1) { 
+            print(paste("doing ",k1,"................"))
+            ## can use mclapply here
             self$select_k(datasH,k1,   means_y_k =if(avg_mean_y) means_y[[k1]] else NULL, 
                           minvars = minvars, maxvars = maxvars)
            

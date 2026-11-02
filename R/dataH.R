@@ -628,7 +628,7 @@ dataH<-R6::R6Class("dataH",
         t1 = t1[order(t1$value),]
         signature=if(prev_signature=="") t1$names else paste(prev_signature, t1$names, sep=";")
         t2 =   t1 |> tibble::add_column(sumAngle, signature,nvar= nvar+1);
-        t2=subset(t2, value<999)
+        #t2=subset(t2, value<999)
         
         ##add norm
         

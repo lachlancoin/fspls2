@@ -2466,15 +2466,15 @@ getAngleInnerOld=function(phensi,ik,k,var,type="slow", direction=NULL,var_thresh
               dir1  = direction1[jk]
            #   print(jk); print(direction1[[jk]])
               if(dir1=="+"){
-                angle_1[jk,angle_1[jk,]>0]=999
+                #angle_1[jk,angle_1[jk,]>0]=999  keep it positive as a penalty
               }else if( dir1=="-"){
                 angle_1[jk,] = -1*angle_1[jk,]
-                angle_1[jk,angle_1[jk,]>0]=999
+                #angle_1[jk,angle_1[jk,]>0]=999
               }else{
                 angle_1[jk,] = -1*abs(angle_1[jk,,drop=FALSE])
               }
             }
-            if(length(to_rem)>0){
+            if(length(to_rem)>0  ){
                 angle_1[,to_rem]=999  #after we project out the projected out columns have zero norm
             }
             angle_1
