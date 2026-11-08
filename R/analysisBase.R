@@ -1,5 +1,15 @@
 
 
+.print<-function(file, x, width = 30,height  = 20){
+  if(is.null(x)) return;
+  pdf(file ,width=60, height=20);
+  print(x);
+  dev.off()
+}
+
+
+
+
 check_flags<-function(flags){
   angles_only = .readFlag(flags, 'angles_only', TRUE)
   topn = .readFlag(flags, "topn", 20)
@@ -47,6 +57,8 @@ analysisBase<-R6::R6Class("analysisBase",
                      transform_x="list",
                      phens="list",
                      useDB="boolean",
+                    
+                     
                      savePvals=function(ri , varnames, k1, data_nme=private$nme, useCurrVarnames=TRUE){
                        
                        if(!is.null(private$sigs)) {
@@ -60,7 +72,12 @@ analysisBase<-R6::R6Class("analysisBase",
                        if(!is.null(private$sigs)){
                          private$sigs$saveVars(variables,replace=TRUE)   #saving local
                        }
+                       self$variables = variables;
                      },
+                     savePredictions=function(predictions){
+                       self$predictions = predictions
+                     },
+                     
                      loadVars = function(){
                        phens = private$phens;
                        if(is.null(private$sigs)) return (NULL)
@@ -82,6 +99,8 @@ analysisBase<-R6::R6Class("analysisBase",
                        if(!is.null(sigDB)){
                          sigDB$saveModels(all_models_)
                        }
+                       self$all_models = all_models_;
+                       
                      },
                      loadEval=function(){
                        sigDB = private$sigs 
@@ -101,6 +120,7 @@ analysisBase<-R6::R6Class("analysisBase",
                         sigDB$saveEval(eval2, private$flags,private$phens)
                          
                        }
+                      self$evals=eval2;
                      },
                      expt_id = function(){
                        return(private$exptid);
@@ -122,14 +142,29 @@ analysisBase<-R6::R6Class("analysisBase",
                        private$flags
                        check_flags(private$flags)
                        options(private$flags);
+                     },
+                    saveDataPlots=function(data_plots){
+                      self$data_plots = data_plots
+                    },
+                     savePlotResults = function(plot_results_eval){
+                       self$plot_results_eval = plot_results_eval
                      }
-                     
                    
                      
                     
                    ),
                    public = list(
-                                          
+                                       
+                     variables=NULL, ##selected variables
+                     all_models=NULL,
+                     predictions=NULL,
+                     evals=NULL,
+                     data_plots =NULL,
+                     pred_plots=NULL,
+                     evals_pretty =NULL,   
+                     eval_plot=NULL,
+                     betas_table = NULL,
+                     vars_table = NULL,
                      #' @description Create a new instance of base class
                      #' @param nme name
                      #' @param dims dims
@@ -166,6 +201,7 @@ analysisBase<-R6::R6Class("analysisBase",
                      return (private$nme)
                    },
                    
+                  
                 
                    #' @description integrates variables from different CV runs
                    #' @param max_model_length length maximum model length
@@ -247,7 +283,57 @@ analysisBase<-R6::R6Class("analysisBase",
                      
                      
                      vars_combined
-                   }
+                   },
+
+                  #' @description extracts the variables into a table
+                  tabulate_variables=function(variables =self$variables){
+                    df2 = .merge1_new(lapply(variables, function(v){
+                      .merge1_new(v)
+                    }), addName="nrep")
+                    res1 = (tibble::as_tibble(df2))  
+                    self$vars_table = res1;
+                    invisible(res1)
+                  },
+                  
+                  #' @description  tabulates the evals
+                  #' @param eval1 a tibble or data frame from evaluateAll method from dataH
+                  #' @param cv_index can be full, avg or merged, or a numerical index
+                  #' @param measure the measure to be included, eg AUC
+                  #' @param values_from which values to include, can be low, mid, high or mid_perc
+                  #' @returns formatted table
+                   tabulateEvals=function(eval1 = self$evals, minvars =1
+                  ){
+                    id_cols = c("subpheno","pheno","cv_index","beam","measure","family","data")
+                    id_cols = id_cols[id_cols %in% names(eval1)]
+                    eval1 = subset(eval1, cv_index %in% c("avg","merged","full"))
+                    eval1 = subset(eval1, numvars>=minvars)
+                    eval3 = eval1[,match(c("mid","low","high"),names(eval1))];
+                    range=apply(eval3, 1,function(xx) {
+                      
+                      if(is.na(xx[1])) return("NA")
+                      
+                      #if(xx[3]>100*xx[1] || xx[2}<100*xx[1]) return("NA(-Inf, Inf)")
+                      if(is.na(xx[2])) return(gsub("\\s+","",sprintf("%4.2g",xx[1])));
+                      gsub("\\s+","",sprintf("%4.2g (%4.2g-%4.2g)", xx[1], xx[2], xx[3]))
+                      #    paste(xx1[1],paste0("(",paste(xx1[-1], collapse="-"),")"))
+                    })
+                    eval1 = tibble::add_column(eval1, range=range)
+                    res = pivot_wider(eval1,id_cols=id_cols,values_from=range, names_from="numvars")
+                    res2 = pivot_wider(eval1,id_cols=id_cols,values_from=variable, names_from="numvars")
+                    model = apply(res2[,-(1:length(id_cols))],1, function(xx) paste(xx[!is.na(xx)],collapse=";"))
+                    res3 = res |> tibble::add_column(model,.after = "family")
+                    #cvs = unique(eval1$cv_index); names(cvs) = cvs; cvs = cvs[cvs%in% c("avg","merged","full")]
+                    families = unique(res$family); names(families) = families;
+                    res_out=lapply(families, function(fam){
+                      res4= subset(res3, family==fam)
+                      res5 = res4 |> dplyr::arrange(cv_index, pheno, subpheno,measure)
+                      res5
+                    })
+                    self$evals_pretty = res_out
+                    invisible(res_out)
+                  }
+                  
+                  
                  
                  
                      

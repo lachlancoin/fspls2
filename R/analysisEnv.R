@@ -1,33 +1,149 @@
 random_identifier = "rand" #\\.rand\\."  ## this identifies random variables;
 
-
-#' Extracts all the variables selected from the variables object. Useful when using beam>1 
-#' @param variables a variables object
+#' main function for variable selection
+#' @param min minimum number of variables
+#' @param max maximum number of variables, number of selected features 
+#' @param nfold number of folds.  10 fold implies a 10 non-overlapping 10% splits
+#' @param batchsize batch size can be specified alternatively to nfold, but only one can be nonzero
+#' @param angles_only whether to use purely angles to find best variables (FALSE faster but less accurate)
+#' @param topn if using model fit to rank variables, how many top angles to take  (larger takes more time)
+#' @param beam  how many best combinations to take through to next round of iteration. minimum value is 1, but higher explores more combinations
+#' @param all_v_all  multi-class outcomes, this builds all vs all classifier, instead of a one vs all #here!!!
+#' @param project whether to use the projection approach in model building (TRUE recommended)
+#' @param useglmnet whether to use glmnet for model fitting (after variables selected) doesnt work well for randomisation.  Note that useglmnet is TRUE by default for multinomial
+#' @param verbose print verbose
+#' @param show_warnings  print extra warnings
+#' @param binomial.link link parameter for binomial, one is default
+#' @param gaussian.link  link parameter for gaussian, zero is default
+#' @param fspls.types  a list indicate the output evaluations to consider for different families
+#' @param firth=TRUE,
 #' @export
-extract_all_variables<-function(variables){
-df2 = .merge1_new(lapply(variables, function(v){
-    .merge1_new(v)
-}), addName="nrep")
-return(tibble::as_tibble(df2))  
+getFlags<-function(min=1,  #minimum number of variables
+         max=100, #maximum number of variables, number of selected features 
+         nfold=1,#number of folds.  10 fold implies a 10 non-overlapping 10% splits
+         batchsize=0, #batch size can be specified alternatively to nfold, but only one can be nonzero
+         angles_only=TRUE, #whether to use purely angles to find best variables (RECOMMENDED FALSE)
+         topn=100,  #if using model fit to rank variables, how many top angles to take  (larger takes more time)
+         beam=1, #how many best combinations to take through to next round of iteration. minimum value is 1, but higher explores more combinations
+         all_v_all=TRUE,  #for multi-class outcomes, this builds all vs all classifier, instead of a one vs all #here!!!
+         project=TRUE,   #whether to use the projection approach in model building (TRUE recommended)
+         useglmnet=FALSE,  #whether to use glmnet for model fitting (after variables selected) doesnt work well for randomisation.  Note that useglmnet is TRUE by default for multinomial
+         verbose=TRUE,
+         lambda = NULL, #for using glmnet
+         show_warnings=FALSE,
+         binomial.link= c(0.1, 0.3,0.5,1.0),
+         gaussian.link = c(0),
+         fspls.types= list(gaussian = c("correlation","rms"),binomial=c("AUC","AUPRC","area"),
+                              multinomial=c("AUC"),
+                              ordinal = c("AUC_all")),
+         
+         firth=TRUE){
+      
+   list(min=min,  #minimum number of variables
+                 max=max, #maximum number of variables, number of selected features 
+                 nfold=nfold,#number of folds.  10 fold implies a 10 non-overlapping 10% splits
+                 batchsize=batchsize, #batch size can be specified alternatively to nfold, but only one can be nonzero
+                 angles_only=angles_only, #whether to use purely angles to find best variables (RECOMMENDED FALSE)
+                 topn=topn,  #if using model fit to rank variables, how many top angles to take  (larger takes more time)
+                 beam=beam, #how many best combinations to take through to next round of iteration. minimum value is 1, but higher explores more combinations
+                 all_v_all=all_v_all,  #for multi-class outcomes, this builds all vs all classifier, instead of a one vs all #here!!!
+                 project=project,   #whether to use the projection approach in model building (TRUE recommended)
+                 useglmnet=useglmnet,  #whether to use glmnet for model fitting (after variables selected) doesnt work well for randomisation.  Note that useglmnet is TRUE by default for multinomial
+                 verbose=verbose,
+                 lambda = lambda, #for using glmnet
+                 show_warnings=show_warnings,
+                 binomial.link= binomial.link,
+                 gaussian.link = gaussian.link,
+                 fspls.types = fspls.types,
+                 firth=firth
+    )
 }
-
-#' Extracts all the model weights from all_model object
-#' @param all_model obtained from makeAllModels
+#' @description
+#' this reads pre-saved results and makes a new analysis object as well as updating datasH objects
+#' it re-establishes the variables selected in analysis and the models in dataH objects
+#' @param out_dir directory with results saved via save_all_results
+#' @param datasH list of dataH objects to update
 #' @export
-extractBetas<-function(all_model, cv_index="full", beam=1, family="binomial"){
-  models_by_len = all_model$models[[cv_index]][-1]
-  max_len = length(models_by_len)
-  res = lapply(models_by_len, function(x){
-    r1 = x[[beam]]$betas[[family]]
-    if(ncol(r1) < max_len){
-      r1 = rbind(r1, matrix(0, ncol =ncol(r1), nrow = max_len -nrow(r1)))
+read_all_results<-function(out_dir, datasH = NULL){
+  variables0=jsonlite::read_json(paste(out_dir,"variables.json",sep="/"), simplifyVector=TRUE)
+  modelfile = paste(out_dir,"all_models.json",sep="/")
+  all_models0 = jsonlite::unserializeJSON(paste(readLines(modelfile), collapse="\n"))
+
+  folds = jsonlite::read_json(paste(out_dir,"folds.json",sep="/"), simplifyVector= TRUE);
+  params = jsonlite::read_json(paste(out_dir,"params.json",sep="/"), simplifyVector = TRUE)
+  analysis = analysisEnv$new(flags=params$flags, dbDir=NULL)
+  analysis$variables = variables0
+  if(!is.null(datasH)){
+    
+    for(nme in names(datasH)) {
+      dh = datasH[[nme]];
+      dh$variables = variables0
+      dh$update(phens = params$phens, flags = params$flags, transform_x = params$transform_x, data_types = params$data_types, 
+                                folds = folds, 
+                                force=TRUE)
+                    dh$all_models = all_models0[[nme]]
     }
-    r1
+  }
+  analysis
+  }
+
+
+plotInternal<-function(eval5,sep_by,  title1, point, dotsize, shape_nme, color_nme, 
+                       linetype_nme, text_nme,  labelsize, showranges,
+                       grid0_nme, grid1_nme, scales, txtsize,  line, transformy, showtext, legend){
+  
+  if(length(sep_by)==0){
+    # ph3 = paste(sort(unique(apply(eval5[,names(eval5) %in% title1, drop=FALSE],1,paste,collapse=","))), collapse=" ")
+    ggp<-ggplot(eval5);
+    if(point) {
+      if(dotsize %in% names(eval5)){
+        ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_nme,size=dotsize, color=color_nme))
+      }else{
+        ggp<-ggp+geom_point(aes_string(x="numvars", y="mid",  shape=shape_nme, color=color_nme),size=dotsize)
+        
+      }
+    }
+    if(line)  ggp<-ggp+geom_line(aes_string(x="numvars", y="mid", linetype=linetype_nme,  color=color_nme)) #+ggtitle(paste(title,ph, ph3))
+    if(showtext) ggp<-ggp+geom_text_repel(aes_string(x="numvars", y="mid", label=text_nme,color=color_nme),size=labelsize,max.overlaps = 1000) #+ggtitle(paste(title,ph, ph3))
+    
+    if(showranges){ ## geom_ribbon vs geom_errorbar
+      
+      ggp<-ggp+ geom_ribbon(aes_string(x = "numvars", ymin="low", ymax="high",linetype=linetype_nme,color=color_nme, fill = color_nme ), alpha = 0.1)
+    }
+    if(nchar(grid0_nme)>0){
+      if(nchar(grid1_nme)>0){
+        ggp<-ggp+facet_grid(paste(grid0_nme, grid1_nme,sep="~"),scales=scales)
+      }else{
+        ggp<-ggp+facet_wrap(grid0_nme, scales=scales)
+      }
+    }
+    legend_position=if(legend) "bottom" else "none";
+    ggp<- ggp+ theme(legend.position = legend_position,legend.title = element_text(size = txtsize));#+theme(,    legend.text = element_text(size = 3))
+    ggp<-ggp+ scale_y_continuous(transform=transformy);#scale_y_log10() 
+    return(ggp+ggtitle(title1))
+    
+  }
+  #print(sep_by)
+  levs1 = unique(eval5[[sep_by[[1]]]]); names(levs1) = levs1;
+  final_res=lapply(levs1,function(ph){
+    subinds1 = eval5[[sep_by[[1]]]]==ph
+    
+    if(length(sep_by)>0){
+      res =plotInternal(eval5[subinds1,,drop=F], sep_by[-1], 
+                        paste(title1,paste(sep_by[[1]],ph, sep="=")), 
+                        point, dotsize, shape_nme, color_nme,
+                        linetype_nme, text_nme, labelsize, showranges,
+                        grid0_nme, grid1_nme, scales, txtsize, line, transformy, showtext, legend);
+      return(res);
+    }
+    
+    
+    
+    
   })
-  if(max(unlist(lapply(res, ncol)))==1) res = data.frame(res)
-  names(res) = names(models_by_len)
-  res
+  final_res
 }
+
 
 plot_traj<-function(comb_plot, y="value"  ,facet="data~maxsig", keep_best=10, txtsize=5, step=2){ #y="cumulative";
   if(!is.null(comb_plot$nrep)){
@@ -290,7 +406,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     type="character",
     sigsdir="character",
     sigs="environment",
-
+  
     updateData=function(datasH, data_names =names(datasH), 
                         data_types = names(datasH[[1]]$data$data),
                         dims   = lapply(datasH, function(data) data$dims())
@@ -301,6 +417,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
                                                    dims = dims,
                                                    transform_x = private$transform_x)
     },
+    
+   
+    
     means_y=function(datasH){ ## averages over the datasH
       means_y_all =lapply(datasH, function(dh) dh$means_y());
       counts_y_all = lapply(datasH, function(dh) dh$counts_y());
@@ -383,7 +502,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
     #' @param flags a list object specifying options
     #' @param dbDir location for database to be written. If NULL then no DB 
   initialize=function(
-              flags = list(),
+              flags = getFlags(),
               dbDir=tempdir()
             
                     ){
@@ -403,7 +522,202 @@ analysisEnv<-R6::R6Class("analysisEnv",
     plot_traj(comb_plot, y="cumulative",keep_best = 5,txtsize=8,step=10,facet="data~maxsig")
   
     },
+  #' @description extractPredictions from datasH objects
+  #' @param datasH
+  extractPredictions=function(datasH, prob=TRUE){
+    predictions = lapply(datasH, function(dh) dh$extractPredictions(prob=prob)) 
+    self$predictions = predictions#  names(datasH), function(nmeh) datasH[[nmeh]]$extractPredictions(prob=TRUE))
+    invisible(predictions);
+  },
+  plotPredictions = function(datasH, show="area"){
+    pred_plots = lapply(datasH, function(dh) dh$plotPredictions(show="area"))
+    self$pred_plots = pred_plots
+    invisible(pred_plots);
+  },
   
+  #' @description saves all results to a directory
+  #' @param datasH a list of dataH objects 
+  #' @param out_dir  output directory
+  #' @param savePlots whether to save plots
+  #' @returns assigned name of dataset
+  save_all_results=function(
+    datasH,
+    out_dir =paste("FSPLS", gsub("\\s+","_",date()), sep="_" ),
+    savePlots=TRUE
+  ){
+    working_dir = getwd();
+    dir.create(out_dir,recursive = TRUE);
+    setwd(out_dir);
+     if(!is.null(self$evals_pretty)) write_xlsx(self$evals_pretty, "evaluation.xlsx");
+    toprint = c(list(variables=self$vars_table), self$betas_table)
+    toprint = toprint[unlist(lapply(toprint, length))>0]
+    if(length(toprint)>0){
+      write_xlsx(toprint, "models.xlsx");
+    }
+     toDUMP = list(
+      flags = private$flags, phens=private$phens, transform_x = private$transform_x, data_types = private$data_types)
+    
+    jsonlite::write_json(toDUMP,"params.json", simplifyVector=TRUE, pretty = TRUE);
+    
+    if(!is.null(self$variables)) jsonlite::write_json(self$variables,"variables.json", simplifyVector=TRUE, pretty = TRUE);
+    # if(!is.null(self$all_models)) jsonlite::write_json(self$all_models,"all_models.json", simplifyVector=TRUE, pretty = TRUE);
+    if(length(datasH)>0){
+      all_models = lapply(datasH, function(dh)dh$all_models)
+      folds = lapply(datasH, function(dh)dh$folds())
+      jsonlite::write_json(folds, "folds.json", simplifyVector=TRUE, pretty = TRUE);
+  
+     writeLines(jsonlite::serializeJSON(all_models), "all_models.json", useBytes = TRUE)
+    }
+    if(savePlots){
+      .print("data_plot.pdf", self$data_plots);
+      .print("eval_plot.pdf", self$eval_plot);
+      .print("pred_plots.pdf", self$pred_plots)
+    }
+    setwd(working_dir)
+    out_dir
+  },
+  
+  
+  evaluate=function(datasH, cv_index = c("full","merged","avg"), beam=1:10){
+    evals = lapply(datasH, function(dh) dh$evaluate())
+    eval_combined = .merge1_new(evals, addName="dataset")
+    eval3 = eval2[eval2$cv_index %in% cv_index & eval2$beam %in% beam,,drop=F]
+#    eval2 = subset(eval_combined, cv_index %in% cv_index)
+#    eval3 = subset(eval2, beam %in% beam)
+    self$evals = eval3;
+    invisible(eval3)
+  },
+  
+  tabulateBetas=function(datasH){
+  betas_all0 = lapply(datasH, function (dh) dh$tabulateBetas())
+  nvars = 1:length(betas_all0[[1]]); names(nvars) = nvars;
+  betas_all = lapply(nvars, function(nv){
+    df = data.frame(lapply(betas_all0, function(ba) ba[[nv]][,1]))
+    rownames(df) = rownames(betas_all0[[1]][[nv]])
+    df
+  })
+  self$betas_table = betas_all
+  betas_all
+  },
+  
+  
+  #' @description extracts and plots the selected variables
+  #' @param datasH is a list of dataH objects
+  #' @param violin violin plots
+  #' @returns ggplots 
+  plotData=function(datasH, variables = self$variables, facet="gene~pheno_data",flip  = TRUE,violin=TRUE){
+    
+    plot_data_all =lapply(datasH, function(dh) dh$plotData(variables ))
+                          
+                          families = names(plot_data_all[[1]]); names(families) = families
+                          
+                          plot_all = lapply(families, function(family){
+                            df5 = .merge1_new(lapply(plot_data_all, function(pd)pd[[family]])) |> unite('pheno_data', pheno, dataset,sep="\n", remove=FALSE)
+                            
+                            fam = strsplit(family,"\\.")[[1]][[1]];
+                            #df5=subset(plot_data, family==fam)
+                            if(flip) facet ="pheno_data~gene";
+                            names(df5) =sub("name","gene",names(df5))
+                            
+                            df5$gene = gsub("_"," ",df5$gene)
+                            df5$gene = gsub(" ","\n",df5$gene)
+                            
+                            df5$gene = factor(df5$gene, levels = df5$gene[!duplicated(df5$gene)])
+                            
+                            df6=subset(df5, family=="gaussian" | family=="ordinal")
+                            df7=(subset(df5, family!="gaussian"))
+                            pv6 = getPvals(df6)
+                            pv7 = if(fam=="binomial") getPvals(df7) else pv6;
+                            # color= if(length(unique(df4$dataset))>1) "dataset" else #"pheno"
+                            # facet= if(!is.null(df4[['transform']]) ) "transform~pheno" else "pheno"
+                            
+                            lens = c(length(table(df5$gene)), length(table(df5$pheno_data)))
+                            wrap=TRUE;
+                            title=""
+                            if(lens[1]>1 & lens[2]>1){
+                              
+                              wrap = FALSE
+                            }else if(lens[2]>1){
+                              title= df5$gene[1]
+                              facet="pheno_data"
+                            }else{
+                              title = df5$dataset[[1]]
+                              facet="gene"
+                            }
+                            ggp = NULL; ggp1 = NULL;ggp2=NULL
+                            if(nrow(df7)>0){
+                              df7$y = factor(df7$y, ordered=TRUE)
+                              
+                              ggp<-ggplot(df7, aes(x=y, y=value, color=pheno));#+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
+                              if(violin){
+                                ggp<-ggp+ggplot2::geom_violin()+geom_point()
+                              }else{
+                                ggp<-ggp+ggplot2::geom_boxplot()
+                              }
+                              if(!is.null(pv7)){
+                                pv7$y = factor(pv7$y, levels = levels(df7$y))
+                                
+                                ggp<-ggp+ggplot2::geom_text(data=pv7,
+                                                            mapping = aes(x=y, y=value,  label=pv), color="black")
+                              }
+                            }
+                            
+                            if(nrow(df6)>0){
+                              separator="______________"
+                              prbs=c(0.33,0.5,0.66)
+                              df6_1 =df6 |> unite("comb",gene,family,pheno_data,sep=separator)
+                              comb1=unique(df6_1$comb); names(comb1)=comb1
+                              quants=.merge1_new(lapply(comb1,function(c1){
+                                df6_2 = subset(df6_1, comb==c1)
+                                df6_2$y = as.numeric(as.character(df6_2$y))
+                                df6_2 = df6_2[order(df6_2$y),]
+                                yv = unique(df6_2$y)
+                                names(yv)=yv
+                                .merge1_new(lapply(yv, function(yv1){
+                                  df6_3 = subset(df6_2, y<=yv1)
+                                  q1=quantile(df6_3$value,na.rm=TRUE,probs = prbs)
+                                  df_=data.frame(t(data.frame(q1)))
+                                  df_
+                                }),addName="y")
+                              }), addName="comb")
+                              
+                              quants1 = quants |> separate("comb", sep=separator, into=c("gene","family","pheno_data"))
+                              names(quants1) = gsub("\\.","",names(quants1))
+                              quants1$y = as.numeric(quants1$y)
+                              #gsub("X50", "median expression", names(quants1))
+                              quants1$gene=factor(quants1$gene, levels = levels(df6$gene))
+                              ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=pheno_data, fill=gene))
+                              ggp1<-ggp1+geom_line()+geom_ribbon(alpha=0.1)
+                              ggp1<-ggp1+ggplot2::geom_text(data=pv6,
+                                                            mapping = aes(x=y, y=value, ymin=value, ymax=value, label=pv), color="black")
+                              # ggp1<-ggp1+ggplot2::geom_text(mapping = aes(x=y, y=value, label=pv), color="black",data = pv6)
+                              
+                              ggp1<-ggp1+labs(y="median gene expression for y<=yval", x="yval")
+                              
+                              ggp2<-ggplot(df6, aes(x=y, y = value, color=pheno, fill=pheno, shape = dataset))+geom_point()
+                              ggp2<-ggp2+ggplot2::geom_text(data=pv6,
+                                                            mapping = aes(x=y, y=value, label=pv), color="black")
+                              
+                            }
+                            if(wrap){
+                              ggp<-ggp+facet_wrap(facet,scales = "free")+ggtitle(title)
+                              ggp1<-ggp1+facet_wrap(facet,scales = "free")+ggtitle(title)
+                              ggp2<-ggp2+facet_wrap(facet,scales = "free")+ggtitle(title)
+                              
+                            }else{
+                              ggp<-ggp+facet_grid(facet,scales = "free")+ggtitle(title)
+                              ggp1<-ggp1+facet_grid(facet,scales = "free")+ggtitle(title);#+scale_y_continuous(transform="log")
+                              ggp2<-ggp2+facet_grid(facet,scales = "free")+ggtitle(title);
+                            }
+                            
+                            resu =  list("binomial"=ggp,"gaussian"=ggp1, "gaussian1"=ggp2)
+                            if(flip) resu = lapply(resu, function(r1)r1+ggplot2::coord_flip())
+                            resu
+                          })
+                          
+          self$data_plots=plot_all
+          invisible(plot_all)
+  },
   #' selection for a single fold
   #' @param datasH a list of dataH objects
   #' @param k1  the fold
@@ -772,10 +1086,104 @@ analysisEnv<-R6::R6Class("analysisEnv",
 #   vars_all=super$integrate(variables1)
 
    private$saveVars(variables1)
-   variables1
+   invisible(variables1)
    
- }
- 
+ },
+
+
+#'  Plot the results from evaluateAll
+#' @param evals a tibble or data frame from evaluate method 
+#' @param shape_color a list of column names to encode as both shape and color
+#' @param shape defaults to shape_color but can be specified separately
+#' @param text a list of column names to include as text labels
+#' @param dotsize a numerical column to encode dotsize, or a number for constant sizes
+#' @param color defaults to shape_color but can be specified separately 
+#' @param linetype column controlling the type of line
+#' @param showranges whether to show 95\% CI as ribbon
+#' @param txtsize size of text
+#' @param transformy transformation on y axis, from ggplot2
+#' @param legend whether to show a legend
+#' @param sep_by list of column names to separate into diff plots
+#' @param scales used in faceting can be free or fixed
+#' @param point whether to show dots
+#' @param line whether to include line
+#' @param labelsize the size of the text labels
+#' @param grid_y how to facet on y 
+#' @param grid_x how to facet on x
+#' @param title the title
+#' @param title1 columns to include in the title
+#' @returns nested ggplot2 plots
+plotEval=function(eval3=self$evals,
+                   shape_color=c("pheno","subpheno"),
+                   shape=shape_color,
+                   text =c(), ## variable
+                   dotsize="nsamps",
+                   color=shape_color,
+                   linetype=shape,
+                   showranges=TRUE, ## linetype="fullmodel"
+                   txtsize=1,transformy = "identity",legend=FALSE,sep_by="",scales="free",point=TRUE,line=TRUE,
+                   labelsize=2,
+                   grid_x = c("cohort","measure"),grid_y = "cv_full",title="", title1=""
+){
+  grid1 = grid_y; grid0 = grid_x;
+  grid0= grid0[grid0 %in% names(eval3)];  grid1= grid1[grid1 %in% names(eval3)]
+  beam_levs = c(sort(unique(as.numeric(as.character(eval3$beam)))),"combined"); 
+  
+  eval3$beam = factor(eval3$beam, levels =beam_levs  )
+  
+  #eval3$sign = as.character(eval3$sign)
+  #eval3$sign = factor(eval3$sign, levels = c(-1,0,1), labels=c("-","","+"))
+  #  eval3 = eval3[,names(eval3) %in% c(shape_color,sep_by, linetype, text, dotsize, color, title1, grid0, grid1, "numvars","mid","low","high"),drop=FALSE]
+  
+  
+  l1 = apply(eval3,1,paste, collapse="::");
+  #print(which(duplicated(l1)))
+  eval3 = eval3[!duplicated(l1),,drop=FALSE]
+  showtext = length(text)>0
+  linetype_nme = paste(linetype, collapse="_");
+  grid0_nme = paste(grid0, collapse="_")
+  grid1_nme = if(length(grid1)==0) "" else  paste(grid1,collapse="_");
+  shape_nme = paste(shape,collapse="_")
+  color_nme = paste(color,collapse="_")
+  text_nme = paste(text,collapse="_")
+  
+  # sep_by_nme = "sep_by"
+  subphens = table(eval3$subpheno)
+  subphens = subphens[order(as.numeric(unlist(lapply(names(subphens), function(str)strsplit(str,"\\|")[[1]][1]))))]
+  eval3$subpheno = factor(eval3$subpheno, levels = names(subphens))
+  if(!is.null(eval3$measure))eval3$measure = factor(eval3$measure)
+  eval3 = .modify(eval3, color, color_nme)
+  eval3 = .modify(eval3, shape, shape_nme)
+  eval3 = .modify(eval3, text, text_nme)
+  
+  eval3 = .modify(eval3, linetype, linetype_nme)
+  #  eval3 = .modify(eval3, sep_by, sep_by_nme)
+  eval3 = .modify(eval3,grid0, grid0_nme,collapse="\n")
+  if(length(grid1)>0){
+    eval3 = .modify(eval3,grid1, grid1_nme, collapse="\n")
+  }
+  eval2 = eval3
+  
+  phenos = unique(eval2$sep_by)
+  names(phenos)=phenos
+  
+  
+  
+  
+  eval2$numvars = as.numeric(eval2$numvars)
+  eval2 = subset(eval2, !is.na(mid))
+  # eval2$isfull = (eval2$isfull+1)/2.0
+  
+  
+  ggps =  plotInternal(eval2, sep_by, title1, point, dotsize, shape_nme, color_nme,
+                       linetype_nme, text_nme, labelsize, showranges,
+                       grid0_nme, grid1_nme, scales, txtsize, line, transformy, showtext, legend);
+  self$eval_plot = ggps;
+  invisible(ggps)
+}
+
+
+
 
 
   

@@ -27,118 +27,6 @@ getPvals<-function(df7){
   res_df
 }
 
-#' Infer the statistical families of the phenotypes
-#' @param df5 is the output of dh$plotData
-#' @param violin violin plots
-#' @returns ggplots 
-#' @export
-plotData<-function(plot_data_all, facet="gene~pheno_data",flip  = TRUE,violin=TRUE){
-  families = names(plot_data_all[[1]]); names(families) = families
-   
-  plot_all = lapply(families, function(family){
-    df5 = .merge1_new(lapply(plot_data_all, function(pd)pd[[family]])) |> unite('pheno_data', pheno, dataset,sep="\n", remove=FALSE)
-    
-    fam = strsplit(family,"\\.")[[1]][[1]];
-  #df5=subset(plot_data, family==fam)
-  if(flip) facet ="pheno_data~gene";
-  names(df5) =sub("name","gene",names(df5))
-  
-  df5$gene = gsub("_"," ",df5$gene)
-  df5$gene = gsub(" ","\n",df5$gene)
-  
-  df5$gene = factor(df5$gene, levels = df5$gene[!duplicated(df5$gene)])
-  
-  df6=subset(df5, family=="gaussian" | family=="ordinal")
-  df7=(subset(df5, family!="gaussian"))
-  pv6 = getPvals(df6)
-  pv7 = if(fam=="binomial") getPvals(df7) else pv6;
-  # color= if(length(unique(df4$dataset))>1) "dataset" else #"pheno"
- # facet= if(!is.null(df4[['transform']]) ) "transform~pheno" else "pheno"
-
-  lens = c(length(table(df5$gene)), length(table(df5$pheno_data)))
-  wrap=TRUE;
-  title=""
-  if(lens[1]>1 & lens[2]>1){
- 
-    wrap = FALSE
-  }else if(lens[2]>1){
-    title= df5$gene[1]
-    facet="pheno_data"
-  }else{
-    title = df5$dataset[[1]]
-    facet="gene"
-  }
-  ggp = NULL; ggp1 = NULL;ggp2=NULL
-  if(nrow(df7)>0){
-    df7$y = factor(df7$y, ordered=TRUE)
-    
-    ggp<-ggplot(df7, aes(x=y, y=value, color=pheno));#+facet_wrap(facet, scales="free");#+ggtitle(unlist(phens1))
-    if(violin){
-      ggp<-ggp+ggplot2::geom_violin()+geom_point()
-    }else{
-      ggp<-ggp+ggplot2::geom_boxplot()
-    }
-    if(!is.null(pv7)){
-      pv7$y = factor(pv7$y, levels = levels(df7$y))
-      
-    ggp<-ggp+ggplot2::geom_text(data=pv7,
-                                 mapping = aes(x=y, y=value,  label=pv), color="black")
-    }
-  }
-  
-  if(nrow(df6)>0){
-    separator="______________"
-    prbs=c(0.33,0.5,0.66)
-    df6_1 =df6 |> unite("comb",gene,family,pheno_data,sep=separator)
-    comb1=unique(df6_1$comb); names(comb1)=comb1
-    quants=.merge1_new(lapply(comb1,function(c1){
-      df6_2 = subset(df6_1, comb==c1)
-      df6_2$y = as.numeric(as.character(df6_2$y))
-      df6_2 = df6_2[order(df6_2$y),]
-      yv = unique(df6_2$y)
-      names(yv)=yv
-      .merge1_new(lapply(yv, function(yv1){
-        df6_3 = subset(df6_2, y<=yv1)
-        q1=quantile(df6_3$value,na.rm=TRUE,probs = prbs)
-        df_=data.frame(t(data.frame(q1)))
-        df_
-      }),addName="y")
-    }), addName="comb")
-    
-    quants1 = quants |> separate("comb", sep=separator, into=c("gene","family","pheno_data"))
-    names(quants1) = gsub("\\.","",names(quants1))
-    quants1$y = as.numeric(quants1$y)
-    #gsub("X50", "median expression", names(quants1))
-    quants1$gene=factor(quants1$gene, levels = levels(df6$gene))
-    ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=pheno_data, fill=gene))
-    ggp1<-ggp1+geom_line()+geom_ribbon(alpha=0.1)
-    ggp1<-ggp1+ggplot2::geom_text(data=pv6,
-                                mapping = aes(x=y, y=value, ymin=value, ymax=value, label=pv), color="black")
-   # ggp1<-ggp1+ggplot2::geom_text(mapping = aes(x=y, y=value, label=pv), color="black",data = pv6)
-    
-    ggp1<-ggp1+labs(y="median gene expression for y<=yval", x="yval")
-    
-    ggp2<-ggplot(df6, aes(x=y, y = value, color=pheno, fill=pheno, shape = dataset))+geom_point()
-    ggp2<-ggp2+ggplot2::geom_text(data=pv6,
-                                  mapping = aes(x=y, y=value, label=pv), color="black")
-    
-  }
-  if(wrap){
-    ggp<-ggp+facet_wrap(facet,scales = "free")+ggtitle(title)
-    ggp1<-ggp1+facet_wrap(facet,scales = "free")+ggtitle(title)
-    ggp2<-ggp2+facet_wrap(facet,scales = "free")+ggtitle(title)
-    
-  }else{
-    ggp<-ggp+facet_grid(facet,scales = "free")+ggtitle(title)
-    ggp1<-ggp1+facet_grid(facet,scales = "free")+ggtitle(title);#+scale_y_continuous(transform="log")
-    ggp2<-ggp2+facet_grid(facet,scales = "free")+ggtitle(title);
-  }
- 
- resu =  list("binomial"=ggp,"gaussian"=ggp1, "gaussian1"=ggp2)
- if(flip) resu = lapply(resu, function(r1)r1+ggplot2::coord_flip())
- resu
-  })
-}
 
 filter_comb<-function(comb2_new, ang1){
   #comb2_filtered = lapply(comb2_news, function(comb2_new){
@@ -537,11 +425,15 @@ getFamily<-function(y_mat, max_ordinal=getOption("max_ordinal",10)){
 #' @export
 dataH<-R6::R6Class("dataH", 
                    inherit = analysisBase,
+           
  private = list(
    data ="environment",
-   models="list",
+   models="list", ## this stores the saved models made as fitting progresses
+ 
     type="character",  
   plot_results="list",
+
+ 
   angle_plots="list",
   levs="list",
    data_id="character",
@@ -1000,6 +892,9 @@ predefined=function(incl1,prev_signature, sumAngle){
  ),
  
  public = list(
+   
+  # all_models="list",
+   
    #' @description Create a new instance
    #' @param data a list of matrices (of different modalities), with columns as variables and rows as samples
    #' @param y phenotype matrix, with columns as outcomes and rows as samples
@@ -1341,6 +1236,12 @@ predefined=function(incl1,prev_signature, sumAngle){
  dims=function(){
    private$data$dims()
  },
+folds = function(){
+#  folds = private$data$folds
+#  if(!is.nul(folds)) return(folds)
+  incl = as.list(data.frame(private$data$looc$incl))
+  lapply(incl[-length(incl)], function(xx) which(!xx))
+},
  #' get the nreps
  #' @returns  nreps
  nreps=function(){
@@ -1359,13 +1260,15 @@ predefined=function(incl1,prev_signature, sumAngle){
 #' @param data_types a data_type object
 #' @param force whether to force update
  update=function(phens=self$pheno()$all, flags=private$flags, transform_x=fromJSON(flags$transform_x), 
-                 data_types = self$data_types(), force=FALSE){
+                 data_types = self$data_types(), folds = NULL, force=FALSE){
    flags = super$updateExpt(phens, flags, transform_x, data_types);
     verbose=.readFlag(flags,'verbose',FALSE)
    # force=.readFlag(flags,'force',FALSE);
     #flags$transform_x = transform_x;
   #  super$updateExpt(phens, flags)
-     private$updateLOOC(verbose=verbose,force=force)
+     private$updateLOOC(folds = folds, verbose=verbose,force=force)
+     #if(private$data$looc$nfold!=flags$nfold) 
+     
      private$initTrain(verbose=verbose, force=force)
    private$models =lapply(1:private$data$nreps(), function(i){
     model = modelObj$new(i);
@@ -1423,13 +1326,13 @@ counts_y=function(){
      if(getOption("verbose",FALSE)) print(paste("cv",k1,"of",length(nreps)))
      private$select_k(analysis, k1,  means_y_k = means_y[[k1]], force=TRUE, minvars = minvars, maxvars = maxvars)
                })
-    variables = c(variables_cvs, variables);
+    variables = c(variables_cv, variables);
    }
    
    attr(variables, "phens")=private$phens; attr(variables,"transform_x") = private$transform_x; attr(variables, "flags") = private$flags
    
    super$saveVars(variables);
-  variables;
+  invisible(variables);
   
  },
  #merge22=function(comb2, vars_l){
@@ -1456,7 +1359,7 @@ y=function(phens = self$pheno()[[1]]){
 #' @param all_modelsh fitted models from makeAllModels
 #' @param update whether to update
 #' @returns  a ggplot
-plotPredictions=function(predictions,evals=NULL,
+plotPredictions=function(predictions=self$predictions,evals=self$evals,
                          phens = private$phens,keep_cv = FALSE, 
                         max_beam=1,
                          merge_beam = FALSE, 
@@ -1726,9 +1629,26 @@ plotPredictions=function(predictions,evals=NULL,
   #familys=names(preds[[beam]][[nv]][[cv]]);
   #family = familys[[1]];td=1
   ##beams = names(preds); names()  .merge_lapply_nme
-plot_results
+ self$pred_plots = plot_results
+invisible(plot_results)
 },
 
+
+#' @description extract the predictions for the fitted models
+#' @param all_model obtained from makeAllModels
+tabulateBetas=function(all_model = self$all_models, cv_index="full", beam=1, family="binomial"){
+  models_by_len = all_model$models[[cv_index]][-1]
+  max_len = length(models_by_len)
+  res = lapply(models_by_len, function(x){
+    r1 = x[[beam]]$betas[[family]];
+    rownames(r1) = names(x[[beam]]$var_names)
+    
+    data.frame(r1)
+  })
+  #if(max(unlist(lapply(res, ncol)))==1) res = data.frame(res)
+  names(res) = names(models_by_len)
+  res
+},
 
 
 #' @description extract the predictions for the fitted models
@@ -1737,7 +1657,7 @@ plot_results
 #' @param cv_index if a specific cv_index is required , default is NA
 #' @param prob return probability
 #' @returns  a table with results
-extractPredictions=function(all_modelsh,
+extractPredictions=function(all_modelsh = self$all_models,
                             phens = private$phens,
                             update=FALSE,
                             prob=FALSE
@@ -1756,7 +1676,8 @@ extractPredictions=function(all_modelsh,
                                      merge=TRUE)
  attr(predictions0,"trainedOn")=all_modelsh$trainedOn
  attr(predictions0, "prob")=prob
-     predictions0 # 
+ self$predictions = predictions0;
+    invisible( predictions0) # 
 },
 
 #' @description plot all data for selected variables
@@ -1766,7 +1687,7 @@ extractPredictions=function(all_modelsh,
 #' @param max_model_length the maximum model length to consider
 #' @param order allows for a reordering of variables
 #' @returns  a table with results
-plotData=function(variables, all_types=FALSE,  update=FALSE,
+plotData=function(variables=self$variables, all_types=FALSE,  update=FALSE,
                   max_model_length=1000, max_beam = 1, order=NULL){
   
   attrs = attributes(variables)
@@ -1792,10 +1713,11 @@ plotData=function(variables, all_types=FALSE,  update=FALSE,
   
   df5
   })
-res_df
+#  self$data_plots = res_df
+  invisible(res_df)
   },
 
-#' @description update the weights based on predictions from the model
+#' @description update the weights based on predictions from the model.  Used for iterative reweighting of uncertain samples
 #' @param all_models the output of dataH function getAllModels
 #' @returns list of auc beta and updated sumdiff of weights used as stopping criteria
 updateWeights=function(all_models){
@@ -1908,6 +1830,7 @@ getVariance=function(varnames){
 makeAllModels=function(variables,
                        update=FALSE
                        ){
+  private$saveVars(variables);
   if(is.null(private$phens)) stop("need to update")
   attrs = attributes(variables);
   if(update) self$update(attrs$phens, attrs$flags, transform_x =  attrs$transform_x)
@@ -1983,7 +1906,7 @@ makeAllModels=function(variables,
                    transform_x = private$transform_x, pres = pres)
   super$saveModels(all_modelsh);
   #combined_models
-  all_modelsh
+  invisible(all_modelsh)
 },
 
 
@@ -2010,7 +1933,8 @@ updateEnsemble=function(all_modelsh){
     coeffs = NULL;
   }
 all_modelsh$coeffs = coeffs;
- all_modelsh
+self$all_models = all_modelsh;
+ invisible(all_modelsh)
   
 },
 
@@ -2018,7 +1942,7 @@ all_modelsh$coeffs = coeffs;
 #' @param all_modelsh  models fitted from makeAllModels
 #' @param update whether to automatically update phens, transform_x and flags , default TRUE
 #' @returns evaluation of models
-evaluate=function(predictions){ ## different folds with same variables
+evaluate=function(predictions=self$predictions){ ## different folds with same variables
 #  if(update) self$update(all_modelsh$phens, all_modelsh$flags, transform_x =  fromJSON(all_modelsh$flags$transform_x))
   flags = private$flags; phens = private$phens;
  phens = private$phens
@@ -2041,7 +1965,8 @@ evaluate=function(predictions){ ## different folds with same variables
    #            tibble::add_column(combined = eval4$beam=="combined") |>
       
   super$saveEval(eval5);
-  eval5 
+  
+  invisible(eval5) 
 }
     
 )

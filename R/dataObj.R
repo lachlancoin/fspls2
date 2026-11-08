@@ -149,7 +149,7 @@ fitGLM<-function(y,x, family,w,
     if(family=="binomial"){
       
         if(firth){
-          m_mean <- glm(func, data = df, family = fams[[lambda]], method = "brglm_fit", type = type)
+          m_mean <- glm(func, data = df, family = fams[[lambda]], method = brglm2::brglm_fit, type = type)
         }else{
           m_mean <- glm(func, data = df, family = fams[[lambda]])
           
@@ -163,7 +163,7 @@ fitGLM<-function(y,x, family,w,
     }else{
      # fam = gaussian(link = sinh_asinh_link(lambda))
       if(firth && FALSE){ ## no point
-        m_mean <- glm(func, data = df, family = fams[[lambda]], method = "brglm_fit", type = type)
+        m_mean <- glm(func, data = df, family = fams[[lambda]], method = brglm2::brglm_fit, type = type)
       }else{
         m_mean <- glm(func, data = df, family = fams[[lambda]])
         
@@ -2473,15 +2473,15 @@ getAngleInnerOld=function(phensi,ik,k,var,type="slow", direction=NULL,var_thresh
               dir1  = direction1[jk]
            #   print(jk); print(direction1[[jk]])
               if(dir1=="+"){
-                #angle_1[jk,angle_1[jk,]>0]=999  keep it positive as a penalty
+                angle_1[jk,angle_1[jk,]>0]=999
               }else if( dir1=="-"){
                 angle_1[jk,] = -1*angle_1[jk,]
-                #angle_1[jk,angle_1[jk,]>0]=999
+                angle_1[jk,angle_1[jk,]>0]=999
               }else{
                 angle_1[jk,] = -1*abs(angle_1[jk,,drop=FALSE])
               }
             }
-            if(length(to_rem)>0  ){
+            if(length(to_rem)>0){
                 angle_1[,to_rem]=999  #after we project out the projected out columns have zero norm
             }
             angle_1
@@ -2732,7 +2732,8 @@ initTrain=function(phens,flags, transform_x, verbose=FALSE, force=FALSE){ ## thi
 #    self$updateWeights(phens)
 #  }
 },
-updateLOOC=function(phens,flags,varn=c(), force=FALSE, verbose=FALSE){
+updateLOOC=function(phens,flags,varn=c(),folds = NULL, force=FALSE, verbose=FALSE){
+  if(!is.null(folds)) self$folds = folds; ## update the folds if not NULL
   seed=.readFlag(flags,"seed",42)
   #incl = incls_all
   batch=.readFlag(flags, "batchsize",0)
