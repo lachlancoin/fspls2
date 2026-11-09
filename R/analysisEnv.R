@@ -543,7 +543,7 @@ analysisEnv<-R6::R6Class("analysisEnv",
   save_all_results=function(
     datasH,
     out_dir =paste("FSPLS", gsub("\\s+","_",date()), sep="_" ),
-    savePlots=TRUE
+    savePlots=TRUE, width = 20 , height = 20
   ){
     working_dir = getwd();
     dir.create(out_dir,recursive = TRUE);
@@ -571,9 +571,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
      writeLines(jsonlite::serializeJSON(all_models), "all_models.json", useBytes = TRUE)
     }
     if(savePlots){
-      .print("data_plot.pdf", self$data_plots);
-      .print("eval_plot.pdf", self$eval_plot);
-      .print("pred_plots.pdf", self$pred_plots)
+      .print("data_plot.pdf", self$data_plots, width = width);
+      .print("eval_plot.pdf", self$eval_plot, width = width);
+      .print("pred_plots.pdf", self$pred_plots, width = width)
     }
     setwd(working_dir)
     out_dir

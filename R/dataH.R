@@ -1466,7 +1466,7 @@ plotPredictions=function(predictions=self$predictions,evals=self$evals,
              if(is.null(ap)) return(ap)
              ap |> tibble::add_column(pheno = coln1[[xi]])
            }))
-         }else if(ncol(y1)==1){
+         }else if(ncol(y1)==1 && fam!="binomial"){
            coln1 = 1:length(coln1)
            df = .merge1_new(lapply(coln1, function(cn1){
            #  print(cn1)
@@ -1599,9 +1599,11 @@ plotPredictions=function(predictions=self$predictions,evals=self$evals,
      toplot2=subset(toplot1, cv_index==lev & beam==beam)
      ggp=ggplot(toplot2, aes(x =knots, y=value,color=subpheno, label=beam, size=counts ))+facet_grid(facet);
                    
-    
+    if(length(unique(toplot2$beam))>1){
        ggp= ggp+geom_text(family = "sans")
-     
+    }else{
+      ggp = ggp+geom_point()
+    }
      if(!is.null(evals)){
        evals2 = subset(evals,cv_index==lev &   family==fam & beam==beam) 
        if(family=="ordinal"){
