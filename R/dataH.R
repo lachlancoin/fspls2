@@ -680,8 +680,8 @@ dataH<-R6::R6Class("dataH",
   
          private$data$initTrain( private$phens,private$flags,private$transform_x, verbose=verbose, force=force)
    },
-   updateLOOC=function( varn=c(),verbose=FALSE, force=FALSE){
-     private$data$updateLOOC( private$phens,private$flags,varn=varn,force=force, verbose=verbose); ### update training object - updates all
+   updateLOOC=function( varn=c(),folds = NULL, verbose=FALSE, force=FALSE){
+     private$data$updateLOOC( private$phens,private$flags,varn=varn,folds = folds, force=force, verbose=verbose); ### update training object - updates all
    },
 
 
@@ -1636,14 +1636,18 @@ invisible(plot_results)
 
 #' @description extract the predictions for the fitted models
 #' @param all_model obtained from makeAllModels
-tabulateBetas=function(all_model = self$all_models, cv_index="full", beam=1, family="binomial"){
+tabulateBetas=function(all_model = self$all_models, cv_index="full", max_beam=10,
+                       family="binomial"){
   models_by_len = all_model$models[[cv_index]][-1]
   max_len = length(models_by_len)
   res = lapply(models_by_len, function(x){
-    r1 = x[[beam]]$betas[[family]];
-    rownames(r1) = names(x[[beam]]$var_names)
     
-    data.frame(r1)
+    lapply(x[1:min(length(x), max_beam)], function(x1){
+        r1 = x1$betas[[family]];
+        variable = names(x1$var_names)
+        
+        cbind(variable, data.frame(r1))|> separate(variable, into = c("type", "var","transform","param"),sep="\\.")
+    })
   })
   #if(max(unlist(lapply(res, ncol)))==1) res = data.frame(res)
   names(res) = names(models_by_len)

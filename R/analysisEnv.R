@@ -549,7 +549,9 @@ analysisEnv<-R6::R6Class("analysisEnv",
     dir.create(out_dir,recursive = TRUE);
     setwd(out_dir);
      if(!is.null(self$evals_pretty)) write_xlsx(self$evals_pretty, "evaluation.xlsx");
-    toprint = c(list(variables=self$vars_table), self$betas_table)
+    betas_table = unlist(self$betas_table, recursive=FALSE)
+   
+    toprint = c(list(variables=self$vars_table), betas_table)
     toprint = toprint[unlist(lapply(toprint, length))>0]
     if(length(toprint)>0){
       write_xlsx(toprint, "models.xlsx");
@@ -578,23 +580,25 @@ analysisEnv<-R6::R6Class("analysisEnv",
   },
   
   
-  evaluate=function(datasH, cv_index = c("full","merged","avg"), beam=1:10){
+  evaluate=function(datasH){
     evals = lapply(datasH, function(dh) dh$evaluate())
     eval_combined = .merge1_new(evals, addName="dataset")
-    eval3 = eval2[eval2$cv_index %in% cv_index & eval2$beam %in% beam,,drop=F]
-#    eval2 = subset(eval_combined, cv_index %in% cv_index)
-#    eval3 = subset(eval2, beam %in% beam)
-    self$evals = eval3;
-    invisible(eval3)
+    self$evals = eval_combined;
+    invisible(eval_combined)
   },
   
-  tabulateBetas=function(datasH){
-  betas_all0 = lapply(datasH, function (dh) dh$tabulateBetas())
+  tabulateBetas=function(datasH, max_beam=10){
+  betas_all0 = lapply(datasH, function (dh) dh$tabulateBetas(max_beam = max_beam))
   nvars = 1:length(betas_all0[[1]]); names(nvars) = nvars;
   betas_all = lapply(nvars, function(nv){
-    df = data.frame(lapply(betas_all0, function(ba) ba[[nv]][,1]))
-    rownames(df) = rownames(betas_all0[[1]][[nv]])
-    df
+   beams = names(betas_all0[[1]][[nv]]); names(beams) = 1:length(beams)
+    lapply(beams, function(beam){
+      df1 = betas_all0[[1]][[nv]][[beam]]
+      colind = 5:ncol(df1)
+      df = data.frame(lapply(betas_all0, function(ba) ba[[nv]][[beam]][,5]))
+       cbind(df1[,1:4],df)
+   
+   })
   })
   self$betas_table = betas_all
   betas_all

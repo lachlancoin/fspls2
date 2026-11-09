@@ -301,12 +301,17 @@ analysisBase<-R6::R6Class("analysisBase",
                   #' @param measure the measure to be included, eg AUC
                   #' @param values_from which values to include, can be low, mid, high or mid_perc
                   #' @returns formatted table
-                   tabulateEvals=function(eval1 = self$evals, minvars =1
+                   tabulateEvals=function(eval1 = self$evals, minvars =1, cvs = c("avg","merged","full"), beams = 1:10
                   ){
+                     if(is.null(eval1)) {
+                       warning("need to use evluate function first")
+                       return(NULL)
+                     }
                     id_cols = c("subpheno","pheno","cv_index","beam","measure","family","data")
                     id_cols = id_cols[id_cols %in% names(eval1)]
-                    eval1 = subset(eval1, cv_index %in% c("avg","merged","full"))
+                    eval1 = subset(eval1, cv_index %in% cvs)
                     eval1 = subset(eval1, numvars>=minvars)
+                    eval1 = subset(eval1, beam %in% beams)
                     eval3 = eval1[,match(c("mid","low","high"),names(eval1))];
                     range=apply(eval3, 1,function(xx) {
                       
