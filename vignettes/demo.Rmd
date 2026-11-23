@@ -50,7 +50,6 @@ devtools::load_all( "~/github/fspls2/R")
               show_warnings=FALSE
     )
 
-
 ```
 
 ```{r example}
@@ -62,20 +61,16 @@ devtools::load_all( "~/github/fspls2/R")
 
   #FUNCTION TO SHOW HOW TO RUN EACH EXAMPLE
   runExample<-function(example,nfold=5){
-   flags$nfold = nfold
+   flags = getFlags(nfold = nfold);
     fi = system.file("extdata", paste0(example,"_data.rds"), package = "fspls2")
     if (fi == "") stop("Could not find extdata/", example, "_data.rds in fspls2 package")
     dataset = readRDS(fi)
        ## set up the objects
-    dh = dataH$new(dataset$dataset, y = dataset$y,    nme=example, flags=flags)##, family="gaussian")
+    folds = getFolds(nrow(dataset$y), nfold = nfold)
+    dh = dataH$new(dataset$dataset, y = dataset$y,    nme=example, flags=flags, folds = folds)##, family="gaussian")
     ##Step 1. run variable selection 
     datasH = list(dh)
-    #      
-    #vars_all = analysis$select(datasH,  flags, transform_x, phens = dh$pheno()$all)
-   #   flags$keep_all = TRUE
-
     analysis =analysisEnv$new(flags=flags, dbDir=NULL)
-     #flags$maintain_norm=TRUE
     data_types = dh$data_types();
     phens = dh$pheno()$all
     variables=analysis$select(datasH, phens, transform_x)
@@ -93,6 +88,8 @@ devtools::load_all( "~/github/fspls2/R")
     dh$update(phens = phens, flags = flags, transform_x = transform_x, data_types = data_types)
 
     all_models =dh$makeAllModels(variables);
+    dh$tabulateBetas(all_models)
+    
     ##OPTIONAL IF BEAM>1
     if(flags$beam>1 && FALSE){
         all_models = dh$updateEnsemble(all_models)
@@ -102,6 +99,7 @@ devtools::load_all( "~/github/fspls2/R")
     #optionally get predictions
     predictions = dh$extractPredictions(all_models, prob=FALSE)
     
+    eval1= dh$evaluate(predictions)
 
     
     #optionally visualise the predictions
@@ -109,8 +107,7 @@ devtools::load_all( "~/github/fspls2/R")
 
     #Step 3. evaluate the models
    
-    eval1= dh$evaluate(predictions)
-    eval2 = subset(eval1, cv_index %in% c("avg","full","merged"))
+    
     ## Now visuaise the resultsy
     ggps1=plotEval(eval2,legend=T, grid_x=c("subpheno","pheno", "measure"), grid_y=c("cv_index"),linetype="combined",
                    color="beam",##"full_model"

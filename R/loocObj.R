@@ -6,6 +6,7 @@
 #' @param randomize whether to randomize
 #' @export
 getFolds<-function(leng, nfold=NA, batch=NA, randomize=TRUE, balance = NULL){
+  if(nfold==1 && is.na(batch)) return(list())
   if(!is.null(balance)){
     if(is.na(nfold)) stop("need to specify fold")
     levs = levels(balance);names(levs) = levs
@@ -54,6 +55,7 @@ getFolds<-function(leng, nfold=NA, batch=NA, randomize=TRUE, balance = NULL){
      if(length(unique(unlist(folds))) < len_y1) stop("error")
       names(folds) = 1:length(folds)
 #      if(addFull) folds[["full"]] = 1:len_y1
+  if(length(folds)<2) warning("less than two folds, probably not going to work")
   folds
   
 

@@ -174,17 +174,11 @@ trainObj<-R6::R6Class("trainObj",
                         stop("need to calc means first")
                        
                       }
-                     
-                      
-                     # print("transform")
                       looc_incl_k_ij = self$looc_incl_k_ij
-                    #  inds_to_do = which(names(self$y1) %in% names(phens1))
-                  #    if(length(inds_to_do)==0) stop("inds_to_do is empty")
-                     # for(colk1 in 1:length(inds_to_do)){
                       for(colk in 1:length(self$y1)){
-                      # colk = inds_to_do[colk1]
                        ncols=ncol(y1[[colk]])
-                       inds_to_do_1 = 1:ncol(y1[[colk]])#which(dimnames(y1[[colk]])[[2]] %in% phens1[[colk1]])
+                       inds_to_do_1 = 1:ncol(y1[[colk]])#
+                    #   inds_to_do_1=which(dimnames(y1[[colk]])[[2]] %in% phens1[[colk]])
                        for(f_k in 1:length(funcst)){
                           funcs =  funcst[[f_k]]$invfunc 
                           params = funcst[[f_k]][[3]]; names(params)=params

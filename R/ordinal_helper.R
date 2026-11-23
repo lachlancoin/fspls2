@@ -262,9 +262,11 @@ clm_ao <- function(formula, data, lambda,lower=NULL, firth = FALSE, steps = 6, m
             class = "clm_ao")
 }
 
+#' @export
 logLik.clm_ao <- function(object, ...)
   structure(object$logLik, df = object$npar, nobs = object$nobs, class = "logLik")
 
+#' @export
 print.clm_ao <- function(x, ...) {
   cat("Aranda-Ordaz ordinal regression, lambda =", x$lambda, "(fixed)\n")
   cat("n =", x$nobs, "  logLik =", format(x$logLik, digits = 8),
@@ -646,8 +648,8 @@ test_logistf<-function(){
   fam <- binomial(link = ao2(lambda))                   # phi = your lambda
   
   m_ml   <- glm(y01_low ~ x1 + x2, data = d, family = fam)
-  m_mean <- glm(y01_low ~ x1 + x2, data = d, family = fam, method = "brglm_fit", type = "AS_mean")
-  m_mpl  <- glm(y01_low ~ x1 + x2, data = d, family = fam, method = "brglm_fit", type = "MPL_Jeffreys")
+  m_mean <- glm(y01_low ~ x1 + x2, data = d, family = fam, method = brglm2::brglm_fit, type = "AS_mean")
+  m_mpl  <- glm(y01_low ~ x1 + x2, data = d, family = fam, method = brglm2::brglm_fit, type = "MPL_Jeffreys")
   
   cf <- clm_ao(y ~ x1 + x2, d[,1:3], lambda = lambda, firth = TRUE)
   cbind(MPL = -coef(m_mpl)[-1], AS_mean = -coef(m_mean)[-1], clm_ao_firth = cf$beta)
@@ -662,7 +664,7 @@ test_logistf<-function(){
   
   fitOrdinal(y,X,c(0.1,1.0) )
   
-  m <- glm(y ~ x1 + x2, data = d[1:10,1:3], family = gaussian(link = sinh_asinh_link(-0.5)), method="brglm_fit", type="MPL_Jeffreys") #AS_mean
+  m <- glm(y ~ x1 + x2, data = d[1:10,1:3], family = gaussian(link = sinh_asinh_link(-0.5)), method=brglm2::brglm_fit, type="MPL_Jeffreys") #AS_mean
   
   
   fitFirth_brglm2(y,X, "binomial",rep(1, length(y)),lambda)
@@ -670,7 +672,7 @@ test_logistf<-function(){
 
   m <- glm(y ~ x1 + x2, data = d,
            family = binomial(link = ao2(lambda)) ,
-           method = "brglm_fit",
+           method = brglm2::brglm_fit,
            type = "AS_mean")  
   sm = summary(m);
   
