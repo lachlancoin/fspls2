@@ -48,7 +48,7 @@ plotData<-function(plot_data_all, facet="gene~pheno_data",flip  = TRUE,violin=TR
   
   df5$gene = factor(df5$gene, levels = df5$gene[!duplicated(df5$gene)])
   
-  df6=subset(df5, family=="gaussian" | family=="ordinal")
+  df6=df5 ##subset(df5, family=="gaussian" | family=="ordinal")
   df7=(subset(df5, family!="gaussian"))
   pv6 = getPvals(df6)
   pv7 = if(fam=="binomial") getPvals(df7) else pv6;
@@ -68,7 +68,7 @@ plotData<-function(plot_data_all, facet="gene~pheno_data",flip  = TRUE,violin=TR
     title = df5$dataset[[1]]
     facet="gene"
   }
-  ggp = NULL; ggp1 = NULL;ggp2=NULL
+  ggp = NULL; ggp1 = NULL;ggp2=NULL; ggp1_flipped=NULL;
   if(nrow(df7)>0){
     df7$y = factor(df7$y, ordered=TRUE)
     
@@ -91,6 +91,21 @@ plotData<-function(plot_data_all, facet="gene~pheno_data",flip  = TRUE,violin=TR
     prbs=c(0.33,0.5,0.66)
     df6_1 =df6 |> unite("comb",gene,family,pheno_data,sep=separator)
     comb1=unique(df6_1$comb); names(comb1)=comb1
+    
+    quants_flipped=.merge1_new(lapply(comb1,function(c1){
+      df6_2 = subset(df6_1, comb==c1)
+      df6_2$y = as.numeric(as.character(df6_2$y))
+      df6_2 = df6_2[order(df6_2$value),]
+      v = unique(df6_2$value)
+      names(v)=v
+      .merge1_new(lapply(v, function(yv1){
+        df6_3 = subset(df6_2, value<=yv1)
+        q1=quantile(df6_3$y,na.rm=TRUE,probs = prbs)
+        df_=data.frame(t(data.frame(q1)))
+        df_
+      }),addName="value")
+    }), addName="comb")
+    
     quants=.merge1_new(lapply(comb1,function(c1){
       df6_2 = subset(df6_1, comb==c1)
       df6_2$y = as.numeric(as.character(df6_2$y))
@@ -104,12 +119,17 @@ plotData<-function(plot_data_all, facet="gene~pheno_data",flip  = TRUE,violin=TR
         df_
       }),addName="y")
     }), addName="comb")
-    
     quants1 = quants |> separate("comb", sep=separator, into=c("gene","family","pheno_data"))
-    names(quants1) = gsub("\\.","",names(quants1))
+    quants_flipped1 = quants_flipped |>  separate("comb", sep=separator, into=c("gene","family","pheno_data"))
+    names(quants1) = gsub("\\.","",names(quants1)); 
+    names(quants_flipped1) = gsub("\\.","",names(quants_flipped1)); 
+    
     quants1$y = as.numeric(quants1$y)
-    #gsub("X50", "median expression", names(quants1))
+    quants_flipped1$value = as.numeric(quants_flipped1$value)
+
     quants1$gene=factor(quants1$gene, levels = levels(df6$gene))
+    quants_flipped1$gene=factor(quants_flipped1$gene, levels = levels(df6$gene))
+    
     ggp1<-ggplot(quants1, aes(x=y, y=X50, ymin=X33, ymax = X66,color=pheno_data, fill=gene))
     ggp1<-ggp1+geom_line()+geom_ribbon(alpha=0.1)
     ggp1<-ggp1+ggplot2::geom_text(data=pv6,
@@ -117,6 +137,16 @@ plotData<-function(plot_data_all, facet="gene~pheno_data",flip  = TRUE,violin=TR
    # ggp1<-ggp1+ggplot2::geom_text(mapping = aes(x=y, y=value, label=pv), color="black",data = pv6)
     
     ggp1<-ggp1+labs(y="median gene expression for y<=yval", x="yval")
+    
+    
+    ggp1_flipped<-ggplot(quants_flipped1, aes(x=value, y=X50, ymin=X33, ymax = X66,color=pheno_data, fill=gene))
+    ggp1_flipped<-ggp1_flipped+geom_line()+geom_ribbon(alpha=0.1)
+    ggp1_flipped<-ggp1_flipped+ggplot2::geom_text(data=pv6,
+                                  mapping = aes(x=value, y=y, ymin=value, ymax=value, label=pv), color="black")
+    # ggp1<-ggp1+ggplot2::geom_text(mapping = aes(x=y, y=value, label=pv), color="black",data = pv6)
+    
+    ggp1_flipped<-ggp1_flipped+labs(y="median pheno for expression<=val", x="val")
+    
     
     ggp2<-ggplot(df6, aes(x=y, y = value, color=pheno, fill=pheno, shape = dataset))+geom_point()
     ggp2<-ggp2+ggplot2::geom_text(data=pv6,
@@ -126,15 +156,19 @@ plotData<-function(plot_data_all, facet="gene~pheno_data",flip  = TRUE,violin=TR
   if(wrap){
     ggp<-ggp+facet_wrap(facet,scales = "free")+ggtitle(title)
     ggp1<-ggp1+facet_wrap(facet,scales = "free")+ggtitle(title)
+    ggp1_flipped<-ggp1_flipped+facet_wrap(facet,scales = "free")+ggtitle(title)
+    
     ggp2<-ggp2+facet_wrap(facet,scales = "free")+ggtitle(title)
     
   }else{
     ggp<-ggp+facet_grid(facet,scales = "free")+ggtitle(title)
     ggp1<-ggp1+facet_grid(facet,scales = "free")+ggtitle(title);#+scale_y_continuous(transform="log")
-    ggp2<-ggp2+facet_grid(facet,scales = "free")+ggtitle(title);
+    ggp1_flipped<-ggp1_flipped+facet_grid(facet,scales = "free")+ggtitle(title);#+scale_y_continuous(transform="log")
+    
+      ggp2<-ggp2+facet_grid(facet,scales = "free")+ggtitle(title);
   }
  
- resu =  list("binomial"=ggp,"gaussian"=ggp1, "gaussian1"=ggp2)
+ resu =  list("binomial"=ggp,"gaussian"=ggp1, "gaussian1"=ggp2, "flipped"=ggp1_flipped)
  if(flip) resu = lapply(resu, function(r1)r1+ggplot2::coord_flip())
  resu
   })
