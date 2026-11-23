@@ -903,6 +903,7 @@ predefined=function(incl1,prev_signature, sumAngle){
    #' @param flags list of options, described in the vignette
    #' @param transform_x a transformation object from the function getTransformation
    #' @param family the statistical family of phenotype y, can be calculated by getFamily
+   #' @param fix.names remove . character from sample names and replace with _
    #' @param dbDir dir for database to store results to speed up re-reruns.  Can be NULL
      initialize=function(
     data,
@@ -912,11 +913,14 @@ predefined=function(incl1,prev_signature, sumAngle){
     flags ,
     folds = NULL,
     family= getFamily(y),
+    fix.names=FALSE,
          dbDir=NULL
    ){
     super$initialize(nme,dims =lapply(d$data, dim),  flags=flags, dbDir=dbDir);
+       if(!fix.names && length(grep("\\.",colnames(y)))>0) stop("cannot have . in the colnames of y.  Can use fix.names=TRUE")
        colnames(y) = gsub("\\.","_",colnames(y))  ## no . allowed
       for(k in 1:length(data)){
+        if(!fix.names && length(grep("\\.",colnames(data[[k]])))>0) stop("cannot have . in the colnames of y")
         colnames(data[[k]]) = gsub("\\.","_",colnames(data[[k]]))  ## no . allowed
         
       }
@@ -1639,17 +1643,22 @@ invisible(plot_results)
 #' @description extract the predictions for the fitted models
 #' @param all_model obtained from makeAllModels
 tabulateBetas=function(all_model = self$all_models, cv_index="full", max_beam=10,
-                       family="binomial"){
+                       families = names(private$phens)){
   models_by_len = all_model$models[[cv_index]][-1]
+  names(families) = families
   max_len = length(models_by_len)
   res = lapply(models_by_len, function(x){
     
-    lapply(x[1:min(length(x), max_beam)], function(x1){
+    a1 =  lapply(x[1:min(length(x), max_beam)], function(x1){
+     lapply(families, function(family){
         r1 = x1$betas[[family]];
         variable = names(x1$var_names)
         
         cbind(variable, data.frame(r1))|> separate(variable, into = c("type", "var","transform","param"),sep="\\.")
+      })
+     
     })
+    unlist(a1, recursive=FALSE)
   })
   #if(max(unlist(lapply(res, ncol)))==1) res = data.frame(res)
   names(res) = names(models_by_len)
