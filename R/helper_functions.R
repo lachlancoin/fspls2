@@ -8,6 +8,8 @@
   }
 
 
+
+
 rbind_sparse <- function(mats) {
   # sanity check: all matrices must have the same number of columns
   ncols <- vapply(mats, ncol, integer(1))
